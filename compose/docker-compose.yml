@@ -1,0 +1,63 @@
+# docker-compose.yml — generischer Single-Container-Stack für Selbst-Hoster
+# (JanuaPort/januaport#776). Abgeleitet vom jnpt-Dienst aus der Produkt-Compose
+# (docker/docker-compose.prod.yml im Produkt-Repo) — OHNE die dort showcase-
+# spezifischen Caddy/Tailscale-Sidecars. Wer öffentlich erreichbar sein will,
+# betreibt den eigenen Reverse-Proxy mit TLS (siehe README, "Sicherheits-
+# Defaults").
+#
+# Betreiber-Konfiguration kommt ausschließlich aus der begleitenden .env
+# (Vorlage: .env.example) — diese Datei bleibt unangetastet.
+#
+# Start:      docker compose --env-file .env up -d
+# Update:     docker compose --env-file .env pull && docker compose --env-file .env up -d
+# Config-Check (Syntax, ohne zu starten):
+#             docker compose --env-file .env.example config
+name: jnpt
+
+services:
+  jnpt:
+    # Pflicht-Variable, kein Default: kein `:latest` in Produktion — ein
+    # gepinnter Tag macht den Deploy reproduzierbar. Siehe .env.example.
+    image: ${JANUAPORT_IMAGE:?JANUAPORT_IMAGE in der .env setzen, z. B. ghcr.io/januaport/januaport:0.1.2}
+    # Port NUR an Loopback gebunden (analog docker-compose.customer.yml im
+    # Produkt-Repo, #271): lokal erreichbar (http://localhost:8484), aber auf
+    # einer Cloud-VM nicht versehentlich im Internet. Öffentlich wird die
+    # Anlage ausschließlich über den eigenen Reverse-Proxy (README).
+    ports:
+      - "127.0.0.1:8484:8484"
+    environment:
+      # Vault-Master-Schlüssel. Leer lassen: die Anlage erzeugt beim ersten
+      # Start selbst einen und zeigt ihn EINMALIG im Log (siehe .env.example).
+      # Härtung (optional, hier bewusst nicht vorgebaut): Master-Key als
+      # Docker-Secret/Datei mounten und JNPT_MASTER_KEY_FILE statt JNPT_MASTER_KEY
+      # setzen — Muster in docker/docker-compose.prod.yml im Produkt-Repo.
+      JNPT_MASTER_KEY: ${JNPT_MASTER_KEY:-}
+      # SSO (Entra) — Familie JNPT_SSO_*, leer = SSO aus.
+      JNPT_SSO_ENABLED: ${JNPT_SSO_ENABLED:-false}
+      JNPT_SSO_ISSUER: ${JNPT_SSO_ISSUER:-}
+      JNPT_SSO_AUDIENCE: ${JNPT_SSO_AUDIENCE:-}
+      JNPT_SSO_CLIENT_ID: ${JNPT_SSO_CLIENT_ID:-}
+      JNPT_SSO_AUTH_SCOPE: ${JNPT_SSO_AUTH_SCOPE:-}
+      JNPT_SSO_GROUPS_CLAIM: ${JNPT_SSO_GROUPS_CLAIM:-}
+      JNPT_SSO_DEFAULT_SCOPE: ${JNPT_SSO_DEFAULT_SCOPE:-}
+      JNPT_SSO_DIRECTORY_CREDENTIAL: ${JNPT_SSO_DIRECTORY_CREDENTIAL:-}
+      JNPT_SSO_DIRECTORY_CLIENT_ID: ${JNPT_SSO_DIRECTORY_CLIENT_ID:-}
+      # Anbindungsweg (z. B. OpenAI-Tunnel-Beisteller): überschreibt nur den
+      # Ort des Laufzeit-Schlüssels, wirkungslos ohne laufenden Beisteller.
+      JNPT_TUNNEL_KEY_FILE: ${JNPT_TUNNEL_KEY_FILE:-}
+      # Verzeichnisse für Datei-basierte Betreiber-Konfiguration, beim Start
+      # gelesen. Leer = Standardpfad der Anlage (unter /data, damit persistent).
+      JNPT_CONNECTORS_DIR: ${JNPT_CONNECTORS_DIR:-}
+      JNPT_DATABASES_DIR: ${JNPT_DATABASES_DIR:-}
+      JNPT_KARTEIEN_DIR: ${JNPT_KARTEIEN_DIR:-}
+    volumes:
+      # Persistenz für DB, Master-Key-Datei (falls selbst erzeugt) und die
+      # Standardpfade der obigen *_DIR-Variablen.
+      - jnpt-data:/data
+    restart: unless-stopped
+    # Bewusst KEIN docker-healthcheck: Das distroless-Image hat weder Shell
+    # noch curl/wget, das Binary bietet kein Health-Subcommand. Liveness prüft
+    # man von außen über /healthz (siehe README, "Prüfen").
+
+volumes:
+  jnpt-data:
