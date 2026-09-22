@@ -32,18 +32,26 @@ services:
       # Docker-Secret/Datei mounten und JNPT_MASTER_KEY_FILE statt JNPT_MASTER_KEY
       # setzen — Muster in docker/docker-compose.prod.yml im Produkt-Repo.
       JNPT_MASTER_KEY: ${JNPT_MASTER_KEY:-}
-      # SSO (Entra) — Familie JNPT_SSO_*, leer = SSO aus.
+      # SSO (Entra) — Familie JNPT_SSO_*, leer = SSO aus. Reihenfolge und
+      # JNPT_PUBLIC_URL wie im Runbook-Beispiel (docs/deploy-hetzner.md §11.6.2
+      # im Produkt-Repo) — JNPT_PUBLIC_URL gehört funktional zum selben Block
+      # (muss exakt zum resource-Parameter des Clients passen), auch wenn
+      # docs/inbetriebnahme.md sie nicht einzeln benennt.
       JNPT_SSO_ENABLED: ${JNPT_SSO_ENABLED:-false}
       JNPT_SSO_ISSUER: ${JNPT_SSO_ISSUER:-}
       JNPT_SSO_AUDIENCE: ${JNPT_SSO_AUDIENCE:-}
-      JNPT_SSO_CLIENT_ID: ${JNPT_SSO_CLIENT_ID:-}
+      JNPT_PUBLIC_URL: ${JNPT_PUBLIC_URL:-}
       JNPT_SSO_AUTH_SCOPE: ${JNPT_SSO_AUTH_SCOPE:-}
+      JNPT_SSO_CLIENT_ID: ${JNPT_SSO_CLIENT_ID:-}
       JNPT_SSO_GROUPS_CLAIM: ${JNPT_SSO_GROUPS_CLAIM:-}
       JNPT_SSO_DEFAULT_SCOPE: ${JNPT_SSO_DEFAULT_SCOPE:-}
       JNPT_SSO_DIRECTORY_CREDENTIAL: ${JNPT_SSO_DIRECTORY_CREDENTIAL:-}
       JNPT_SSO_DIRECTORY_CLIENT_ID: ${JNPT_SSO_DIRECTORY_CLIENT_ID:-}
-      # Anbindungsweg (z. B. OpenAI-Tunnel-Beisteller): überschreibt nur den
-      # Ort des Laufzeit-Schlüssels, wirkungslos ohne laufenden Beisteller.
+      # Für den optionalen OpenAI-Tunnel-Beisteller: überschreibt nur den Ort
+      # des Laufzeit-Schlüssels. Dieser generische Stack mountet — anders als
+      # die Produkt-Compose — KEIN /run/jnpt/tunnel-Verzeichnis von sich aus;
+      # wer den Beisteller nutzt, ergänzt den Mount selbst. Ohne Beisteller
+      # und ohne Mount bleibt die Zeile wirkungslos, leer lassen.
       JNPT_TUNNEL_KEY_FILE: ${JNPT_TUNNEL_KEY_FILE:-}
       # Verzeichnisse für Datei-basierte Betreiber-Konfiguration, beim Start
       # gelesen. Leer = Standardpfad der Anlage (unter /data, damit persistent).

@@ -8,10 +8,10 @@ Tailnet-Name, Kontoname, Tokens, IPs). Es provisioniert eine
 gehärteten Drei-Container-Stack aus dem Produkt-Repo aus (`jnpt` + `caddy` +
 `tailscale`-Sidecar).
 
-**Terraform-Hinweis:** `terraform validate` nicht ausgeführt, Prüfung durch
-Lesen. (Details siehe Abschlussbericht des Einführungs-Tickets #776 — falls
-Terraform in der jeweiligen Umgebung verfügbar ist, zusätzlich
-`terraform fmt -check -recursive` und `terraform validate` fahren.)
+**Terraform-Hinweis (JanuaPort/januaport#776):** Ist Terraform in der eigenen
+Umgebung verfügbar, vor dem `apply` zusätzlich `terraform fmt -check -recursive`
+und `terraform validate` fahren. Ist es nicht verfügbar, gilt: Prüfung durch
+Lesen statt Behauptung.
 
 ## Voraussetzungen
 
