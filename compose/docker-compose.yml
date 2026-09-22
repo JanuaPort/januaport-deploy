@@ -18,7 +18,7 @@ services:
   jnpt:
     # Pflicht-Variable, kein Default: kein `:latest` in Produktion — ein
     # gepinnter Tag macht den Deploy reproduzierbar. Siehe .env.example.
-    image: ${JANUAPORT_IMAGE:?JANUAPORT_IMAGE in der .env setzen, z. B. ghcr.io/januaport/januaport:0.1.2}
+    image: ${JANUAPORT_IMAGE:?JANUAPORT_IMAGE in der .env setzen, z. B. ghcr.io/januaport/januaport:0.59.0}
     # Port NUR an Loopback gebunden (analog docker-compose.customer.yml im
     # Produkt-Repo, #271): lokal erreichbar (http://localhost:8484), aber auf
     # einer Cloud-VM nicht versehentlich im Internet. Öffentlich wird die

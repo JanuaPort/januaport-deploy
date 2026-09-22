@@ -121,7 +121,7 @@ variable "name" {
 variable "image_ref" {
   description = <<-EOT
     Gepinnter Image-Tag, den die VM aus der Registry zieht, z. B.
-    ghcr.io/januaport/januaport:0.1.2. PFLICHT (kein Default): bewusst KEIN
+    ghcr.io/januaport/januaport:0.59.0. PFLICHT (kein Default): bewusst KEIN
     `latest`, damit der Deploy reproduzierbar auf einem festen Tag steht.
     cloud-init schreibt den Wert als JANUAPORT_IMAGE in die .env neben der
     Prod-Compose; `docker compose pull` holt das Image.

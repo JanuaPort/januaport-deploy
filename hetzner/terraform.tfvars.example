@@ -44,7 +44,7 @@ ssh_allowed_cidr = ["203.0.113.4/32"]
 # ── Image-Quelle (Prebuilt-Image aus der Registry) ───────────────────────────
 # PFLICHT: gepinnter Image-Tag, den die VM aus der Registry zieht. Bewusst KEIN
 # `:latest` (reproduzierbar).
-image_ref = "ghcr.io/januaport/januaport:0.1.2"
+image_ref = "ghcr.io/januaport/januaport:0.59.0"
 
 # OPTIONAL: classic PAT mit NUR `read:packages` für den Pull aus einem PRIVATEN
 # GHCR-Package. WICHTIG: GHCR unterstützt an der Container-Registry KEINE
