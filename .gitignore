@@ -1,0 +1,21 @@
+# Terraform-State ist NIE Teil dieses Repos (enthält Secrets im Klartext).
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform/
+.terraform.tfstate.lock.info
+
+# Echte Variablenwerte (Secrets) — nur *.tfvars.example ist getrackt.
+*.tfvars
+!*.tfvars.example
+*.tfvars.json
+!*.tfvars.example.json
+
+# Betreiber-.env mit echten Werten — nur .env.example ist getrackt.
+.env
+!.env.example
