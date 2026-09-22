@@ -1,0 +1,246 @@
+#cloud-config
+# cloud-init für die JanuaPort-Single-Node-VM (JanuaPort/januaport#776,
+# generisch abgeleitet aus deploy/hetzner/ im Produkt-Repo, #107). Läuft EINMAL
+# beim First-Boot:
+#  1. Docker Engine + Compose-Plugin installieren (offizielles Docker-Repo).
+#  2. Persistentes /data-Volume formatieren (nur beim Erststart) + mounten.
+#  3. Repo klonen (NUR die Konfig-Dateien: Compose/Caddyfile/tailscale-serve),
+#     Secrets + .env schreiben, das vorgebaute Image aus der Registry ziehen
+#     und die Prod-Compose hochbringen (Prebuilt statt Build-on-VM).
+#
+# Alle $${...}-Platzhalter füllt Terraform via templatefile() (siehe main.tf).
+# Secrets landen mit 0600 außerhalb von /data und werden NICHT geloggt.
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - gnupg
+
+# .env + Secrets werden in ein STAGING-Verzeichnis geschrieben (nicht direkt ins
+# Repo): `git clone` verlangt ein leeres Zielverzeichnis. runcmd kopiert die
+# gestagten Dateien NACH dem Klonen ins Repo (mit 0600).
+write_files:
+  # .env für `docker compose`: Interpolation von JNPT_DOMAIN/_ACME_EMAIL/
+  # TS_HOSTNAME und der PFLICHT-Variable JANUAPORT_IMAGE (gepinnter Registry-Tag,
+  # den der jnpt-Service als `image:` zieht). Kein `latest`: reproduzierbarer
+  # Deploy auf einem festen Tag.
+  #
+  # Die zwei Update-Zeilen sind OPTIONAL und werden IMMER geschrieben — die
+  # Prod-Compose liest sie als $${JNPT_UPDATE_MANIFEST_URL:-} bzw.
+  # $${JNPT_UPDATE_PUBLIC_KEYS:-} (hier $$-escaped, sonst versuchte
+  # templatefile() sie zu interpolieren — auch in einem YAML-Kommentar), ein
+  # leerer Wert ist dort also unschädlich und bedeutet schlicht
+  # „Versions-Check nicht konfiguriert" (offline-first). Der Public Key ist
+  # bewusst kein Secret (s. variables.tf) und steht deshalb hier in derselben
+  # Datei wie Domain und Image-Tag, nicht bei den Secrets.
+  - path: /opt/jnpt/staging/.env
+    permissions: "0600"
+    owner: root:root
+    content: |
+      JNPT_DOMAIN=${domain}
+      JNPT_ACME_EMAIL=${acme_email}
+      TS_HOSTNAME=${ts_hostname}
+      JANUAPORT_IMAGE=${image_ref}
+      JNPT_UPDATE_MANIFEST_URL=${update_manifest_url}
+      JNPT_UPDATE_PUBLIC_KEYS=${update_public_keys}
+
+  # Konfiguration des Host-Aktuators. KEIN Geheimnis: nur Pfade, der
+  # Container-Name, die Domain und die Repository-ALLOWLIST, gegen die der
+  # Aktuator die Ziel-Referenz zusammensetzt (aus dem Plan kommt nur der
+  # Digest). Der PRUEF-TOKEN steht bewusst NICHT hier und wird NICHT von
+  # Terraform gesetzt — er wird von Hand angelegt (ueber user_data laege er im
+  # Terraform-State). Ohne ihn ist der Dienst inert und sagt das im journald;
+  # genau das ist der gewollte Zustand nach der Provisionierung.
+  - path: /etc/jnpt-updater.conf
+    permissions: "0600"
+    owner: root:root
+    content: |
+      IMAGE_REPO=${updater_image_repo}
+      COMPOSE_FILE=/opt/jnpt/repo/docker/docker-compose.prod.yml
+      ENV_FILE=/opt/jnpt/repo/docker/.env
+      CONTAINER=jnpt-jnpt-1
+      DOMAIN=${domain}
+      CHECK_TOKEN_FILE=/etc/jnpt-updater.token
+      BACKUP_DIR=/data/backups
+
+  # Bereitstellungs-Verzeichnis des Anbindungswegs ChatGPT. /run ist ein tmpfs —
+  # das Verzeichnis ist nach JEDEM Boot weg und muss neu entstehen, BEVOR das
+  # Gateway hineinschreiben will. 65532 ist die Gateway-UID (distroless
+  # nonroot): Gehört das Verzeichnis root, kann das Gateway nicht
+  # hineinschreiben, und der Materialisierer meldet einmalig
+  # „laufzeit-schlüssel nicht bereitstellbar".
+  #
+  # ⚠️ REIHENFOLGE: Die Regel wird in runcmd angewandt, BEVOR `docker compose up`
+  # läuft. Fehlt das Host-Verzeichnis beim Start, legt Docker es selbst an —
+  # als root, und damit unbrauchbar. Der Gateway-Stack hängt es standardmäßig
+  # ein (docker/docker-compose.prod.yml im Produkt-Repo).
+  - path: /etc/tmpfiles.d/jnpt-tunnel.conf
+    permissions: "0644"
+    owner: root:root
+    content: |
+      d /run/jnpt/tunnel 0750 65532 65532 -
+
+  # Master-Key-Secret (64 Hex). Außerhalb /data, 0600. Inhalt = JNPT_MASTER_KEY.
+  - path: /opt/jnpt/staging/jnpt_master_key
+    permissions: "0600"
+    owner: root:root
+    content: ${master_key}
+
+  # Tailscale-Auth-Key-Secret. 0600.
+  - path: /opt/jnpt/staging/tailscale_authkey
+    permissions: "0600"
+    owner: root:root
+    content: ${tailscale_authkey}
+
+%{ if registry_token != "" ~}
+  # --- Privates Registry-Package: Login-Token (nur wenn registry_token gesetzt) -
+  # Classic PAT mit NUR `read:packages`. runcmd reicht ihn NUR über
+  # `docker login --password-stdin` (nie auf einer Kommandozeile/in einer URL,
+  # kein Logging) und scrubbt die Datei danach. Trade-off: `docker login`
+  # persistiert die Auth in /root/.docker/config.json (akzeptiert, s. README);
+  # im Terraform-State/in user_data liegt der Token — wie die anderen Secrets —
+  # im Klartext (State gitignored).
+  - path: /opt/jnpt/staging/registry_token
+    permissions: "0600"
+    owner: root:root
+    content: ${registry_token}
+%{ endif ~}
+
+%{ if git_token != "" ~}
+  # --- Privates Repo: authentifizierter Klon (nur wenn git_token gesetzt) ------
+  # Der Token wird NICHT in die git-remote-URL/.git/config geschrieben und NICHT
+  # geloggt. Stattdessen liest ein kurzlebiges GIT_ASKPASS-Skript den Token aus
+  # einer 0600-Staging-Datei; runcmd löscht beide Dateien direkt nach dem Klon
+  # (Scrub). Der Token steht NIE auf einer Kommandozeile (kein Eintrag im
+  # cloud-init-output.log). Trade-off: im Terraform-State/in user_data liegt er
+  # — wie die anderen Secrets — im Klartext (State gitignored).
+  - path: /opt/jnpt/staging/git_token
+    permissions: "0600"
+    owner: root:root
+    content: ${git_token}
+
+  # GIT_ASKPASS-Helfer: liefert Benutzer + Token an `git clone`. Enthält selbst
+  # KEINEN Token (liest ihn zur Laufzeit aus der 0600-Datei). 0700.
+  - path: /opt/jnpt/askpass.sh
+    permissions: "0700"
+    owner: root:root
+    content: |
+      #!/bin/sh
+      # git fragt zuerst nach Username, dann nach Passwort. Username ist bei
+      # einem GitHub-PAT beliebig (Konvention: x-access-token); das Passwort ist
+      # der Token. So landet der Token nie in der Klon-URL.
+      case "$1" in
+        Username*) printf '%s' 'x-access-token' ;;
+        *)         cat /opt/jnpt/staging/git_token ;;
+      esac
+%{ endif ~}
+
+runcmd:
+  # --- Docker Engine + Compose-Plugin (offizielles Repo) ---------------------
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+  - apt-get update
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - systemctl enable --now docker
+
+  # --- Persistentes Volume mounten -------------------------------------------
+  # Hetzner attached das Volume kurz nach dem Boot (separate API-Aktion) als
+  # ${volume_device}. Wir WARTEN explizit darauf (Race gegen den Boot), formatieren
+  # es NUR wenn es noch kein Dateisystem trägt (Re-Deploy behält die DB), und
+  # mounten es persistent nach /mnt/jnpt-data (fstab-Eintrag).
+  - 'for i in $(seq 1 60); do [ -b ${volume_device} ] && break; echo "warte auf volume…"; sleep 5; done'
+  - 'blkid ${volume_device} || mkfs.ext4 -F -L jnpt-data ${volume_device}'
+  - mkdir -p /mnt/jnpt-data
+  - 'grep -q "/mnt/jnpt-data" /etc/fstab || echo "${volume_device} /mnt/jnpt-data ext4 defaults,nofail 0 2" >> /etc/fstab'
+  - mount -a
+  # Unterverzeichnisse für die per local-bind angelegten Docker-Volumes.
+  - mkdir -p /mnt/jnpt-data/jnpt-data /mnt/jnpt-data/caddy-data /mnt/jnpt-data/caddy-config /mnt/jnpt-data/tailscale-state
+
+  # --- Repo holen (NUR Konfig-Dateien) ----------------------------------------
+  # Die VM klont NICHT, um zu bauen, sondern nur für die Konfig-Dateien
+  # (docker-compose.prod.yml, Caddyfile, tailscale-serve.json). In ein LEERES
+  # Zielverzeichnis klonen (write_files schrieb nur nach /opt/jnpt/staging, nie
+  # ins Repo) — sonst scheitert `git clone`.
+%{ if git_token != "" ~}
+  # Authentifiziert (privates Repo): Token kommt NUR über GIT_ASKPASS (s. o.),
+  # nicht über die URL. `credential.helper=` (leer) verhindert jedes Caching/
+  # Persistieren des Credentials; GIT_TERMINAL_PROMPT=0 bricht lieber ab als
+  # interaktiv zu fragen. Danach Token + Helfer scrubben (auch wenn der Klon
+  # fehlschlägt, via separatem rm-Schritt unten).
+  - GIT_ASKPASS=/opt/jnpt/askpass.sh GIT_TERMINAL_PROMPT=0 git -c credential.helper= clone --branch ${git_ref} --depth 1 ${git_repo} /opt/jnpt/repo
+  # Scrub: Token-Datei + Askpass-Helfer entfernen (Token nicht dauerhaft auf der
+  # Platte). Läuft unbedingt — der Klon-Schritt oben hat den Token nur gelesen.
+  - rm -f /opt/jnpt/staging/git_token /opt/jnpt/askpass.sh
+%{ else ~}
+  # Anonym (öffentliches Repo) — bisheriges Verhalten.
+  - git clone --branch ${git_ref} --depth 1 ${git_repo} /opt/jnpt/repo
+%{ endif ~}
+
+  # --- Gestagte .env + Secrets ins Repo legen --------------------------------
+  - mkdir -p /opt/jnpt/repo/deploy/hetzner/secrets
+  - install -m 0600 /opt/jnpt/staging/.env /opt/jnpt/repo/docker/.env
+  # jnpt läuft non-root (distroless nonroot, uid 65532); Compose-file-Secrets
+  # bewahren Host-uid/-Perms (mode/uid werden bei non-Swarm-Compose ignoriert).
+  # Darum den Master-Key dem jnpt-uid übereignen, sonst „permission denied".
+  - install -m 0400 -o 65532 -g 65532 /opt/jnpt/staging/jnpt_master_key /opt/jnpt/repo/deploy/hetzner/secrets/jnpt_master_key
+  - install -m 0600 /opt/jnpt/staging/tailscale_authkey /opt/jnpt/repo/deploy/hetzner/secrets/tailscale_authkey
+  # Scrub: Staging-Kopien nach dem Einbau entfernen — dasselbe Token-Hygiene-
+  # Muster wie bei git_token/registry_token, auch für die zwei langlebigen
+  # Secrets (und die .env). Die cloud-init-user_data unter /var/lib/cloud
+  # bleibt als dokumentierter Trade-off (Produkt-Repo, deploy/hetzner/CLAUDE.md
+  # §Secrets).
+  - rm -f /opt/jnpt/staging/jnpt_master_key /opt/jnpt/staging/tailscale_authkey /opt/jnpt/staging/.env
+  - test -f /opt/jnpt/repo/docker/.env
+
+  # --- Persistente Volumes auf das Block-Volume umbiegen ----------------------
+  # Die in der Compose-Datei benannten Volumes vorab als local-bind auf das
+  # persistente Block-Volume (/mnt/jnpt-data) anlegen, damit die Daten einen
+  # Server-Neuaufbau überleben (das Volume bleibt attached). Compose verwendet
+  # vorhandene Volumes mit passendem Namen wieder; der Name ist <projekt>_<vol>.
+  # Das Projekt heißt `jnpt` — als Top-Level `name` in der Compose-Datei selbst,
+  # deshalb braucht hier (und im Runbook) niemand ein `-p`.
+  - docker volume create --driver local --opt type=none --opt o=bind --opt device=/mnt/jnpt-data/jnpt-data jnpt_jnpt-data
+  - docker volume create --driver local --opt type=none --opt o=bind --opt device=/mnt/jnpt-data/caddy-data jnpt_caddy-data
+  - docker volume create --driver local --opt type=none --opt o=bind --opt device=/mnt/jnpt-data/caddy-config jnpt_caddy-config
+  - docker volume create --driver local --opt type=none --opt o=bind --opt device=/mnt/jnpt-data/tailscale-state jnpt_tailscale-state
+
+%{ if registry_token != "" ~}
+  # --- Privates Registry-Package: docker login (nur wenn registry_token gesetzt) -
+  # Token NUR über stdin an `docker login` (nie in Prozessliste/Log/URL). Die
+  # Registry authentifiziert per Token; der Benutzername ist beim PAT-Login
+  # beliebig (Konvention x-access-token). Danach die Token-Datei scrubben. Die
+  # Auth persistiert docker in /root/.docker/config.json (akzeptiert, s. README).
+  - cat /opt/jnpt/staging/registry_token | docker login ghcr.io -u x-access-token --password-stdin
+  - rm -f /opt/jnpt/staging/registry_token
+%{ endif ~}
+
+  # --- Bereitstellungs-Verzeichnis des Anbindungswegs -------------------------
+  # Die tmpfiles-Regel liegt bereits (write_files); hier wird sie SOFORT
+  # angewandt, statt auf den nächsten Boot zu warten. Muss VOR `docker compose
+  # up` laufen: Fehlt das Host-Verzeichnis beim Start, legt Docker es als root
+  # an, und das Gateway (UID 65532) kann nicht hineinschreiben.
+  - systemd-tmpfiles --create /etc/tmpfiles.d/jnpt-tunnel.conf
+
+  # --- Prod-Compose ziehen + starten (Prebuilt-Image aus der Registry) -------
+  # KEIN Build mehr on-VM: das Image kommt vorgebaut aus der Registry
+  # (JANUAPORT_IMAGE in der .env, gepinnter Tag). `pull` holt Image(s), `up -d`
+  # startet den Stack.
+  - cd /opt/jnpt/repo/docker && docker compose -f docker-compose.prod.yml pull
+  - cd /opt/jnpt/repo/docker && docker compose -f docker-compose.prod.yml up -d
+
+  # --- Host-Aktuator: Skript, Unit, Timer -------------------------------------
+  # Skript/Unit/Timer kommen aus dem geklonten Repo (sie sind umgebungsfrei —
+  # alles Variable steht in /etc/jnpt-updater.conf, s. write_files). Der Timer
+  # wird aktiviert; ohne die von Hand angelegte Prüf-Token-Datei bleibt der
+  # Dienst wirkungslos und protokolliert das bei jedem Lauf.
+  - install -m 0755 -o root -g root /opt/jnpt/repo/deploy/updater/jnpt-updater.sh /usr/local/sbin/jnpt-updater.sh
+  - install -m 0644 -o root -g root /opt/jnpt/repo/deploy/updater/jnpt-updater.service /etc/systemd/system/jnpt-updater.service
+  - install -m 0644 -o root -g root /opt/jnpt/repo/deploy/updater/jnpt-updater.timer /etc/systemd/system/jnpt-updater.timer
+  - systemctl daemon-reload
+  - systemctl enable --now jnpt-updater.timer

@@ -1,0 +1,95 @@
+# Beispiel-Variablenwerte für das Hetzner-Deployment (JanuaPort/januaport#776).
+# Alle Werte unten sind PLATZHALTER — kein Deploy unseres Showcase, kein
+# echtes Konto, keine echte IP.
+#
+# KOPIEREN nach terraform.tfvars und mit ECHTEN Werten füllen. terraform.tfvars
+# ist gitignored — es enthält Secrets und darf NIE committet werden.
+# Alternativ Secrets über TF_VAR_*-Umgebungsvariablen reichen (CI/CD).
+
+# ── Secrets (NIE committen) ──────────────────────────────────────────────────
+# Hetzner-Cloud-API-Token (Projekt → Security → API-Tokens, Read & Write):
+hcloud_token = "PLACEHOLDER_hcloud_token"
+
+# Tailscale-Auth-Key (Tailscale-Admin-Konsole → Settings → Keys):
+tailscale_authkey = "tskey-auth-PLACEHOLDER"
+
+# JanuaPort-Vault-Master-Key, 64 Hex-Zeichen — erzeugen mit:  openssl rand -hex 32
+# ACHTUNG: getrennt sichern. Verlust = Credentials unwiederbringlich.
+jnpt_master_key = "0000000000000000000000000000000000000000000000000000000000000000"
+
+# ── Domain / DNS ─────────────────────────────────────────────────────────────
+# Eigene Domain eintragen (Beispiel-Platzhalter, KEIN echter Wert):
+domain     = "mcp.example.com"
+acme_email = "admin@example.com"  # echte Kontakt-Mail eintragen (Let's-Encrypt-Ablaufmail)
+
+# Tailnet-Hostname (Admin-Fläche: https://<ts_hostname>.<tailnet>.ts.net):
+ts_hostname = "jnpt"
+
+# ── Server / Standort ────────────────────────────────────────────────────────
+server_type = "cpx22"  # 2 vCPU/4 GB. ACHTUNG: Typen sind region-abhängig und ändern sich — Verfügbarkeit je `location` vor `apply` prüfen.
+location    = "nbg1"  # EU-Standort (DSGVO)
+# image       = "ubuntu-24.04"
+# volume_size = 10
+
+# ── SSH-Zugang ───────────────────────────────────────────────────────────────
+# Inhalt des öffentlichen Schlüssels (z. B. `cat ~/.ssh/id_ed25519.pub`):
+ssh_public_key = "ssh-ed25519 AAAA... dein-key"
+
+# PFLICHT (kein Default im Modul): CIDR-Liste, die SSH (22) erreichen darf.
+# Eigene IP eintragen, z. B. ["203.0.113.4/32"]. Bewusst NICHT 0.0.0.0/0.
+# Wirklich kein SSH von außen gewünscht? Dann explizit eine leere Liste
+# eintragen: ssh_allowed_cidr = []
+ssh_allowed_cidr = ["203.0.113.4/32"]
+
+# ── Image-Quelle (Prebuilt-Image aus der Registry) ───────────────────────────
+# PFLICHT: gepinnter Image-Tag, den die VM aus der Registry zieht. Bewusst KEIN
+# `:latest` (reproduzierbar).
+image_ref = "ghcr.io/januaport/januaport:0.1.2"
+
+# OPTIONAL: classic PAT mit NUR `read:packages` für den Pull aus einem PRIVATEN
+# GHCR-Package. WICHTIG: GHCR unterstützt an der Container-Registry KEINE
+# fein-granularen PATs — nur classic. cloud-init reicht ihn NUR über
+# `docker login --password-stdin` (nie in Log/URL). Leer lassen, sobald das
+# Package public ist. Der Token liegt — wie die anderen Secrets — im
+# gitignorten Terraform-State im Klartext (Verlust unkritisch: read-only,
+# package-scoped, jederzeit rotierbar).
+# registry_token = "ghp_PLACEHOLDER_classic_read_packages"
+
+# ── Versions-Check (optional, offline-first) ─────────────────────────────────
+# Beide LEER lassen = der Versions-Check bleibt AUS. Das ist offline-first und
+# ausdrücklich KEIN Fehler.
+#
+# KEIN Secret: die Manifest-URL ist eine öffentliche Abruf-Adresse, und der
+# Prüfschlüssel ist ein PUBLIC Key — ihn zu veröffentlichen ist sein Zweck
+# (deshalb sind beide Variablen NICHT `sensitive`). Der private Schlüssel liegt
+# ausschließlich beim Vendor.
+#
+# update_manifest_url = "https://updates.example.com/jnpt/manifest.json"
+# Form: key_id=<base64(SPKI-DER)|hex>;key_id2=… (ergänzt den eingebetteten
+# Schlüsselring; Rotation „current + next"). Ohne Schlüssel ist alles fail-closed.
+# update_public_keys  = "jnpt-2026=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE_PLACEHOLDER"
+
+# ── Host-Aktuator ─────────────────────────────────────────────────────────────
+# Repository, aus dem der Aktuator installieren darf — DIE ALLOWLIST. Aus dem
+# signierten Plan kommt nur der Digest; die Ziel-Referenz setzt der Aktuator als
+# <updater_image_repo>@<digest> selbst zusammen. Nur das Repository, KEIN Tag.
+# Default ist dasselbe Repository wie in image_ref.
+# updater_image_repo = "ghcr.io/januaport/januaport"
+#
+# ⚠️ Der PRUEF-TOKEN des Gesundheits-Rundlaufs steht bewusst NICHT hier und wird
+# NIE über Terraform gesetzt (er läge sonst im State). Er wird nach dem
+# `apply` von Hand auf der VM abgelegt. Ohne ihn ist der Aktuator inert — der
+# gewollte Zustand direkt nach der Provisionierung.
+
+# ── Konfig-Quelle (Klon der Compose-/Caddy-/Tailscale-Configs) ──────────────
+# git_repo = "https://github.com/JanuaPort/januaport.git"
+# git_ref  = "main"
+#
+# Für ein PRIVATES Repo git_token setzen → cloud-init klont authentifiziert
+# (NUR die Konfig-Dateien, die VM baut nichts). Fein-granularer, READ-ONLY
+# GitHub-PAT, NUR für dieses Repo, NUR "Contents:read". Der Token wird auf der
+# VM NICHT persistiert (kein Eintrag in .git/config) und NICHT geloggt; er
+# liegt aber — wie die anderen Secrets — im gitignorten Terraform-State im
+# Klartext. Verlust unkritisch (read-only, repo-scoped, jederzeit rotierbar).
+# Leer/auskommentiert lassen für ein ÖFFENTLICHES Repo (anonymer Klon).
+# git_token = "github_pat_PLACEHOLDER"
