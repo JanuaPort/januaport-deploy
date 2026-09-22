@@ -1,0 +1,67 @@
+#cloud-config
+# cloud-init (EC2 User-Data) für einen minimalen JanuaPort-Startpunkt auf AWS
+# (Ubuntu-AMI) — JanuaPort/januaport#776.
+#
+# COMMUNITY-VORLAGE, von JanuaPort GmbH NICHT BETRIEBEN, UNGETESTET.
+#
+# Installiert Docker + Compose-Plugin und legt einen minimalen Ein-Container-
+# Stack + eine .env-Vorlage unter /opt/jnpt ab. Startet die Anlage BEWUSST
+# NICHT automatisch — die .env enthält nur Platzhalter (kein gültiger
+# JANUAPORT_IMAGE-Wert), ein automatischer Start würde ohnehin nur mit einer
+# Fehlermeldung abbrechen (Pflicht-Variable, s. docker-compose.yml). Nach dem
+# ersten Boot: /opt/jnpt/.env mit echten Werten füllen (siehe
+# ../compose/.env.example für die vollständige Liste der Betreiber-Envs), dann
+# von Hand starten — Schritte in README.md.
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+
+write_files:
+  # Minimaler Ein-Container-Stack, bewusst identisch zu compose/docker-compose.yml
+  # im Repo-Root (Loopback-Bind, Pflicht-Image-Tag, kein Healthcheck — Begründung
+  # dort). Wer mehr Betreiber-Envs braucht (SSO, Anbindungsweg, …), ersetzt diese
+  # Datei durch compose/docker-compose.yml + compose/.env.example aus dem Repo.
+  - path: /opt/jnpt/docker-compose.yml
+    permissions: "0644"
+    owner: root:root
+    content: |
+      name: jnpt
+      services:
+        jnpt:
+          image: ${JANUAPORT_IMAGE:?JANUAPORT_IMAGE in der .env setzen, z. B. ghcr.io/januaport/januaport:0.1.2}
+          ports:
+            - "127.0.0.1:8484:8484"
+          environment:
+            JNPT_MASTER_KEY: ${JNPT_MASTER_KEY:-}
+          volumes:
+            - jnpt-data:/data
+          restart: unless-stopped
+      volumes:
+        jnpt-data:
+
+  - path: /opt/jnpt/.env.example
+    permissions: "0644"
+    owner: root:root
+    content: |
+      # Nach .env kopieren (liegt daneben, ist bereits kopiert) und Werte
+      # eintragen. Vollständige Liste der Betreiber-Envs (SSO, Anbindungsweg,
+      # Verzeichnisse): ../compose/.env.example im Repo.
+      JANUAPORT_IMAGE=ghcr.io/januaport/januaport:0.1.2
+      JNPT_MASTER_KEY=
+
+runcmd:
+  # --- Docker Engine + Compose-Plugin (offizielles Repo) ---------------------
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+  - apt-get update
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - systemctl enable --now docker
+  - cp /opt/jnpt/.env.example /opt/jnpt/.env
+  - 'echo "JanuaPort-Startpunkt - Docker ist bereit. /opt/jnpt/.env mit echten Werten fuellen, danach docker compose -f /opt/jnpt/docker-compose.yml --env-file /opt/jnpt/.env up -d" > /etc/motd'
