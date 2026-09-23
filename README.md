@@ -1,40 +1,46 @@
 # januaport-deploy
 
-Deploy-Vorlagen und Anleitungen je Umgebung fuer JanuaPort: Compose, Hetzner, Azure, AWS (Apache 2.0)
+**English** · [Deutsch](README.de.md)
 
-**Status:** privat bis zum GoLive von JanuaPort (Flip in der GoLive-Checkliste JanuaPort/januaport#788). Teil des Open-Core-Pivots (JanuaPort/januaport#773).
+Operations for JanuaPort: templates and guides for running JanuaPort in a given environment.
 
-**Lizenz:** Apache License 2.0 (`LICENSE`), Copyright 2026 JanuaPort GmbH (`NOTICE`). Beitraege: `CONTRIBUTING.md`.
+JanuaPort is a self-hosted MCP gateway. It connects AI assistants to a company's existing systems with
+fine-grained permissions and records access in an append-only audit log. The core of JanuaPort is
+proprietary software of JanuaPort GmbH and is not part of this repository. This repository is one of the
+open edges around it.
 
-**Zustaendig:** Lead (#776) — Ownership je Unterordner; Inhalte kommen mit den genannten Tickets.
+- **License:** Apache License 2.0 ([`LICENSE`](LICENSE), [`NOTICE`](NOTICE))
+- **Links:** [januaport.ai](https://januaport.ai) · [Security policy](SECURITY.md) · [Contributing](CONTRIBUTING.md)
+- **Language:** The guides in the subfolders are currently written in German.
 
-Keine Kundendaten, keine Schluessel, keine Betreiberwerte in diesem Repository.
+No customer data, no keys, no operator values in this repository.
 
-## Umgebungen
+---
 
-Jede Anleitung folgt derselben Gliederung: Voraussetzungen · Schritte ·
-Prüfen · Update · Sicherheits-Defaults.
+## Environments
 
-| Umgebung | Status | Anleitung |
+Every guide follows the same structure: prerequisites · steps · checks · update · security defaults.
+
+Status labels: **Built** · **In progress** · **Planned**. Each entry says what exactly has been verified.
+
+| Environment | Status | Guide |
 |---|---|---|
-| Docker Compose (generisch, Selbst-Hoster) | von JanuaPort GmbH betrieben (Showcase-Muster) | [`compose/`](compose/) |
-| Hetzner Cloud (Terraform) | von JanuaPort GmbH betrieben (Showcase-Muster) | [`hetzner/`](hetzner/) |
-| Microsoft Azure | Community-Vorlage, ungetestet | [`azure/`](azure/) |
-| Amazon Web Services (AWS) | Community-Vorlage, ungetestet | [`aws/`](aws/) |
-| JanuaPort Box | kommt aus `JanuaPort/januaport-plugins` (#781) | [`box/`](box/) |
+| Docker Compose (generic, self-hosting) | **Built.** Operated by JanuaPort GmbH (showcase pattern). | [`compose/`](compose/) |
+| Hetzner Cloud (Terraform) | **Built.** Operated by JanuaPort GmbH (showcase pattern). | [`hetzner/`](hetzner/) |
+| Microsoft Azure | **Built, untested.** Community template. | [`azure/`](azure/) |
+| Amazon Web Services (AWS) | **Built, untested.** Community template. | [`aws/`](aws/) |
+| JanuaPort Box | **Planned.** Will come from `JanuaPort/januaport-plugins`. | [`box/`](box/) |
 
-„Von JanuaPort GmbH betrieben (Showcase-Muster)" heißt: dieselbe Grundform
-läuft produktiv auf unserem eigenen Showcase — die Vorlage hier ist davon
-abgeleitet, aber ohne unsere konkreten Betreiberwerte (Domain, Tailnet-Name,
-Konto, Tokens, IPs). „Community-Vorlage, ungetestet" heißt: ein minimaler,
-plausibler Startpunkt, den wir nicht selbst betreiben und nicht durchprobiert
-haben — Korrekturen sind Beiträge (`CONTRIBUTING.md`).
+"Operated by JanuaPort GmbH (showcase pattern)" means: the same basic setup runs productively on our own
+showcase. The template here is derived from it, without our concrete operator values (domain, tailnet
+name, account, tokens, IP addresses). "Community template, untested" means: a minimal, plausible
+starting point that we do not operate ourselves and have not tried out. Corrections are welcome as
+contributions ([`CONTRIBUTING.md`](CONTRIBUTING.md)).
 
-## Verhältnis zum Produkt-Repo
+## Relationship to the product
 
-JanuaPort selbst bleibt self-hosted und account-agnostisch; dieses Repo
-liefert nur die Deploy-Schicht (Compose-Vorlagen, Infrastruktur-Automatik).
-Die Inbetriebnahme **nach** „Container läuft" (Erstzugang, Master-Schlüssel,
-Admin-Passwort, erster Admin-Token, Teams, SSO, Integrationen) steht in
-`docs/inbetriebnahme.md` im Produkt-Repo `JanuaPort/januaport` — jede
-Anleitung hier verweist an der passenden Stelle dorthin.
+JanuaPort itself stays self-hosted and runs without any activation by us. This repository only provides
+the deployment layer (Compose templates, infrastructure automation). Everything **after** "the container
+is running" (first access, master key, admin password, first admin token, teams, SSO, integrations) is
+described in the setup guide of the product (`docs/inbetriebnahme.md`, product documentation, not
+public). Every guide here points there at the right step.
