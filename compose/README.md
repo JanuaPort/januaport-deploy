@@ -80,3 +80,31 @@ docker compose --env-file .env up -d
   internes Netz.
 - **Secrets kommen ausschließlich aus der `.env`** bzw. später aus dem Vault
   der Anlage selbst — nie in `docker-compose.yml`, nie ins Repo.
+
+## Host-Firewall für das Plugin-Netz (Beisteller, JanuaPort/januaport#1040, #1194)
+
+Wer Beisteller betreibt (Skript-Läufer, agent-runner, google-reporting), braucht auf dem Host eine Regel. Sie verhindert, dass ein Container am Plugin-Netz `jnpt_plugins` über das Bridge-Gateway Dienste des Hosts erreicht, zum Beispiel sshd oder einen lokalen Modell-Server. `internal: true` sperrt nur den Weg nach außen, den Host selbst sperrt es nicht. Gemessen wurde das auf der Showcase am 26.10.2026.
+
+1. **Bridge-Namen pinnen**, damit die Regel an einem festen Namen hängt und nicht am Subnetz:
+   ```yaml
+   networks:
+     plugins:
+       name: jnpt_plugins
+       internal: true
+       driver_opts:
+         com.docker.network.bridge.name: jnpt-plugins
+   ```
+   ⚠️ Ein Bridge-Name lässt sich nur beim Anlegen des Netzes setzen. Bei einer bestehenden Anlage nimmst du deshalb zuerst alle Plugin-Stacks herunter, danach den Kern, und startest dann in umgekehrter Reihenfolge. Jeder Aufruf bekommt `-f` auf die eigene Datei, und `COMPOSE_FILE` darf **nicht** exportiert sein. Sonst trifft ein `down` das falsche Projekt.
+2. **Regel**, idempotent, für IPv4 und IPv6. Sie greift auch, bevor Docker die Bridge anlegt:
+   ```sh
+   # /usr/local/sbin/jnpt-plugin-net-guard.sh
+   for IF in jnpt-plugins; do
+     iptables  -C INPUT -i "$IF" -j DROP 2>/dev/null || iptables  -I INPUT 1 -i "$IF" -j DROP
+     ip6tables -C INPUT -i "$IF" -j DROP 2>/dev/null || ip6tables -I INPUT 1 -i "$IF" -j DROP
+   done
+   ```
+   Hat ein Beisteller ein eigenes Ausgangsnetz mit gepinnter Bridge, etwa google-reporting mit `jnpt-gr-egress`, gehört dessen Name mit in die Liste.
+3. **Dauerhaft** über eine systemd-Unit `jnpt-plugin-net-guard.service`: `Type=oneshot`, `After=`, `Requires=` und `PartOf=docker.service`, `WantedBy=multi-user.target docker.service`. Sie ruft das Skript auf.
+4. **Prüfen**, auch nach jedem Neustart des Hosts: Aus jedem Container am Plugin-Netz darf **kein** lauschender Host-Port (`ss -lnt`) über das Bridge-Gateway erreichbar sein. `jnpt:8484` muss erreichbar bleiben.
+
+Die Box bringt mit `scripts/hardening.sh` eine input-Kette mit `policy drop` mit. Ob sie das Plugin-Netz vollständig erfasst, wird in JanuaPort/januaport#1194 geprüft.
