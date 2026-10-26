@@ -98,7 +98,9 @@ Wer Beisteller betreibt (Skript-Läufer, agent-runner, google-reporting), brauch
        driver_opts:
          com.docker.network.bridge.name: jnpt-plugins
    ```
-   ⚠️ Ein Bridge-Name lässt sich nur beim Anlegen des Netzes setzen. Bei einer bestehenden Anlage nimmst du deshalb zuerst alle Plugin-Stacks herunter, danach den Kern, und startest dann in umgekehrter Reihenfolge. Jeder Aufruf bekommt `-f` auf die eigene Datei, und `COMPOSE_FILE` darf **nicht** exportiert sein. Sonst trifft ein `down` das falsche Projekt.
+   Hat ein Container eine feste Adresse im Netz (etwa google-reporting), pinnst du zusätzlich das Subnetz per `ipam`, sonst passt die Adresse nach dem Neuanlegen nicht mehr.
+
+   ⚠️ Ein Bridge-Name lässt sich nur beim Anlegen des Netzes setzen. Bei einer bestehenden Anlage nimmst du deshalb zuerst alle Plugin-Stacks herunter, danach den Kern, und startest dann in umgekehrter Reihenfolge. Plugin-Stacks laufen je mit `-f docker-compose.yml` im eigenen Ordner. Den Kern startest du mit **allen** seinen Dateien, also mit `-f` je Datei oder mit `COMPOSE_FILE=… docker compose …` nur als Präfix dieses einen Aufrufs. `COMPOSE_FILE` darf **nie** exportiert sein, sonst trifft ein `down` das falsche Projekt.
 2. **Regel**, idempotent, für IPv4 und IPv6. Sie greift auch, bevor Docker die Bridge anlegt:
    ```sh
    # /usr/local/sbin/jnpt-plugin-net-guard.sh
@@ -108,7 +110,7 @@ Wer Beisteller betreibt (Skript-Läufer, agent-runner, google-reporting), brauch
    done
    ```
    Hat ein Beisteller ein eigenes Ausgangsnetz mit gepinnter Bridge, etwa google-reporting mit `jnpt-gr-egress`, gehört dessen Name mit in die Liste.
-3. **Dauerhaft** über eine systemd-Unit `jnpt-plugin-net-guard.service`: `Type=oneshot`, `After=`, `Requires=` und `PartOf=docker.service`, `WantedBy=multi-user.target docker.service`. Sie ruft das Skript auf.
+3. **Dauerhaft** über eine systemd-Unit `jnpt-plugin-net-guard.service` mit `Type=oneshot`, `RemainAfterExit=yes`, `ExecStart=/usr/local/sbin/jnpt-plugin-net-guard.sh`, `After=`, `Requires=` und `PartOf=docker.service`, `WantedBy=multi-user.target docker.service`. Ohne `RemainAfterExit=yes` greifen `PartOf` und `Requires` bei oneshot nicht richtig.
 4. **Prüfen**, auch nach jedem Neustart des Hosts: Aus jedem Container am Plugin-Netz darf **kein** lauschender Host-Port (`ss -lnt`) über das Bridge-Gateway erreichbar sein. `jnpt:8484` muss erreichbar bleiben.
 
 Die Box bringt mit `scripts/hardening.sh` eine input-Kette mit `policy drop` mit. Ob sie das Plugin-Netz vollständig erfasst, wird in JanuaPort/januaport#1194 geprüft.
