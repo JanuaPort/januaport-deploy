@@ -9,11 +9,12 @@ import unittest
 from test_profile import ROOT, run
 
 
-def ps(script, source=ROOT / "einrichten.ps1"):
+def ps(script, source=ROOT / "einrichten.ps1", extra_env=None):
     # Passed as an argument, without an intervening shell.
     env = dict(os.environ)
     # PowerShell 7's inherited PSModulePath hides the standard 5.1 cmdlets.
     env = {key: value for key, value in env.items() if key.lower() != 'psmodulepath'}
+    env.update(extra_env or {})
     return run("powershell", "-NoProfile", "-Command",
                "$ErrorActionPreference='Stop'; . '" + str(source) + "'; " + script,
                check=False, env=env)

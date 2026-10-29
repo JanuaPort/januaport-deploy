@@ -49,6 +49,16 @@ def verify_sums(directory):
 
 
 class Profile(unittest.TestCase):
+    def test_static_leaf_configuration(self):
+        caddyfile = (ROOT / 'Caddyfile').read_text()
+        self.assertNotIn('tls internal', caddyfile)
+        self.assertIn('tls /certs/cert.pem /certs/key.pem', caddyfile)
+        cfg = json.loads(config().stdout)
+        mounts = cfg['services']['caddy']['volumes']
+        leaf = [mount for mount in mounts if mount['target'] == '/certs']
+        self.assertEqual(len(leaf), 1)
+        self.assertTrue(leaf[0]['read_only'])
+
     def test_sums_and_tampering(self):
         verify_sums(ROOT)
         with tempfile.TemporaryDirectory(dir=ROOT / "test") as tmp:

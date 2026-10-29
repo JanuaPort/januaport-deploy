@@ -2,9 +2,13 @@
 import hashlib
 import http.client
 import json
+import os
+from pathlib import Path
+import shutil
 import socket
 import ssl
 import time
+import tempfile
 import unittest
 import uuid
 
@@ -17,6 +21,17 @@ class Live(unittest.TestCase):
         name = 'jnpt-windows-live-' + uuid.uuid4().hex[:10]
         compose = ('docker', 'compose', '--env-file', str(ROOT / '.env.example'),
                    '-p', name, '-f', str(ROOT / 'docker-compose.yml'))
+        installation = tempfile.TemporaryDirectory(prefix='install-', dir=ROOT / 'test')
+        target = Path(installation.name)
+        for file in ['Caddyfile', 'docker-compose.yml', 'einrichten.ps1', 'SHA256SUMS']:
+            shutil.copyfile(ROOT / file, target / file)
+        shutil.copyfile(ROOT / '.env.example', target / '.env')
+        env_bytes = (target / '.env').read_bytes()
+        install_env = {key: value for key, value in os.environ.items() if key.lower() != 'psmodulepath'}
+        install_env['COMPOSE_PROJECT_NAME'] = name
+        def install():
+            return run('powershell', '-NoProfile', '-File', str(target / 'einrichten.ps1'),
+                       '-Directory', str(target), env=install_env, check=False)
         def request(path, tls=False, method='GET', body=None, headers=None):
             if tls:
                 conn = http.client.HTTPSConnection('127.0.0.1', 443, timeout=4,
@@ -30,7 +45,7 @@ class Live(unittest.TestCase):
             finally:
                 conn.close()
         try:
-            result = run(*compose, 'up', '-d', check=False)
+            result = install()
             self.assertEqual(result.returncode, 0, result.stderr)
             for attempt in range(60):
                 try:
@@ -69,11 +84,27 @@ class Live(unittest.TestCase):
             with socket.create_connection(('127.0.0.1', 443), timeout=3) as raw:
                 with ssl._create_unverified_context().wrap_socket(raw, server_hostname=None) as secure:
                     expected = hashlib.sha256(secure.getpeercert(binary_form=True)).hexdigest()
-            fingerprint = ps('Get-LeafFingerprint')
+            fingerprint = ps("Push-Location '" + str(target) + "'; Get-LeafFingerprint", extra_env={'COMPOSE_PROJECT_NAME': name})
             self.assertEqual(fingerprint.returncode, 0, fingerprint.stderr)
             self.assertEqual(fingerprint.stdout.strip(), expected)
+            # Execute the entire setup script again, preserving operator values and leaf.
+            again = install()
+            self.assertEqual(again.returncode, 0, again.stderr)
+            self.assertIn(expected, again.stdout)
+            self.assertEqual((target / '.env').read_bytes(), env_bytes)
+            run(*compose, 'restart', 'caddy')
+            for attempt in range(30):
+                try:
+                    with socket.create_connection(('127.0.0.1', 443), timeout=3) as raw:
+                        with ssl._create_unverified_context().wrap_socket(raw, server_hostname=None) as secure:
+                            restarted = hashlib.sha256(secure.getpeercert(binary_form=True)).hexdigest()
+                    break
+                except (OSError, ssl.SSLError):
+                    time.sleep(.25)
+            self.assertEqual(restarted, expected)
         finally:
             result = run(*compose, 'down', '-v', '--remove-orphans', check=False)
+            installation.cleanup()
             self.assertEqual(result.returncode, 0, result.stderr)
 
 
