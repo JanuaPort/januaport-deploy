@@ -113,7 +113,7 @@ Anlage, Skript-Läufer, Kopplung und Lauf. Den Zeitplan danach löschen.
 Je Sitzung ein Eintrag beim Dienstleister: Datum, Uhrzeit, Person, Zweck. Keine Inhalte vom Bildschirm, keine
 Daten des Kunden. Vor dem Start hakt die Person ab:
 
-- [ ] Der Kunde hat die Sitzung angenommen oder den Zugang für einen Zeitraum freigegeben.
+- [ ] Der Kunde hat die Sitzung angenommen.
 - [ ] Am Zugriffsgerät ist kein KI-Werkzeug mit Bildschirmzugriff aktiv: kein Computer-Use, keine Desktop-App
       mit Bildschirmfreigabe, keine Screenshot-Synchronisierung.
 - [ ] Kein KI-Werkzeug des Dienstleisters hat Datei-, Datenbank- oder Werkzeugzugriff (MCP) auf echte Daten;
