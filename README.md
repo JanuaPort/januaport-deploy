@@ -11,7 +11,7 @@ open edges around it.
 
 - **License:** Apache License 2.0 ([`LICENSE`](LICENSE), [`NOTICE`](NOTICE))
 - **Links:** [januaport.ai](https://januaport.ai) · [Security policy](SECURITY.md) · [Contributing](CONTRIBUTING.md)
-- **Language:** The guides in the subfolders are currently written in German.
+- **Language:** Most guides are in German; the Windows guide also has an English version.
 
 No customer data, no keys, no operator values in this repository.
 
@@ -26,6 +26,7 @@ Status labels: **Built** · **In progress** · **Planned**. Each entry says what
 | Environment | Status | Guide |
 |---|---|---|
 | Docker Compose (generic, self-hosting) | **Built.** Operated by JanuaPort GmbH (showcase pattern). | [`compose/`](compose/) |
+| Windows Pro / Docker Desktop (LAN TLS, package A) | **Built.** Local Docker checks; operator firewall and long-term operation require validation. | [`windows/`](windows/README.en.md) |
 | Hetzner Cloud (Terraform) | **Built.** Operated by JanuaPort GmbH (showcase pattern). | [`hetzner/`](hetzner/) |
 | Microsoft Azure | **Built, untested.** Community template. | [`azure/`](azure/) |
 | Amazon Web Services (AWS) | **Built, untested.** Community template. | [`aws/`](aws/) |
