@@ -19,7 +19,7 @@ embedded reference and checksums together. The initial script download trusts
 HTTPS/GitHub; the checksums are not an independent publisher signature.
 
 ```powershell
-iwr https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.1.0/windows/einrichten.ps1 -OutFile e.ps1
+curl.exe -fLo e.ps1 https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.1.0/windows/einrichten.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\e.ps1
 ```
 

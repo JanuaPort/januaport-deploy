@@ -33,7 +33,7 @@ Dateifehler, sind keine davon unabhängige Herausgebersignatur.
 In einer normalen PowerShell im gewünschten Downloadordner:
 
 ```powershell
-iwr https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.1.0/windows/einrichten.ps1 -OutFile e.ps1
+curl.exe -fLo e.ps1 https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.1.0/windows/einrichten.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\e.ps1
 ```
 
