@@ -31,6 +31,10 @@ einrichtet und wartet. „Betreiber“ meint in diesem Runbook und im Produkt im
     ist am Zugriffsgerät kein KI-Werkzeug mit Bildschirmzugriff aktiv. Dazu zählen Computer-Use, eine
     Desktop-App mit Bildschirmfreigabe und Screenshot-Synchronisierung. Das ist ein Prüfpunkt im
     Sitzungsprotokoll (Abschnitt 4).
+  - Kein KI-Werkzeug des Dienstleisters hat Datei-, Datenbank- oder Werkzeugzugriff (MCP) auf echte Daten
+    des Kunden, auch nicht per Shell auf dem Rechner (Datenbank, Export, Log). KI-Clients des Dienstleisters
+    sind nur mit der Schulungs- oder Testinstanz verbunden. Was der Kunde mit seiner eigenen KI tut, ist
+    seine Verarbeitung und nicht Teil dieser Regel.
   - Keine Screenshots und keine Logs mit Daten des Kunden in Tickets, Chats oder Notizen bei Dritt-Diensten.
     Gespeichert wird nur auf eigenen, verschlüsselten Geräten des Dienstleisters, nie in Cloud-Ablagen.
 
@@ -112,6 +116,8 @@ Daten des Kunden. Vor dem Start hakt die Person ab:
 - [ ] Der Kunde hat die Sitzung angenommen.
 - [ ] Am Zugriffsgerät ist kein KI-Werkzeug mit Bildschirmzugriff aktiv: kein Computer-Use, keine Desktop-App
       mit Bildschirmfreigabe, keine Screenshot-Synchronisierung.
+- [ ] Kein KI-Werkzeug des Dienstleisters hat Datei-, Datenbank- oder Werkzeugzugriff (MCP) auf echte Daten;
+      KI-Clients sind nur mit der Schulungs- oder Testinstanz verbunden.
 - [ ] Zeigt die Sitzung echte Daten? Dann wird nur von Hand gearbeitet, ohne KI.
 
 ## 5. Nach dem Termin
