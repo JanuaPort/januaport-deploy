@@ -2,13 +2,12 @@
 	# Ein Leaf fuer numerische LAN-Adressen und Loopback; der Laeufer pinnt
 	# genau dieses Zertifikat. Keine CA-Installation, kein HTTP-Listener.
 	default_sni localhost
-	auto_https disable_redirects
-	skip_install_trust
+	auto_https off
 	admin off
 }
 
 https://localhost, https:// {
-	tls internal
+	tls /certs/cert.pem /certs/key.pem
 
 	@device path /api/device/v1/* /healthz
 	handle @device {

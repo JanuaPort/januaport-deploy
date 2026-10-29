@@ -27,12 +27,23 @@ Enter only a core image tag (e.g. `0.87.1`) or `sha256:<64 lowercase hex digits>
 Docker resolves tags to registry digests. The installer creates
 `%LOCALAPPDATA%\JanuaPort\windows\.env` with `JANUAPORT_IMAGE` (repository/tag)
 and mandatory `JANUAPORT_IMAGE_DIGEST`; Compose combines them into a digest
-reference. Caddy and script-runner images are already pinned. Existing target
-directories are rejected. Use `-Directory C:\JanuaPort\windows` for another
-new directory. The script verifies the downloaded files, starts Compose, waits
-for `/healthz`, then prints the SHA-256 fingerprint of Caddy's DER **leaf**.
+reference. Caddy, OpenSSL and script-runner images are already pinned. A complete
+existing profile is verified and started again, preserving its files, `.env`,
+certificate and key, without downloading files or prompting for an image again.
+Other existing or incomplete target directories are rejected. Use
+`-Directory C:\JanuaPort\windows` for another directory.
 
-Open the admin GUI locally at <http://127.0.0.1:8484> and follow the product's
+The script creates a self-signed ECDSA P-256 **leaf** once, valid for ten years
+(3653 days), using a digest-pinned OpenSSL container. SANs include `127.0.0.1`,
+`localhost`, the computer name and all current host IPv4 addresses. Certificate
+and key live in the dedicated `tls-leaf` volume (default name
+`jnpt-windows_tls-leaf`), mounted read-only by Caddy. There is no automatic
+renewal or local CA. An incomplete existing certificate/key pair is rejected
+without overwriting it. The script starts Compose, waits for `/healthz` and
+checks that Caddy serves this exact certificate. The printed SHA-256 fingerprint
+is computed from that PEM certificate in the volume.
+
+The GUI output is exactly `Admin-GUI: http://127.0.0.1:8484`. Follow the product's
 `docs/inbetriebnahme.md`: secure the master key, set the admin password and
 create the first admin token.
 
@@ -49,17 +60,30 @@ establish its identity.
 .\desktop-runner.exe run
 ```
 
-On the server use `https://127.0.0.1`. Use numeric IP addresses rather than
-arbitrary DNS aliases: connections without SNI and `localhost` receive the same
-certificate. **Never import the CA into any certificate store (SEC W10).**
-Do not use `--ca` or disable TLS validation in the runner. Caddy's
-`skip_install_trust` also prevents CA installation inside the container.
+On the server use `https://127.0.0.1`. **Never import a CA into any certificate
+store (SEC W10).** Do not use `--ca` or disable TLS validation in the runner.
+Caddy loads only `/certs/cert.pem` and `/certs/key.pem`.
 
-Caddy's internal leaves are valid for 12 hours by default and renew automatically.
-A changed certificate invalidates the old pin. Dot-source the installed script
-and call `Get-LeafFingerprint` locally; verify the new value and pair again with
-a new code. This package does not distribute renewed fingerprints automatically;
-long-term operation requires an operational solution for this.
+The reviewed desktop runner (`desktop-runner/internal/client/http.go`,
+`NewAPI`/`VerifyConnection`) checks only the exact DER leaf's SHA-256 in fingerprint
+mode. It does not check hostname/IP SANs, the CA chain or validity dates.
+A new DHCP IP therefore does not require a new certificate, but the saved server
+URL must remain reachable. Pair again with the new `--url` and the same
+fingerprint when changing addresses. Prefer a fixed IP, DHCP reservation or
+a reliably resolvable computer name.
+
+**Explicit certificate replacement**, for example after a compromise or before
+the ten-year validity ends:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\JanuaPort\windows\einrichten.ps1" -NeuesZertifikat
+```
+
+Add `-Directory <profile-directory>` for a custom installation. This explicit
+command stops Caddy, replaces the certificate/key with current SANs and starts
+it again. **Pair every runner again with a new code and the new fingerprint.**
+Normal setup reruns and Caddy restarts preserve the certificate. Keep the TLS
+volume: losing it and generating another certificate also changes the pin.
 
 For desktop packages, configure `plugin-script-runner` (runtime key) and
 `plugin-script-runner-git` (read-only deploy key) in basic setup, then set the

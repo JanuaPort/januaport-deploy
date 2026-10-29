@@ -48,6 +48,15 @@ def verify_sums(directory):
         raise ValueError("incomplete checksum manifest")
 
 
+def create_leaf(cfg, volume, san='DNS:localhost,IP:127.0.0.1'):
+    service = cfg['services']['cert-init']
+    # Compose config escapes dollars again in serialized output.
+    script = service['command'][0].replace('$$', '$')
+    return run('docker', 'run', '--rm', '--network', 'none', '--read-only',
+               '--cap-drop', 'ALL', '-v', volume + ':/certs', '-e', 'CERT_SAN=' + san,
+               '--entrypoint', '/bin/sh', service['image'], '-ec', script)
+
+
 class Profile(unittest.TestCase):
     def test_static_leaf_configuration(self):
         caddyfile = (ROOT / 'Caddyfile').read_text()
@@ -58,6 +67,37 @@ class Profile(unittest.TestCase):
         leaf = [mount for mount in mounts if mount['target'] == '/certs']
         self.assertEqual(len(leaf), 1)
         self.assertTrue(leaf[0]['read_only'])
+
+    def test_leaf_properties_and_partial_pair_rejection(self):
+        cfg = json.loads(config().stdout)
+        volume = 'jnpt-windows-cert-test-' + uuid.uuid4().hex[:10]
+        image = cfg['services']['cert-init']['image']
+        try:
+            create_leaf(cfg, volume, 'DNS:localhost,DNS:probe-host,IP:127.0.0.1,IP:192.0.2.10')
+            text = run('docker', 'run', '--rm', '-v', volume + ':/certs:ro', image,
+                       'x509', '-in', '/certs/cert.pem', '-noout', '-text').stdout
+            for value in ['CA:FALSE', 'prime256v1', 'DNS:localhost', 'DNS:probe-host',
+                          'IP Address:127.0.0.1', 'IP Address:192.0.2.10']:
+                self.assertIn(value, text)
+            # At least ten years, but not an accidentally indefinite certificate.
+            for days, expected in [(3652, 0), (3654, 1)]:
+                check = run('docker', 'run', '--rm', '-v', volume + ':/certs:ro', image,
+                            'x509', '-in', '/certs/cert.pem', '-noout', '-checkend',
+                            str(days * 86400), check=False)
+                self.assertEqual(check.returncode, expected)
+            def fingerprint():
+                return run('docker', 'run', '--rm', '-v', volume + ':/certs:ro', image,
+                           'x509', '-in', '/certs/cert.pem', '-noout', '-fingerprint', '-sha256').stdout
+            original_pin = fingerprint()
+            create_leaf(cfg, volume)
+            self.assertEqual(fingerprint(), original_pin, 'initializer replaced an existing leaf')
+            run('docker', 'run', '--rm', '-v', volume + ':/certs', '--entrypoint', '/bin/sh',
+                image, '-ec', 'rm /certs/key.pem')
+            # A partial existing pair is never silently replaced.
+            with self.assertRaises(subprocess.CalledProcessError):
+                create_leaf(cfg, volume)
+        finally:
+            run('docker', 'volume', 'rm', volume, check=False)
 
     def test_sums_and_tampering(self):
         verify_sums(ROOT)
@@ -101,6 +141,7 @@ class Profile(unittest.TestCase):
         # A real HTTP backend proves that allowed requests reach reverse_proxy.
         backend = cfg["services"]["script-runner"]["image"]
         try:
+            create_leaf(cfg, ident + '-leaf')
             run("docker", "run", "-d", "--name", ident, "-p", "127.0.0.1::443",
                 "--entrypoint", "python3", backend, "-c",
                 "from http.server import HTTPServer,BaseHTTPRequestHandler\n"
@@ -110,7 +151,8 @@ class Profile(unittest.TestCase):
                 " do_POST=do_GET\n"
                 "HTTPServer(('127.0.0.1',8484),H).serve_forever()")
             run("docker", "run", "-d", "--name", ident + "-caddy", "--network", "container:" + ident,
-                "-v", str(ROOT / "Caddyfile") + ":/etc/caddy/Caddyfile:ro", image)
+                "-v", str(ROOT / "Caddyfile") + ":/etc/caddy/Caddyfile:ro",
+                '-v', ident + '-leaf:/certs:ro', image)
             port = int(run("docker", "port", ident, "443/tcp").stdout.strip().rsplit(":", 1)[1])
             def request(path, method="GET"):
                 conn = http.client.HTTPSConnection("127.0.0.1", port, context=ssl._create_unverified_context(), timeout=3)
@@ -134,7 +176,10 @@ class Profile(unittest.TestCase):
             # Check the real container trust-store directory, as well as the adapter setting.
             store = run('docker', 'exec', ident + '-caddy', 'ls', '/usr/local/share/ca-certificates').stdout
             self.assertNotIn('Caddy', store)
-            self.assertFalse(adapted['apps']['pki']['certificate_authorities']['local']['install_trust'])
+            loaded = adapted['apps']['tls']['certificates']['load_files']
+            self.assertEqual(len(loaded), 1)
+            self.assertEqual((loaded[0]['certificate'], loaded[0]['key']),
+                             ('/certs/cert.pem', '/certs/key.pem'))
             for path in ["/", "/admin/mcp", "/admin/mcp/", "/api/admin/tokens", "/mcp", "/mcp/x",
                          "/metrics", "/healthz/", "/api/device/v1", "/api/device/v10/pair",
                          "/api/device/v1/../../../admin/mcp", "/api/device/v1/%2e%2e/%2e%2e/%2e%2e/admin/mcp"]:
@@ -142,6 +187,7 @@ class Profile(unittest.TestCase):
                     self.assertEqual(request(path, method)[0], 404, (method, path))
         finally:
             run("docker", "rm", "-f", "-v", ident + "-caddy", ident, check=False)
+            run('docker', 'volume', 'rm', ident + '-leaf', check=False)
 
 
 if __name__ == "__main__":

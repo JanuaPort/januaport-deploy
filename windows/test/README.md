@@ -14,7 +14,10 @@ python -B windows/test/mutations.py
 Die Standardtests prüfen Summen samt beschädigter Dateien, echte
 PowerShell-Summenprüfung einschließlich Format-/Dateinamen-/Duplikat- und
 Vollständigkeitssperren, Eingabe- und Zielverzeichnis-Abweisungen sowie den
-Compose-Adapter. Für Caddy läuft ein echter HTTPS-Server im Netz-Namensraum
+Compose-Adapter. Ein OpenSSL-Container erzeugt das echte P-256-Leaf: Laufzeit,
+SANs und `CA:FALSE` werden geprüft, ein unvollständiges Paar wird abgewiesen.
+Das Caddyfile muss feste PEM-Dateien statt eines internen Ausstellers laden.
+Für Caddy läuft ein echter HTTPS-Server im Netz-Namensraum
 eines synthetischen HTTP-Backends. Die Negativanfragen umfassen GET/POST,
 GUI, Admin-MCP, Admin-API, MCP, Metrics, Pfadgrenzen und Traversal. Der Test
 versucht auch Caddys Admin-Socket zu erreichen und prüft den tatsächlichen
@@ -31,8 +34,12 @@ mit dem in `.env.example` gepinnten Kern-Image. Es prüft Health, erlaubte und
 gesperrte Routen, den Transport-Riegel für die Kopplung (HTTP direkt: 401;
 HTTPS mit leerem Eingabeobjekt: 400 nach dem Transport-Riegel), die tatsächliche
 Netz-Namensraumteilung, Docker-Portbindungen, die Unerreichbarkeit des
-Admin-Ports über die eigene LAN-Schnittstelle und den PowerShell-Fingerprint
-gegen das tatsächlich empfangene DER-Zertifikat. In `finally` folgt immer
+Admin-Ports über die eigene LAN-Schnittstelle und den Fingerprint aus dem
+Zertifikats-Volume gegen das tatsächlich empfangene DER-Zertifikat. Das gesamte
+Einrichtungsskript läuft zweimal gegen ein vorbereitetes, geprüftes Profil:
+`.env` und Fingerprint bleiben gleich. Danach muss ein Caddy-Neustart ebenfalls
+denselben Pin liefern; nur `-NeuesZertifikat` muss ihn ändern. Die Host-SANs
+werden mit dem erzeugten Zertifikat verglichen. In `finally` folgt immer
 `docker compose down -v --remove-orphans` nur für das eigene Zufallsprojekt.
 Keine Kern-Logs ausgeben: Sie können den initialen Master-Schlüssel enthalten.
 
@@ -40,7 +47,8 @@ Keine Kern-Logs ausgeben: Sie können den initialen Master-Schlüssel enthalten.
 Die zugehörige Negativprüfung muss mit einer Assertion rot werden; ein
 Adapterfehler zählt nicht. Die Summen der Mutantenkopie werden dabei erneuert,
 damit kein zufälliger Summenfehler die eigentliche Probe verdeckt. Geprüft
-werden LAN-Pfadfilter, Caddy-Admin-Socket, CA-Import, Loopback-Upstream,
+werden LAN-Pfadfilter, Caddy-Admin-Socket, statisches Leaf, Zertifikatserhalt,
+`CA:FALSE`, Loopback-Upstream,
 Admin-Portbindung, Netz-Namensraum, Pflicht-Image und -Digest, Beisteller-Digest,
 Download-Summen, Summenformat/Dateinamen/Duplikate/Vollständigkeit,
 Image-Eingaben, vorhandenes Ziel und W6.

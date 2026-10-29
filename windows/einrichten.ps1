@@ -1,7 +1,8 @@
 #requires -Version 5.1
 [CmdletBinding()]
 param(
-    [string]$Directory = (Join-Path $env:LOCALAPPDATA 'JanuaPort\windows')
+    [string]$Directory = (Join-Path $env:LOCALAPPDATA 'JanuaPort\windows'),
+    [switch]$NeuesZertifikat
 )
 
 Set-StrictMode -Version Latest
@@ -61,7 +62,29 @@ function Resolve-CoreImage {
     throw 'Registry lieferte keinen passenden Repository-Digest.'
 }
 
+function Get-CertificateSAN {
+    $sans = @('IP:127.0.0.1', 'DNS:localhost', ('DNS:' + [Net.Dns]::GetHostName()))
+    foreach ($adapter in [Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces()) {
+        foreach ($address in $adapter.GetIPProperties().UnicastAddresses) {
+            if ($address.Address.AddressFamily -eq [Net.Sockets.AddressFamily]::InterNetwork) {
+                $sans += 'IP:' + $address.Address.ToString()
+            }
+        }
+    }
+    return (($sans | Select-Object -Unique) -join ',')
+}
+
 function Get-LeafFingerprint {
+    # Aus genau dem PEM im eigenen Volume, ohne Schluessel-Export zum Host.
+    $line = (Invoke-Docker @('compose', 'run', '--rm', '--no-deps', '--entrypoint', 'openssl',
+        'cert-init', 'x509', '-in', '/certs/cert.pem', '-noout', '-fingerprint', '-sha256')) -join ''
+    if ($line -notmatch '^sha256 Fingerprint=([A-Fa-f0-9]{2}(?::[A-Fa-f0-9]{2}){31})$') {
+        throw 'Ungueltige Zertifikats-Fingerprint-Ausgabe.'
+    }
+    return $Matches[1].Replace(':', '').ToLowerInvariant()
+}
+
+function Get-ServedLeafFingerprint {
     $client = New-Object Net.Sockets.TcpClient
     $stream = $null
     try {
@@ -83,36 +106,52 @@ function Get-LeafFingerprint {
 }
 
 function Install-Profile {
-    if (Test-Path -LiteralPath $Directory) { throw 'Ziel existiert bereits. Fuer eine Erstinstallation einen neuen Ordner waehlen.' }
     Get-Command docker -ErrorAction Stop | Out-Null
     Invoke-Docker @('compose', 'version') | Out-Host
-    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-    $staging = Join-Path ([IO.Path]::GetTempPath()) ('jnpt-profile-' + [Guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Path $staging | Out-Null
-    try {
-        foreach ($name in @('SHA256SUMS', 'docker-compose.yml', 'Caddyfile', 'einrichten.ps1')) {
-            Invoke-WebRequest -UseBasicParsing -Uri "$ProfileBase/$name" -OutFile (Join-Path $staging $name)
+    if (Test-Path -LiteralPath $Directory) {
+        foreach ($name in @('.env', 'SHA256SUMS', 'docker-compose.yml', 'Caddyfile', 'einrichten.ps1')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $Directory $name) -PathType Leaf)) {
+                throw 'Ziel existiert bereits und ist kein vollstaendiges Profil.'
+            }
         }
-        Test-ProfileFiles $staging
-        $image = Resolve-CoreImage (Read-Host 'JanuaPort Image-Tag (z.B. 0.87.1) oder sha256:Digest')
-        New-Item -ItemType Directory -Path $Directory | Out-Null
-        foreach ($name in @('SHA256SUMS', 'docker-compose.yml', 'Caddyfile', 'einrichten.ps1')) {
-            Copy-Item -LiteralPath (Join-Path $staging $name) -Destination (Join-Path $Directory $name)
+        Test-ProfileFiles $Directory
+    } else {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        $staging = Join-Path ([IO.Path]::GetTempPath()) ('jnpt-profile-' + [Guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $staging | Out-Null
+        try {
+            foreach ($name in @('SHA256SUMS', 'docker-compose.yml', 'Caddyfile', 'einrichten.ps1')) {
+                Invoke-WebRequest -UseBasicParsing -Uri "$ProfileBase/$name" -OutFile (Join-Path $staging $name)
+            }
+            Test-ProfileFiles $staging
+            $image = Resolve-CoreImage (Read-Host 'JanuaPort Image-Tag (z.B. 0.87.1) oder sha256:Digest')
+            New-Item -ItemType Directory -Path $Directory | Out-Null
+            foreach ($name in @('SHA256SUMS', 'docker-compose.yml', 'Caddyfile', 'einrichten.ps1')) {
+                Copy-Item -LiteralPath (Join-Path $staging $name) -Destination (Join-Path $Directory $name)
+            }
+            $envText = "JANUAPORT_IMAGE=$($image[0])`nJANUAPORT_IMAGE_DIGEST=$($image[1])`n"
+            [IO.File]::WriteAllText((Join-Path $Directory '.env'), $envText, (New-Object Text.UTF8Encoding($false)))
+        } finally {
+            # Ausschliesslich der oben selbst angelegte temporaere Ordner.
+            $resolvedStaging = [IO.Path]::GetFullPath($staging)
+            $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
+            if (-not $resolvedStaging.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase)) {
+                throw 'Temporaerer Pfad liegt ausserhalb des Temp-Verzeichnisses.'
+            }
+            Remove-Item -LiteralPath $resolvedStaging -Recurse -Force
         }
-        $envText = "JANUAPORT_IMAGE=$($image[0])`nJANUAPORT_IMAGE_DIGEST=$($image[1])`n"
-        [IO.File]::WriteAllText((Join-Path $Directory '.env'), $envText, (New-Object Text.UTF8Encoding($false)))
-    } finally {
-        # Ausschliesslich der oben selbst angelegte temporaere Ordner.
-        $resolvedStaging = [IO.Path]::GetFullPath($staging)
-        $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
-        if (-not $resolvedStaging.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase)) {
-            throw 'Temporaerer Pfad liegt ausserhalb des Temp-Verzeichnisses.'
-        }
-        Remove-Item -LiteralPath $resolvedStaging -Recurse -Force
     }
     Push-Location $Directory
     try {
         Invoke-Docker @('compose', 'config', '--quiet') | Out-Host
+        if ($NeuesZertifikat) {
+            Invoke-Docker @('compose', 'stop', 'caddy') | Out-Host
+            Invoke-Docker @('compose', 'run', '--rm', '--no-deps', '--entrypoint', '/bin/sh',
+                'cert-init', '-ec', 'rm -f /certs/cert.pem /certs/key.pem') | Out-Host
+        }
+        Invoke-Docker @('compose', 'run', '--rm', '--no-deps', '-e',
+            ('CERT_SAN=' + (Get-CertificateSAN)), 'cert-init') | Out-Host
+        $fingerprint = Get-LeafFingerprint
         Invoke-Docker @('compose', 'up', '-d') | Out-Host
         $ready = $false
         for ($attempt = 0; $attempt -lt 90; $attempt++) {
@@ -123,11 +162,14 @@ function Install-Profile {
             Start-Sleep -Seconds 2
         }
         if (-not $ready) { throw 'Gateway nicht bereit. Diagnose: docker compose logs jnpt' }
-        $fingerprint = $null
+        $tlsReady = $false
         for ($attempt = 0; $attempt -lt 30; $attempt++) {
-            try { $fingerprint = Get-LeafFingerprint; break } catch { Start-Sleep -Seconds 2 }
+            try {
+                if ((Get-ServedLeafFingerprint) -ceq $fingerprint) { $tlsReady = $true; break }
+            } catch { }
+            Start-Sleep -Seconds 2
         }
-        if (-not $fingerprint) { throw 'Caddy-Zertifikat nicht erreichbar. Diagnose: docker compose logs caddy' }
+        if (-not $tlsReady) { throw 'Caddy liefert nicht das eingerichtete Zertifikat. Diagnose: docker compose logs caddy' }
         Write-Host "Profil: $Directory"
         Write-Host 'Admin-GUI: http://127.0.0.1:8484'
         Write-Host "SHA-256 des Caddy-Leaf-Zertifikats: $fingerprint"

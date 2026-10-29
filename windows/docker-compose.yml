@@ -37,9 +37,48 @@ services:
     security_opt: [no-new-privileges:true]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - tls-leaf:/certs:ro
       - caddy-data:/data
       - caddy-config:/config
+    depends_on:
+      cert-init:
+        condition: service_completed_successfully
     restart: unless-stopped
+
+  # Einmaliges Leaf, keine CA und keine automatische Erneuerung.
+  # einrichten.ps1 uebergibt alle aktuellen Host-SANs an diesen Container.
+  cert-init:
+    image: alpine/openssl@sha256:3f25da71f70eba788067daac3f3df03bd1de7a7c52ed89fa93b94ad2c92d986b
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        if [ -s /certs/cert.pem ] && [ -s /certs/key.pem ]; then
+          exit 0
+        fi
+        if [ -e /certs/cert.pem ] || [ -e /certs/key.pem ]; then
+          echo 'Unvollstaendiges TLS-Paar; vorhandene Dateien bleiben erhalten.' >&2
+          exit 1
+        fi
+        umask 077
+        trap 'rm -f /certs/.cert.new /certs/.key.new' EXIT
+        openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -noenc \
+          -sha256 -days 3653 -subj /CN=JanuaPort \
+          -addext 'basicConstraints=critical,CA:FALSE' \
+          -addext 'keyUsage=critical,digitalSignature' \
+          -addext 'extendedKeyUsage=serverAuth' \
+          -addext "subjectAltName=$$CERT_SAN" \
+          -keyout /certs/.key.new -out /certs/.cert.new
+        mv /certs/.key.new /certs/key.pem
+        mv /certs/.cert.new /certs/cert.pem
+    environment:
+      CERT_SAN: DNS:localhost,IP:127.0.0.1
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - tls-leaf:/certs
+    restart: "no"
 
   # Ersatz fuer systemd-tmpfiles auf dem Windows-Host. Der Elternordner
   # bleibt root:0755; nur die zwei Kinder gehoeren der Gateway-UID.
@@ -136,6 +175,7 @@ volumes:
   plugin-keys:
   caddy-data:
   caddy-config:
+  tls-leaf:
   sockets:
   store:
   libs:

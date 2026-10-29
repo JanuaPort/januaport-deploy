@@ -57,7 +57,23 @@ def mutant(label, file=None, old=None, new=None, command=None, extra_env=None):
 def main():
     mutant('W8 LAN route allowlist', 'Caddyfile', '@device path /api/device/v1/* /healthz', '@device path /*')
     mutant('Caddy admin socket off', 'Caddyfile', '\tadmin off\n', '')
-    mutant('W10 CA not installed', 'Caddyfile', '\tskip_install_trust\n', '')
+    mutant('static leaf instead of internal issuer', 'Caddyfile',
+           'tls /certs/cert.pem /certs/key.pem', 'tls internal',
+           command=['-m', 'unittest', 'test_profile.Profile.test_static_leaf_configuration', '-v'])
+    mutant('certificate retained on repeated setup', 'docker-compose.yml',
+           'if [ -s /certs/cert.pem ] && [ -s /certs/key.pem ]; then\n          exit 0\n        fi',
+           'rm -f /certs/cert.pem /certs/key.pem',
+           command=['-m', 'unittest', 'test_profile.Profile.test_leaf_properties_and_partial_pair_rejection', '-v'])
+    mutant('partial certificate pair preserved', 'docker-compose.yml',
+           "if [ -e /certs/cert.pem ] || [ -e /certs/key.pem ]; then\n"
+           "          echo 'Unvollstaendiges TLS-Paar; vorhandene Dateien bleiben erhalten.' >&2\n"
+           "          exit 1\n        fi", ':',
+           command=['-m', 'unittest', 'test_profile.Profile.test_leaf_properties_and_partial_pair_rejection', '-v'])
+    mutant('leaf is not a CA', 'docker-compose.yml', 'basicConstraints=critical,CA:FALSE',
+           'basicConstraints=critical,CA:TRUE',
+           command=['-m', 'unittest', 'test_profile.Profile.test_leaf_properties_and_partial_pair_rejection', '-v'])
+    mutant('rotation requires explicit flag', 'einrichten.ps1', 'if ($NeuesZertifikat)',
+           'if ($true)', command=[str(TESTS / 'live.py')])
     mutant('W8 real loopback upstream', 'Caddyfile', 'reverse_proxy http://127.0.0.1:8484\n\t}',
            'reverse_proxy http://jnpt:8484\n\t}', command=[str(TESTS / 'live.py')])
     mutant('W8 admin port LAN rejection', 'docker-compose.yml', '127.0.0.1:8484:8484', '8484:8484',
@@ -86,7 +102,7 @@ def main():
            "return @($Repository, ('a' * 64))",
            command=['-m', 'unittest', 'test_install.Installer.test_invalid_image_input_rejected', '-v'])
     mutant('existing installation refusal', 'einrichten.ps1',
-           "throw 'Ziel existiert bereits. Fuer eine Erstinstallation einen neuen Ordner waehlen.'", 'return',
+           "throw 'Ziel existiert bereits und ist kein vollstaendiges Profil.'", 'return',
            command=['-m', 'unittest', 'test_install.Installer.test_existing_installation_preserved', '-v'])
     with tempfile.TemporaryDirectory(prefix='seccomp-', dir=TESTS) as tmp:
         # Upstream fixture, not a deployment asset. Never adds a sandbox to the profile.

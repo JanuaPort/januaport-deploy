@@ -29,9 +29,10 @@ class Live(unittest.TestCase):
         env_bytes = (target / '.env').read_bytes()
         install_env = {key: value for key, value in os.environ.items() if key.lower() != 'psmodulepath'}
         install_env['COMPOSE_PROJECT_NAME'] = name
-        def install():
+        def install(rotate=False):
             return run('powershell', '-NoProfile', '-File', str(target / 'einrichten.ps1'),
-                       '-Directory', str(target), env=install_env, check=False)
+                       '-Directory', str(target), *(['-NeuesZertifikat'] if rotate else []),
+                       env=install_env, check=False)
         def request(path, tls=False, method='GET', body=None, headers=None):
             if tls:
                 conn = http.client.HTTPSConnection('127.0.0.1', 443, timeout=4,
@@ -47,6 +48,7 @@ class Live(unittest.TestCase):
         try:
             result = install()
             self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('Admin-GUI: http://127.0.0.1:8484', result.stdout)
             for attempt in range(60):
                 try:
                     if request('/healthz', tls=True)[0] == 200:
@@ -87,6 +89,17 @@ class Live(unittest.TestCase):
             fingerprint = ps("Push-Location '" + str(target) + "'; Get-LeafFingerprint", extra_env={'COMPOSE_PROJECT_NAME': name})
             self.assertEqual(fingerprint.returncode, 0, fingerprint.stderr)
             self.assertEqual(fingerprint.stdout.strip(), expected)
+            # The setup path includes the real machine name and all current IPv4 SANs.
+            sans = ps('Get-CertificateSAN')
+            self.assertEqual(sans.returncode, 0, sans.stderr)
+            expected_sans = {'DNS:localhost', 'IP:127.0.0.1', 'DNS:' + socket.gethostname()}
+            expected_sans.update('IP:' + address[4][0] for address in
+                                 socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET))
+            self.assertTrue(expected_sans.issubset(set(sans.stdout.strip().split(','))))
+            cert = run(*compose, 'run', '--rm', '--no-deps', '--entrypoint', 'openssl',
+                       'cert-init', 'x509', '-in', '/certs/cert.pem', '-noout', '-text').stdout
+            for san in sans.stdout.strip().split(','):
+                self.assertIn(san.replace('IP:', 'IP Address:'), cert)
             # Execute the entire setup script again, preserving operator values and leaf.
             again = install()
             self.assertEqual(again.returncode, 0, again.stderr)
@@ -102,6 +115,13 @@ class Live(unittest.TestCase):
                 except (OSError, ssl.SSLError):
                     time.sleep(.25)
             self.assertEqual(restarted, expected)
+            rotated = install(rotate=True)
+            self.assertEqual(rotated.returncode, 0, rotated.stderr)
+            new_pin = ps("Push-Location '" + str(target) + "'; Get-LeafFingerprint",
+                         extra_env={'COMPOSE_PROJECT_NAME': name})
+            self.assertEqual(new_pin.returncode, 0, new_pin.stderr)
+            self.assertNotEqual(new_pin.stdout.strip(), expected)
+            self.assertIn(new_pin.stdout.strip(), rotated.stdout)
         finally:
             result = run(*compose, 'down', '-v', '--remove-orphans', check=False)
             installation.cleanup()

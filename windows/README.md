@@ -40,12 +40,24 @@ eingeben. Ein Tag wird mit Docker auf seinen Registry-Digest aufgelöst. In
 `%LOCALAPPDATA%\JanuaPort\windows\.env` stehen Repository/Tag als `JANUAPORT_IMAGE`
 und der zwingende `JANUAPORT_IMAGE_DIGEST`; Compose kombiniert beide zu einer
 Digest-Referenz. Caddy und Skript-Läufer sind bereits per Digest festgelegt.
-Ein vorhandenes Ziel wird abgewiesen; dies ist ein Erstinstallationsskript.
-Für ein anderes leeres Ziel gibt es `-Directory C:\JanuaPort\windows`.
+Ein vollständiges vorhandenes Profil wird erneut geprüft und gestartet; seine
+Dateien, `.env`, Zertifikat und Schlüssel bleiben erhalten. Dabei gibt es
+keinen Download und keine erneute Image-Abfrage. Andere vorhandene oder
+unvollständige Zielordner werden abgewiesen. Für ein anderes Ziel gibt es
+`-Directory C:\JanuaPort\windows`.
 
-Nach Prüfung der Summen startet das Skript `docker compose up -d`, wartet auf
-`/healthz` und gibt den SHA-256-Fingerprint des DER-**Leaf-Zertifikats** aus.
-Die Admin-GUI liegt lokal unter <http://127.0.0.1:8484>. Weiter mit
+Nach Prüfung der Summen erzeugt das Skript einmalig ein selbstsigniertes
+ECDSA-P-256-Leaf für zehn Jahre (3653 Tage) in einem per Digest gepinnten
+OpenSSL-Container. SANs: `127.0.0.1`, `localhost`, Rechnername und aktuelle
+IPv4-Adressen des Hosts. Zertifikat und Schlüssel liegen im eigenen Docker-
+Volume `tls-leaf` (standardmäßig `jnpt-windows_tls-leaf`), für Caddy nur lesbar.
+Es gibt keine automatische Zertifikatserneuerung und keine lokale CA.
+Auch ein unvollständiges Zertifikat-/Schlüsselpaar wird nicht überschrieben.
+
+Danach startet `docker compose up -d`; das Skript wartet auf `/healthz` und
+prüft, dass Caddy genau das eingerichtete Zertifikat ausliefert. Der ausgegebene
+SHA-256-Fingerprint stammt aus genau diesem PEM-Zertifikat im Volume.
+Die GUI-Ausgabe lautet wörtlich `Admin-GUI: http://127.0.0.1:8484`. Weiter mit
 `docs/inbetriebnahme.md` im Produkt-Repo `JanuaPort/januaport`: Master-Schlüssel
 sichern, Admin-Passwort setzen, ersten Admin-Token erzeugen.
 
@@ -63,19 +75,33 @@ belegt dessen Identität nicht.
 .\desktop-runner.exe run
 ```
 
-Am Server selbst `--url https://127.0.0.1` verwenden. Numerische IP-Adressen
-verwenden, keine beliebigen DNS-Aliasse: Caddy liefert für Verbindungen ohne
-SNI sowie für `localhost` dasselbe Zertifikat. **Die CA nie in einen Windows-
-oder anderen Zertifikatsspeicher importieren (SEC W10).** Kein `--ca` und kein
-Abschalten der TLS-Prüfung am Läufer. `--fingerprint` bindet genau dieses Leaf.
-Caddy importiert durch `skip_install_trust` auch im Container keine CA.
+Am Server selbst `--url https://127.0.0.1` verwenden. **Eine CA nie in einen
+Windows- oder anderen Zertifikatsspeicher importieren (SEC W10).** Kein `--ca`
+und kein Abschalten der TLS-Prüfung am Läufer. `--fingerprint` bindet genau
+dieses Leaf; Caddy lädt ausschließlich `/certs/cert.pem` und `/certs/key.pem`.
 
-**Zertifikatswechsel:** Caddys interne Leaf-Zertifikate sind standardmäßig
-12 Stunden gültig und werden erneuert. Danach passt der alte Pin nicht mehr.
-Den neuen Fingerprint lokal durch Dot-Sourcing des installierten Skripts und
-`Get-LeafFingerprint` ermitteln, vertrauenswürdig vergleichen und mit neuem
-Kopplungscode erneut koppeln. Dieses Paket enthält keine automatische
-Fingerprint-Verteilung; ein Langzeitbetrieb braucht hierfür ein Betriebskonzept.
+Im geprüften Desktop-Läufer (`desktop-runner/internal/client/http.go`,
+`NewAPI`/`VerifyConnection`) vergleicht der Fingerprint-Modus ausschließlich
+SHA-256 des DER-Leafs. Hostname/IP-SAN, CA-Kette und Gültigkeitszeit werden
+dabei nicht geprüft. Eine neue DHCP-IP erfordert daher kein neues Zertifikat.
+Die im Läufer gespeicherte Server-URL muss aber weiter erreichbar sein; bei
+geänderter Adresse mit angepasstem `--url` erneut koppeln, mit demselben
+Fingerprint. Empfehlung: feste IP oder DHCP-Reservierung bzw. ein stabil
+auflösbarer Rechnername.
+
+**Zertifikat bewusst ersetzen:** beispielsweise nach einer Kompromittierung
+oder vor Ablauf der zehn Jahre im installierten Profil:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\JanuaPort\windows\einrichten.ps1" -NeuesZertifikat
+```
+
+Bei einem eigenen Ziel `-Directory <Profilordner>` ergänzen. Dieser ausdrückliche
+Aufruf stoppt Caddy, ersetzt Zertifikat und Schlüssel, nimmt die aktuellen SANs
+auf und startet wieder. **Danach alle Läufer mit neuem Kopplungscode und dem
+neuen Fingerprint erneut koppeln.** Ein normaler Einrichtungslauf und ein
+Caddy-Neustart behalten das Zertifikat unverändert. Das TLS-Volume erhalten;
+sein Verlust und anschließende Neuerzeugung bedeuten ebenfalls einen neuen Pin.
 
 Für Skriptpakete in der Basis-Einrichtung die Stellen `plugin-script-runner`
 (Laufzeitschlüssel) und `plugin-script-runner-git` (Nur-Lese-Deploy-Key) belegen.
