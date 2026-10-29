@@ -4,8 +4,9 @@ Dieses Runbook beschreibt den **Ablauf eines Termins** beim Kunden. Was installi
 steht im [README](README.md) dieses Profils. Hier steht, wer wann was tut, was vorher geklärt sein
 muss und was nach einem Neustart passiert.
 
-Begriffe: **Betreiber** ist, wer die Anlage für den Kunden einrichtet und wartet. **Kunde** ist die
-Organisation, in deren Räumen der Rechner steht.
+Begriffe: **Kunde** ist die Organisation, in deren Räumen der Rechner steht. Sie ist Betreiber der Anlage
+und Verantwortlicher im Sinne des Datenschutzes. **Dienstleister** ist, wer die Anlage für den Kunden
+einrichtet und wartet. „Betreiber“ meint in diesem Runbook und im Produkt immer den Kunden.
 
 ## 1. Grundregeln
 
@@ -17,7 +18,7 @@ Organisation, in deren Räumen der Rechner steht.
   werden abgetippt. Deshalb sind sie hier kurz gehalten. Längere Dateien lädt der Rechner selbst aus
   diesem Repo, geprüft gegen eine SHA-256-Liste.
 - **Keine KI mit Bildschirmzugriff während einer Fernsitzung**, auch wenn die Anlage noch leer ist.
-  Werkzeuge mit Bildschirmzugriff sind auf dem Gerät des Betreibers abgeschaltet, solange die Sitzung
+  Werkzeuge mit Bildschirmzugriff sind auf dem Gerät des Dienstleisters abgeschaltet, solange die Sitzung
   offen ist.
 - **Die Admin-Oberfläche ist nur am Rechner selbst erreichbar** (`http://127.0.0.1:8484`, im Browser
   des Rechners). Ins lokale Netz geht nur die Geräte-API für die Desktop-Läufer.
@@ -28,7 +29,7 @@ Organisation, in deren Räumen der Rechner steht.
 
 | Was | Wer liefert | Warum |
 |---|---|---|
-| Der Vertrag mit dem Kunden erlaubt diesen Termin. Bei Kunden mit Berufsgeheimnis heißt das in der Regel: Auftragsverarbeitung und Verpflichtung zur Geheimhaltung sind unterschrieben, oder es ist schriftlich vereinbart, was vorher erlaubt ist. | Betreiber und Kunde | Ohne Grundlage kein Zugriff |
+| Der Vertrag mit dem Kunden erlaubt diesen Termin. Bei Kunden mit Berufsgeheimnis heißt das in der Regel: Auftragsverarbeitung und Verpflichtung zur Geheimhaltung sind unterschrieben, oder es ist schriftlich vereinbart, was vorher erlaubt ist. | Dienstleister und Kunde | Ohne Grundlage kein Zugriff |
 | Der Kunde bestätigt in Textform, dass der Rechner keine Daten des Kunden hält: keine Netzlaufwerke, keine gespeicherten Zugangsdaten, keine Fachanwendung, keine Mitgliedschaft in der Domäne des Kunden. | Kunde | Nur so darf der Rechner vor der Anbindung von Fachsystemen bearbeitet werden |
 | Eine Person beim Kunden, die die Sitzung startet und nach einem Neustart am Rechner anmeldet. Am Rechner hängen Bildschirm und Tastatur. | Kunde | Ohne unbeaufsichtigten Zugriff bricht jede Sitzung beim Neustart ab |
 | Ein Zeitfenster, in dem ein Neustart niemanden stört. | Kunde | Docker Desktop verlangt einen Neustart |
@@ -49,7 +50,7 @@ winver
 ```
 
 - `net use` zeigt keine Laufwerke des Kunden, `cmdkey /list` keine Zugangsdaten des Kunden, `PartOfDomain`
-  ist `False`. Sonst bricht der Betreiber ab und klärt es mit dem Kunden.
+  ist `False`. Sonst bricht der Dienstleister ab und klärt es mit dem Kunden.
 - `Get-Tpm` und `winver` werden notiert. Ohne TPM gibt es keine BitLocker-Verschlüsselung mit TPM.
   Das ist vor der Anbindung von Fachsystemen zu klären.
 - In der Fernwartungssoftware prüfen: kein unbeaufsichtigter Zugriff, kein festes Kennwort.
@@ -59,7 +60,7 @@ Schritte im [README](README.md#voraussetzungen), Abschnitt „Voraussetzungen“
 eine neue Sitzung nötig ist.
 
 ### 3.3 Nach einem Neustart
-1. Die Sitzung bricht ab. Der Betreiber ruft beim Kunden an.
+1. Die Sitzung bricht ab. Der Dienstleister ruft beim Kunden an.
 2. Die Person beim Kunden meldet sich am Rechner an, mit dem für die Wartung vereinbarten Konto.
 3. Sie startet die Fernwartung und nennt Kennung und neues Einmal-Kennwort.
 4. Docker Desktop braucht auf schwacher Hardware nach dem Start einige Minuten. Erst weiterarbeiten,
@@ -67,7 +68,13 @@ eine neue Sitzung nötig ist.
 
 ### 3.4 Anlage einrichten
 Schritte im [README](README.md#zwei-befehle), Abschnitt „Zwei Befehle“. Am Ende gibt `einrichten.ps1` den
-Zertifikats-Fingerprint aus. Ihn abschreiben und beim Betreiber ablegen, nicht beim Kunden aushängen.
+Zertifikats-Fingerprint aus. Ihn abschreiben und beim Dienstleister ablegen, nicht beim Kunden aushängen.
+
+**Das Admin-Passwort setzt der Kunde selbst am Rechner, nicht der Dienstleister.** Wer das Admin-Passwort
+kennt, verwaltet die Anlage. Der Dienstleister beendet dafür die Fernsitzung. Der Kunde setzt das Passwort in
+der Admin-Oberfläche (`http://127.0.0.1:8484`), sichert den Master-Schlüssel und startet danach eine neue
+Sitzung. Hat doch der Dienstleister das Passwort gesetzt, setzt der Kunde es neu.
+
 Den Master-Schlüssel der Anlage auf Papier sichern. Das Papier bleibt beim Kunden, an einem verschlossenen Ort.
 
 ### 3.5 Desktop-Läufer auf dem Rechner selbst
@@ -91,7 +98,7 @@ Anlage, Skript-Läufer, Kopplung und Lauf. Den Zeitplan danach löschen.
 
 ## 4. Nach dem Termin
 - Den Termin dokumentieren: Datum, Uhrzeit, Person, Zweck. Keine Inhalte vom Bildschirm, keine Daten des Kunden.
-- Offene Punkte gehen in das Ticket des Betreibers, ohne Namen und ohne Daten des Kunden.
+- Offene Punkte gehen in das Ticket des Dienstleisters, ohne Namen und ohne Daten des Kunden.
 
 ## 5. Typische Fehlerbilder
 | Bild | Ursache | Abhilfe |

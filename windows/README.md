@@ -190,4 +190,4 @@ Benutzeranmeldung ist hier nicht belegt. Tailscale gehört nicht zu Paket A.
 
 ## Fernwartung
 
-Über das Werkzeug des Betreibers, Sitzung nimmt der Kunde an.
+Über das Fernwartungswerkzeug des Kunden. Jede Sitzung nimmt der Kunde an.
