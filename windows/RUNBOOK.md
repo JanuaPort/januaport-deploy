@@ -24,6 +24,15 @@ einrichtet und wartet. „Betreiber“ meint in diesem Runbook und im Produkt im
   des Rechners). Ins lokale Netz geht nur die Geräte-API für die Desktop-Läufer.
 - **Kopiert wird nur lokal** auf dem Rechner, etwa ein Schlüssel vom Editor in die Admin-Oberfläche.
   Danach die Datei löschen und die Zwischenablage leeren.
+- **Kein KI-Werkzeug sieht echte Daten des Kunden.** Gilt bei Kunden mit Berufsgeheimnis, etwa Praxen.
+  - Skripte bauen und testen mit KI nur gegen eine Schulungs- oder Testinstanz des Fachsystems mit eigener
+    Datenbank. Tests mit echten Daten macht ein Mensch, ohne KI.
+  - Zeigt ein Bildschirm echte Daten, etwa die Fachanwendung oder eine Fernsitzung auf einen Arbeitsplatz,
+    ist am Zugriffsgerät kein KI-Werkzeug mit Bildschirmzugriff aktiv. Dazu zählen Computer-Use, eine
+    Desktop-App mit Bildschirmfreigabe und Screenshot-Synchronisierung. Das ist ein Prüfpunkt im
+    Sitzungsprotokoll (Abschnitt 4).
+  - Keine Screenshots und keine Logs mit Daten des Kunden in Tickets, Chats oder Notizen bei Dritt-Diensten.
+    Gespeichert wird nur auf eigenen, verschlüsselten Geräten des Dienstleisters, nie in Cloud-Ablagen.
 
 ## 2. Vor dem Termin klären
 
@@ -96,11 +105,19 @@ Fingerprint. Die CA des Rechners kommt nie in den Zertifikatsspeicher der Arbeit
 Ein harmloses Test-Skript ohne Bezug zum Kunden, etwa eines, das den Editor öffnet, belegt die Kette aus
 Anlage, Skript-Läufer, Kopplung und Lauf. Den Zeitplan danach löschen.
 
-## 4. Nach dem Termin
-- Den Termin dokumentieren: Datum, Uhrzeit, Person, Zweck. Keine Inhalte vom Bildschirm, keine Daten des Kunden.
+## 4. Sitzungsprotokoll
+Je Sitzung ein Eintrag beim Dienstleister: Datum, Uhrzeit, Person, Zweck. Keine Inhalte vom Bildschirm, keine
+Daten des Kunden. Vor dem Start hakt die Person ab:
+
+- [ ] Der Kunde hat die Sitzung angenommen.
+- [ ] Am Zugriffsgerät ist kein KI-Werkzeug mit Bildschirmzugriff aktiv: kein Computer-Use, keine Desktop-App
+      mit Bildschirmfreigabe, keine Screenshot-Synchronisierung.
+- [ ] Zeigt die Sitzung echte Daten? Dann wird nur von Hand gearbeitet, ohne KI.
+
+## 5. Nach dem Termin
 - Offene Punkte gehen in das Ticket des Dienstleisters, ohne Namen und ohne Daten des Kunden.
 
-## 5. Typische Fehlerbilder
+## 6. Typische Fehlerbilder
 | Bild | Ursache | Abhilfe |
 |---|---|---|
 | Nach dem Neustart keine Sitzung möglich | kein unbeaufsichtigter Zugriff (gewollt) | Kunde meldet sich an und startet eine neue Sitzung (3.3) |
