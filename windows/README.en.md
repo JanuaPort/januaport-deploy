@@ -119,6 +119,14 @@ completed job separately from pairing.
   broad rules. Test 443 from the local subnet and rejection from outside it;
   verify that 8484 cannot be reached from the LAN. Do not forward 443 at the
   router. The installer does not change the host firewall.
+- **Caddy and the firewall are the edge (SEC K1/K2):** Caddy forwards from inside
+  the `jnpt` network namespace, so the core sees every request as loopback. The
+  core's checks for local senders (pairing without HTTPS, local devices only)
+  therefore do not apply in this profile. The boundary is Caddy alone (TLS on 443
+  only, no plaintext listener, covered by a test) plus the Windows firewall (W9).
+  Before production data, the acceptance report lists `Get-NetFirewallRule` for 443
+  and for the Docker processes. No rule may allow "Any" as remote address. Where
+  possible, add a negative probe from a foreign subnet.
 
 An internal Docker network alone does not isolate all Windows/WSL host services.
 The Linux iptables guidance in `compose/README.md` is not Windows verification;

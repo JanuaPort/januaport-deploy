@@ -144,6 +144,14 @@ erfolgreicher Auftragslauf sind zusätzlich zur Kopplung zu prüfen.
   Regeln nicht auf. Von einem Gerät im lokalen Subnetz 443 prüfen, von außerhalb
   des Subnetzes muss der Zugriff scheitern. 8484 auch im LAN negativ prüfen.
   Das Skript ändert die Host-Firewall nicht.
+- **Caddy und Firewall sind die Kante (SEC K1/K2):** Weil Caddy im Netz-Namensraum
+  von `jnpt` weiterleitet, sieht der Kern jeden Aufruf als Loopback. Die Prüfungen
+  des Kerns auf lokale Absender (Kopplung ohne HTTPS, nur lokale Geräte) greifen in
+  diesem Profil deshalb nicht. Die Grenze bilden allein Caddy (nur TLS auf 443, kein
+  Klartext-Listener, durch einen Test belegt) und die Windows-Firewall (W9). Vor
+  produktiven Daten gehören `Get-NetFirewallRule` für 443 und für die Docker-Prozesse
+  in den Abnahmebericht. Eine Freigabe mit „Beliebig“ als Remoteadresse darf es nicht
+  geben. Wo möglich, kommt eine Gegenprobe aus einem fremden Subnetz dazu.
 
 Das interne Plugin-Netz begrenzt den Ausgang, sperrt aber nicht von selbst
 jeden Dienst des Windows-/WSL-Hosts. Die Linux-iptables-Anleitung in

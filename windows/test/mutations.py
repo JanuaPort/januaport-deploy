@@ -57,6 +57,8 @@ def mutant(label, file=None, old=None, new=None, command=None, extra_env=None):
 def main():
     mutant('W8 LAN route allowlist', 'Caddyfile', '@device path /api/device/v1/* /healthz', '@device path /*')
     mutant('Caddy admin socket off', 'Caddyfile', '\tadmin off\n', '')
+    mutant('K1 no plaintext listener', 'Caddyfile', '\tadmin off\n}\n',
+           '\tadmin off\n}\n\nhttp:// {\n\treverse_proxy http://127.0.0.1:8484\n}\n')
     mutant('static leaf instead of internal issuer', 'Caddyfile',
            'tls /certs/cert.pem /certs/key.pem', 'tls internal',
            command=['-m', 'unittest', 'test_profile.Profile.test_static_leaf_configuration', '-v'])

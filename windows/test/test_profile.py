@@ -180,6 +180,19 @@ class Profile(unittest.TestCase):
             self.assertEqual(len(loaded), 1)
             self.assertEqual((loaded[0]['certificate'], loaded[0]['key']),
                              ('/certs/cert.pem', '/certs/key.pem'))
+            # SEC K1: Caddy is the edge. Behind it every request reaches the core as
+            # loopback, so there must be no plaintext listener and no plaintext path
+            # to the upstream.
+            servers = adapted['apps']['http']['servers']
+            for name, server in servers.items():
+                self.assertEqual(server.get('listen'), [':443'], name)
+                self.assertIn('tls_connection_policies', server, name)
+            plain = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
+            plain.request("GET", "/healthz")
+            plain_res = plain.getresponse()
+            self.assertNotEqual(plain_res.read(), b"upstream")
+            self.assertNotEqual(plain_res.status, 200)
+            plain.close()
             for path in ["/", "/admin/mcp", "/admin/mcp/", "/api/admin/tokens", "/mcp", "/mcp/x",
                          "/metrics", "/healthz/", "/api/device/v1", "/api/device/v10/pair",
                          "/api/device/v1/../../../admin/mcp", "/api/device/v1/%2e%2e/%2e%2e/%2e%2e/admin/mcp"]:
