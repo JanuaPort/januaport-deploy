@@ -160,4 +160,4 @@ is outside package A.
 
 ## Remote maintenance
 
-Through the operator's tool; the customer accepts the session.
+Through the customer's remote-support tool. The customer accepts every session.
