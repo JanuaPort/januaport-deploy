@@ -7,6 +7,8 @@ Paket A (#1246): Windows 10/11 Pro, Docker Desktop mit WSL2 und Linux-Containern
 unbeaufsichtigten Dauerbetriebs. Die Oberfläche bleibt am Gerät, Desktop-Läufer
 im LAN und am selben Rechner sprechen HTTPS mit Zertifikatbindung.
 
+Den Ablauf vor Ort und bei Fernwartung (wer wann was tut) beschreibt das [Runbook](RUNBOOK.md).
+
 ## Voraussetzungen
 
 - Docker Desktop **≥ 4.44.3** (Behebung von CVE-2025-9074), laufende WSL2-Engine,
