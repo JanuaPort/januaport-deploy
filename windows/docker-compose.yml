@@ -1,0 +1,146 @@
+# Windows/WSL2, Paket A (#1246). Plugin-Vertrag: script-runner-v0.3.1.
+name: jnpt-windows
+
+x-script-image: &script-image ghcr.io/januaport/script-runner@sha256:65bb4697333cc6a69185fb00a35f59a08d2702bb2d9348d0a307f522eb93cf43
+x-script-defaults: &script-defaults
+  image: *script-image
+  runtime: runc
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  user: "65532:65532"
+
+services:
+  jnpt:
+    # Zwei Pflichtwerte: Compose selbst verweigert einen fehlenden Digest.
+    image: ${JANUAPORT_IMAGE:?Image-Repository oder Tag fehlt}@sha256:${JANUAPORT_IMAGE_DIGEST:?SHA-256-Digest fehlt}
+    ports:
+      - "443:443"
+      - "127.0.0.1:8484:8484"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - jnpt-data:/data
+      - plugin-keys:/run/jnpt/plugins
+    networks: [default, plugins]
+    depends_on:
+      plugin-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  caddy:
+    # Caddy 2.10.2-alpine, Index-Digest.
+    image: caddy@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    network_mode: "service:jnpt"
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+  # Ersatz fuer systemd-tmpfiles auf dem Windows-Host. Der Elternordner
+  # bleibt root:0755; nur die zwei Kinder gehoeren der Gateway-UID.
+  plugin-init:
+    image: *script-image
+    runtime: runc
+    entrypoint: [python3, -I, -c]
+    command:
+      - |
+        import os
+        for name in ('script-runner', 'script-runner-git'):
+            path = '/keys/' + name
+            os.makedirs(path, mode=0o750, exist_ok=True)
+            os.chown(path, 65532, 65532)
+            os.chmod(path, 0o750)
+    user: "0:0"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER, DAC_OVERRIDE]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - plugin-keys:/keys
+    restart: "no"
+
+  script-runner-init:
+    <<: *script-defaults
+    command: [init-libs]
+    network_mode: none
+    volumes:
+      - libs:/libs
+    restart: "no"
+
+  script-runner:
+    <<: *script-defaults
+    command: [mediator]
+    environment:
+      JNPT_GATEWAY_URL: http://jnpt:8484
+      JNPT_SCRIPT_RUNNER_MAX_WALL_S: "86400"
+    volumes:
+      - type: volume
+        source: plugin-keys
+        target: /run/jnpt/plugins/script-runner
+        read_only: true
+        volume:
+          subpath: script-runner
+          nocopy: true
+      - sockets:/run/script-runner
+      - store:/var/lib/script-runner
+      - libs:/libs
+    networks: [plugins]
+    depends_on:
+      plugin-init:
+        condition: service_completed_successfully
+      script-runner-init:
+        condition: service_completed_successfully
+      script-runner-fetcher:
+        condition: service_started
+    # Originaler Healthcheck bleibt ehrlich: ohne Sandbox 503/unhealthy.
+    # Desktop-Pakete sind davon unabhaengig abrufbar (README, SEC W6).
+    healthcheck:
+      test: [CMD, python3, -I, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  script-runner-fetcher:
+    <<: *script-defaults
+    command: [fetcher]
+    tmpfs:
+      - /tmp:size=1m,noexec,nosuid,nodev,uid=65532,gid=65532,mode=0700
+    volumes:
+      - type: volume
+        source: plugin-keys
+        target: /run/jnpt/plugins/script-runner-git
+        read_only: true
+        volume:
+          subpath: script-runner-git
+          nocopy: true
+      - store:/var/lib/script-runner
+    networks: [egress]
+    depends_on:
+      plugin-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+# SEC W6: kein Sandbox-Dienst, auch kein optionales Compose-Profil dafuer.
+# Desktop-Pins liefert der vermittler ohne Sandbox. Lokale tools/call enden
+# mit refused/state und isolation=invalid; ein Start einer Sandbox aendert
+# diese Zusage.
+volumes:
+  jnpt-data:
+  plugin-keys:
+  caddy-data:
+  caddy-config:
+  sockets:
+  store:
+  libs:
+
+networks:
+  plugins:
+    internal: true
+  egress:

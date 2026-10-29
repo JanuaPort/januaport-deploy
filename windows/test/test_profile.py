@@ -8,7 +8,6 @@ import http.client
 import json
 import os
 from pathlib import Path
-import re
 import ssl
 import subprocess
 import tempfile
@@ -16,7 +15,7 @@ import time
 import unittest
 import uuid
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(os.environ.get('JNPT_PROFILE_ROOT', Path(__file__).resolve().parents[1]))
 EXAMPLE = {"JANUAPORT_IMAGE": "ghcr.io/januaport/januaport:0.87.1",
            "JANUAPORT_IMAGE_DIGEST": "81b25ca65d1cf3ff9c0bbf4d3b14fb5362debac9ed120db73cf5e2c5e18a4bfd"}
 
@@ -79,6 +78,7 @@ class Profile(unittest.TestCase):
             if name.startswith("script-runner"):
                 self.assertEqual(service["runtime"], "runc")
         self.assertNotEqual(config(extra_env={"JANUAPORT_IMAGE_DIGEST": ""}, check=False).returncode, 0)
+        self.assertNotEqual(config(extra_env={"JANUAPORT_IMAGE": ""}, check=False).returncode, 0)
         self.assertTrue(cfg["networks"]["plugins"]["internal"])
 
     def test_caddy_adapter_and_https_rejections(self):
@@ -87,7 +87,6 @@ class Profile(unittest.TestCase):
         adapted = json.loads(run("docker", "run", "--rm", "-i", image, "caddy", "adapt",
                                  "--config", "/dev/stdin", "--adapter", "caddyfile",
                                  input=(ROOT / "Caddyfile").read_text()).stdout)
-        self.assertFalse(adapted["apps"]["pki"]["certificate_authorities"]["local"]["install_trust"])
         ident = "jnpt-windows-test-" + uuid.uuid4().hex[:10]
         # A real HTTP backend proves that allowed requests reach reverse_proxy.
         backend = cfg["services"]["script-runner"]["image"]
@@ -118,6 +117,14 @@ class Profile(unittest.TestCase):
                     pass
                 time.sleep(.25)
             self.assertEqual(request("/api/device/v1/pair", "POST"), (200, b"upstream"))
+            # Probe Caddy's actual admin socket from the shared namespace.
+            admin_probe = run('docker', 'exec', ident, 'python3', '-I', '-c',
+                              "import socket; s=socket.create_connection(('127.0.0.1',2019),timeout=2)", check=False)
+            self.assertNotEqual(admin_probe.returncode, 0, 'Caddy admin socket exposed')
+            # Check the real container trust-store directory, as well as the adapter setting.
+            store = run('docker', 'exec', ident + '-caddy', 'ls', '/usr/local/share/ca-certificates').stdout
+            self.assertNotIn('Caddy', store)
+            self.assertFalse(adapted['apps']['pki']['certificate_authorities']['local']['install_trust'])
             for path in ["/", "/admin/mcp", "/admin/mcp/", "/api/admin/tokens", "/mcp", "/mcp/x",
                          "/metrics", "/healthz/", "/api/device/v1", "/api/device/v10/pair",
                          "/api/device/v1/../../../admin/mcp", "/api/device/v1/%2e%2e/%2e%2e/%2e%2e/admin/mcp"]:

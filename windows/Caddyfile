@@ -1,0 +1,29 @@
+{
+	# Ein Leaf fuer numerische LAN-Adressen und Loopback; der Laeufer pinnt
+	# genau dieses Zertifikat. Keine CA-Installation, kein HTTP-Listener.
+	default_sni localhost
+	auto_https disable_redirects
+	skip_install_trust
+	admin off
+}
+
+https://localhost, https:// {
+	tls internal
+
+	@device path /api/device/v1/* /healthz
+	handle @device {
+		# Echter Loopback-Absender durch network_mode: service:jnpt.
+		reverse_proxy http://127.0.0.1:8484
+	}
+
+	# Erst bei Bedarf eines KI-Clients im LAN freigeben, mit eigener
+	# Berechtigungspruefung und erneuten Negativtests. Exakt /mcp, nie /mcp/*.
+	# handle /mcp {
+	#     reverse_proxy http://127.0.0.1:8484
+	# }
+
+	# SEC W8: auch GUI, /admin/mcp, /api/admin/* und /mcp enden hier.
+	handle {
+		respond 404
+	}
+}

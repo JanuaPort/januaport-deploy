@@ -1,0 +1,267 @@
+Repo-weite Invarianten-Suche (#1246 Paket A)
+Bericht und Trefferdatei selbst ausgeschlossen.
+
+Zusagetexte und Endpunkte
+Suchmuster: SEC W[689]|W10|refused/state|isolation=invalid|Sandbox|sandbox|Admin-Fläche|Admin-GUI|/admin/mcp|/api/admin|/mcp|fingerprint|Zertifikatsspeicher|certificate store|LocalSubnet|4\.44\.3|2375
+
+aws/README.md:64:  und **nur** selektiv weiterleiten (`/mcp` exakt, `/healthz`, OAuth-Discovery)
+aws/README.md:65:  — die Admin-Fläche gehört nie ins offene Internet. Das gehärtete
+azure/README.md:67:  und **nur** selektiv weiterleiten (`/mcp` exakt, `/healthz`, OAuth-Discovery)
+azure/README.md:68:  — die Admin-Fläche gehört nie ins offene Internet. Das gehärtete
+compose/README.md:43:curl -s -X POST http://localhost:8484/mcp /
+compose/README.md:51:curl -s -X POST http://localhost:8484/mcp /
+compose/README.md:76:  Reverse-Proxy mit TLS, der **selektiv** weiterleitet (`/mcp` exakt, `/healthz`,
+compose/README.md:77:  OAuth-Discovery) — kein `/mcp/*`-Wildcard, sonst leakt die Admin-GUI.
+compose/README.md:78:- **Die Admin-Fläche gehört nie ins offene Internet**: GUI, `/admin/mcp`,
+compose/README.md:79:  `/api/admin/*`, `/metrics`. Zugriff nur über SSH-Tunnel, VPN/Tailnet oder ein
+compose/.env.example:39:# Volle MCP-URL inkl. /mcp-Pfad (https://<host>/mcp, OHNE Trailing-Slash) —
+hetzner/outputs.tf:20:  description = "Wo die Admin-Fläche liegt (NICHT öffentlich)."
+hetzner/outputs.tf:21:  value       = "Admin-Fläche (GUI, /admin/mcp, /api/admin, /metrics) ist NUR im Tailnet erreichbar: https://${var.ts_hostname}.<dein-tailnet>.ts.net  — öffentlich ist nur https://${var.domain}/mcp + /healthz + OAuth-Discovery."
+hetzner/README.md:20:- Ein Tailscale-Konto + Auth-Key, falls die Admin-Fläche über das Tailnet
+hetzner/README.md:82:  (Admin-Fläche, nur im Tailnet).
+windows/Caddyfile:20:	# Berechtigungspruefung und erneuten Negativtests. Exakt /mcp, nie /mcp/*.
+windows/Caddyfile:21:	# handle /mcp {
+windows/Caddyfile:25:	# SEC W8: auch GUI, /admin/mcp, /api/admin/* und /mcp enden hier.
+hetzner/terraform.tfvars.example:25:# Tailnet-Hostname (Admin-Fläche: https://<ts_hostname>.<tailnet>.ts.net):
+windows/docker-compose.yml:101:    # Originaler Healthcheck bleibt ehrlich: ohne Sandbox 503/unhealthy.
+windows/docker-compose.yml:102:    # Desktop-Pakete sind davon unabhaengig abrufbar (README, SEC W6).
+windows/docker-compose.yml:130:# SEC W6: kein Sandbox-Dienst, auch kein optionales Compose-Profil dafuer.
+windows/docker-compose.yml:131:# Desktop-Pins liefert der vermittler ohne Sandbox. Lokale tools/call enden
+windows/docker-compose.yml:132:# mit refused/state und isolation=invalid; ein Start einer Sandbox aendert
+windows/einrichten.ps1:126:        $fingerprint = $null
+windows/einrichten.ps1:128:            try { $fingerprint = Get-LeafFingerprint; break } catch { Start-Sleep -Seconds 2 }
+windows/einrichten.ps1:130:        if (-not $fingerprint) { throw 'Caddy-Zertifikat nicht erreichbar. Diagnose: docker compose logs caddy' }
+windows/einrichten.ps1:132:        Write-Host 'Admin-GUI: http://127.0.0.1:8484'
+windows/einrichten.ps1:133:        Write-Host "SHA-256 des Caddy-Leaf-Zertifikats: $fingerprint"
+windows/einrichten.ps1:134:        Write-Host "desktop-runner.exe pair --url https://<LAN-IP> --code <KOPPLUNGSCODE> --fingerprint $fingerprint"
+windows/einrichten.ps1:135:        Write-Host 'CA nie in einen Zertifikatsspeicher importieren. Fingerprint lokal vertrauenswuerdig weitergeben.'
+hetzner/variables.tf:64:  description = "Tailnet-Hostname des Knotens (MagicDNS-Name; Admin-Fläche erreichbar als https://<ts_hostname>.<tailnet>.ts.net)."
+windows/README.en.md:6:Pro (amd64), WSL2 Linux containers, Docker Desktop **≥ 4.44.3**
+windows/README.en.md:8:tcp://localhost:2375” disabled**; approve automatic updates only after review.
+windows/README.en.md:33:for `/healthz`, then prints the SHA-256 fingerprint of Caddy's DER **leaf**.
+windows/README.en.md:43:code in the local admin GUI. Transfer the locally displayed fingerprint over a
+windows/README.en.md:48:desktop-runner.exe pair --url https://<server-LAN-IP> --code <PAIRING-CODE> --fingerprint <64-hex-digits>
+windows/README.en.md:54:certificate. **Never import the CA into any certificate store (SEC W10).**
+windows/README.en.md:61:a new code. This package does not distribute renewed fingerprints automatically;
+windows/README.en.md:75:- **W6:** `runc`, no sandbox service or optional sandbox profile. Valid local
+windows/README.en.md:76:  pin calls return `refused/state`, `isolation=invalid`; local schedules have no
+windows/README.en.md:77:  execution slot. Desktop packages work independently. The original sandbox
+windows/README.en.md:83:  the GUI, `/admin/mcp`, `/api/admin/*`, `/metrics` and `/mcp`. Port 8484 binds
+windows/README.en.md:85:  `/mcp` block only when a LAN AI client needs it and after reviewing permissions
+windows/README.en.md:90:  New-NetFirewallRule -DisplayName 'JanuaPort HTTPS LAN' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 443 -RemoteAddress LocalSubnet -Profile Private
+windows/README.en.md:117:for these manual diagnostics only; runners use the fingerprint. Health does not
+windows/README.md:12:- Docker Desktop **≥ 4.44.3** (Behebung von CVE-2025-9074), laufende WSL2-Engine,
+windows/README.md:14:- Docker Desktop: **„Expose daemon on tcp://localhost:2375“ aus**. Auto-Updates
+windows/README.md:48:Die Admin-GUI liegt lokal unter <http://127.0.0.1:8484>. Weiter mit
+windows/README.md:56:Admin-GUI ein Windows-Gerät anlegen und einen einmaligen Kopplungscode erzeugen.
+windows/README.md:62:desktop-runner.exe pair --url https://<LAN-IP-des-Servers> --code <KOPPLUNGSCODE> --fingerprint <64-Hex-Zeichen>
+windows/README.md:69:oder anderen Zertifikatsspeicher importieren (SEC W10).** Kein `--ca` und kein
+windows/README.md:70:Abschalten der TLS-Prüfung am Läufer. `--fingerprint` bindet genau dieses Leaf.
+windows/README.md:92:- **SEC W6:** Runtime `runc`; lokale Skript-Pins sind aus. Es existiert kein
+windows/README.md:93:  Sandbox-Dienst, auch kein zuschaltbares Sandbox-Profil. Ein lokales
+windows/README.md:94:  `tools/call` für einen gültigen Pin endet mit `refused/state`,
+windows/README.md:95:  `isolation=invalid`. Zeitpläne erhalten ebenfalls keinen lokalen Laufplatz.
+windows/README.md:96:  Desktop-Pins und deren Paketabruf benötigen die Sandbox nicht.
+windows/README.md:97:  Der originale Sandbox-Healthcheck bleibt deshalb **unhealthy/503**. Das ist
+windows/README.md:99:- **SEC W8:** Nur TCP 443 geht ins LAN. Caddy teilt `jnpt`'s Netz-Namensraum
+windows/README.md:103:  darunter GUI, `/admin/mcp`, `/api/admin/*`, `/metrics` und `/mcp`.
+windows/README.md:105:  Der auskommentierte `/mcp`-Block ist erst bei Bedarf eines KI-Clients im LAN
+windows/README.md:107:- **SEC W9:** In einer administrativen PowerShell beispielsweise:
+windows/README.md:110:  New-NetFirewallRule -DisplayName 'JanuaPort HTTPS LAN' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 443 -RemoteAddress LocalSubnet -Profile Private
+windows/test/test_runner.py:24:                        "req=urllib.request.Request('http://127.0.0.1:8090/mcp',data=" + repr(payload.encode()) + ",headers="
+windows/test/test_profile.py:70:        self.assertNotIn("script-runner-sandbox", services)
+windows/test/test_profile.py:128:            for path in ["/", "/admin/mcp", "/admin/mcp/", "/api/admin/tokens", "/mcp", "/mcp/x",
+windows/test/test_profile.py:130:                         "/api/device/v1/../../../admin/mcp", "/api/device/v1/%2e%2e/%2e%2e/%2e%2e/admin/mcp"]:
+windows/test/README.md:21:Container-Zertifikatsspeicher auf importierte Caddy-CAs.
+windows/test/README.md:25:mit gültigem Lauf-Tokenformat, Commit und Manifest muss `refused/state` und
+windows/test/README.md:26:`isolation=invalid` liefern. Dies belegt den Vermittler-/Paketadapter, nicht
+windows/test/README.md:52:ausgelieferte Compose bekommt dadurch keine Sandbox. Sämtliche ursprünglichen
+windows/test/README.md:56:verändern keine Host-Firewall, keinen Windows-Zertifikatsspeicher und keine
+windows/test/live.py:16:    def test_core_tls_loopback_and_fingerprint(self):
+windows/test/live.py:44:            for path in ['/', '/admin/mcp', '/api/admin/tokens', '/mcp', '/mcp/x']:
+windows/test/live.py:72:            fingerprint = ps('Get-LeafFingerprint')
+windows/test/live.py:73:            self.assertEqual(fingerprint.returncode, 0, fingerprint.stderr)
+windows/test/live.py:74:            self.assertEqual(fingerprint.stdout.strip(), expected)
+windows/test/mutations.py:60:    mutant('W10 CA not installed', 'Caddyfile', '/tskip_install_trust/n', '')
+windows/test/mutations.py:92:        # Upstream fixture, not a deployment asset. Never adds a sandbox to the profile.
+windows/test/mutations.py:94:               'script-runner-v0.3.1/script-runner/seccomp/jnpt-sandbox-seccomp.json')
+windows/test/mutations.py:98:        fixture = Path(tmp) / 'sandbox-seccomp.json'
+windows/test/mutations.py:100:        mutant('W6 no local sandbox execution',
+
+
+Alternative Adapter und Kompositionsstellen
+Suchmuster: 8484|443|ports:|network_mode|reverse_proxy|Proxy|runtime:|internal:|volumes:|docker\.sock|JANUAPORT_IMAGE|ProfileRef|ProfileBase|SHA256SUMS|tls internal|default_sni|skip_install_trust|admin off|eol=lf
+
+azure/cloud-init.yaml:10:# JANUAPORT_IMAGE-Wert), ein automatischer Start würde ohnehin nur mit einer
+azure/cloud-init.yaml:36:          image: ${JANUAPORT_IMAGE:?JANUAPORT_IMAGE in der .env setzen, z. B. ghcr.io/januaport/januaport:0.59.0}
+azure/cloud-init.yaml:37:          ports:
+azure/cloud-init.yaml:38:            - "127.0.0.1:8484:8484"
+azure/cloud-init.yaml:41:          volumes:
+azure/cloud-init.yaml:44:      volumes:
+azure/cloud-init.yaml:54:      JANUAPORT_IMAGE=ghcr.io/januaport/januaport:0.59.0
+compose/.env.example:18:JANUAPORT_IMAGE=ghcr.io/januaport/januaport:0.59.0
+windows/.env.example:3:JANUAPORT_IMAGE=ghcr.io/januaport/januaport:0.87.1
+windows/.env.example:4:JANUAPORT_IMAGE_DIGEST=81b25ca65d1cf3ff9c0bbf4d3b14fb5362debac9ed120db73cf5e2c5e18a4bfd
+hetzner/.terraform.lock.hcl:13:    "zh:6d319ee6c9e64437634f3e682196dab24025ea91a7332b40972279e9c6e67f64",
+azure/README.md:44:sudo nano /opt/jnpt/.env   # JANUAPORT_IMAGE + weitere Werte eintragen
+azure/README.md:52:Port 8484 ist hier ebenfalls nur an Loopback gebunden — für den Zugriff von
+azure/README.md:53:außerhalb der VM einen SSH-Tunnel nutzen (`ssh -L 8484:localhost:8484 …`) oder
+azure/README.md:54:einen eigenen Reverse-Proxy ergänzen.
+azure/README.md:65:- Port 8484 ist nur an Loopback gebunden, nicht öffentlich erreichbar.
+azure/README.md:66:- Wer eine öffentliche Fläche braucht: eigenen Reverse-Proxy mit TLS ergänzen
+aws/README.md:40:sudo nano /opt/jnpt/.env   # JANUAPORT_IMAGE + weitere Werte eintragen
+aws/README.md:48:Port 8484 ist hier ebenfalls nur an Loopback gebunden — für den Zugriff von
+aws/README.md:49:außerhalb der Instanz einen SSH-Tunnel nutzen (`ssh -L 8484:localhost:8484 …`)
+aws/README.md:50:oder einen eigenen Reverse-Proxy ergänzen.
+aws/README.md:62:- Port 8484 ist nur an Loopback gebunden, nicht öffentlich erreichbar.
+aws/README.md:63:- Wer eine öffentliche Fläche braucht: eigenen Reverse-Proxy mit TLS ergänzen
+windows/.gitattributes:1:# SHA256SUMS verifies the exact bytes downloaded from Git, also on Windows.
+windows/.gitattributes:2:* text eol=lf
+compose/README.md:7:Reverse-Proxy nach Wahl.
+compose/README.md:14:- Falls die Anlage öffentlich erreichbar sein soll: ein eigener Reverse-Proxy
+compose/README.md:15:  mit TLS vor Port 8484 (siehe „Sicherheits-Defaults" unten) — dieses Repo
+compose/README.md:20:1. `.env.example` nach `.env` kopieren, Werte eintragen (`JANUAPORT_IMAGE` ist
+compose/README.md:37:curl -fsS http://localhost:8484/healthz
+compose/README.md:43:curl -s -X POST http://localhost:8484/mcp /
+compose/README.md:51:curl -s -X POST http://localhost:8484/mcp /
+compose/README.md:74:- **Port 8484 ist nur an Loopback gebunden** (`127.0.0.1:8484:8484`).
+compose/README.md:76:  Reverse-Proxy mit TLS, der **selektiv** weiterleitet (`/mcp` exakt, `/healthz`,
+compose/README.md:86:Wer Beisteller betreibt (Skript-Läufer, agent-runner, google-reporting), braucht auf dem Host eine Regel. Sie verhindert, dass ein Container am Plugin-Netz `jnpt_plugins` über das Bridge-Gateway Dienste des Hosts erreicht, zum Beispiel sshd oder einen lokalen Modell-Server. `internal: true` sperrt nur den Weg nach außen, den Host selbst sperrt es nicht. Gemessen wurde das auf der Showcase am 26.10.2026.
+compose/README.md:93:       internal: true
+compose/README.md:110:4. **Prüfen**, auch nach jedem Neustart des Hosts: Aus jedem Container am Plugin-Netz darf **kein** lauschender Host-Port (`ss -lnt`) über das Bridge-Gateway erreichbar sein. `jnpt:8484` muss erreichbar bleiben.
+hetzner/cloud-init.yaml.tftpl:28:  # TS_HOSTNAME und der PFLICHT-Variable JANUAPORT_IMAGE (gepinnter Registry-Tag,
+hetzner/cloud-init.yaml.tftpl:47:      JANUAPORT_IMAGE=${image_ref}
+hetzner/cloud-init.yaml.tftpl:232:  # (JANUAPORT_IMAGE in der .env, gepinnter Tag). `pull` holt Image(s), `up -d`
+compose/docker-compose.yml:5:# betreibt den eigenen Reverse-Proxy mit TLS (siehe README, "Sicherheits-
+compose/docker-compose.yml:21:    image: ${JANUAPORT_IMAGE:?JANUAPORT_IMAGE in der .env setzen, z. B. ghcr.io/januaport/januaport:0.59.0}
+compose/docker-compose.yml:23:    # Produkt-Repo, #271): lokal erreichbar (http://localhost:8484), aber auf
+compose/docker-compose.yml:25:    # Anlage ausschließlich über den eigenen Reverse-Proxy (README).
+compose/docker-compose.yml:26:    ports:
+compose/docker-compose.yml:27:      - "127.0.0.1:8484:8484"
+compose/docker-compose.yml:61:    volumes:
+compose/docker-compose.yml:70:volumes:
+aws/cloud-init.yaml:10:# JANUAPORT_IMAGE-Wert), ein automatischer Start würde ohnehin nur mit einer
+aws/cloud-init.yaml:36:          image: ${JANUAPORT_IMAGE:?JANUAPORT_IMAGE in der .env setzen, z. B. ghcr.io/januaport/januaport:0.59.0}
+aws/cloud-init.yaml:37:          ports:
+aws/cloud-init.yaml:38:            - "127.0.0.1:8484:8484"
+aws/cloud-init.yaml:41:          volumes:
+aws/cloud-init.yaml:44:      volumes:
+aws/cloud-init.yaml:54:      JANUAPORT_IMAGE=ghcr.io/januaport/januaport:0.59.0
+hetzner/main.tf:8:# WICHTIG: Es wird KEIN Port 8484 geöffnet — JanuaPort ist von außen nicht direkt
+hetzner/main.tf:9:# erreichbar. Die öffentliche Web-Fläche (80/443) ist standardmäßig ZU
+hetzner/main.tf:20:# Firewall: deny-by-default. Die öffentliche Web-Fläche (80/443) entsteht nur
+hetzner/main.tf:45:      port        = "443"
+hetzner/main.tf:53:      description = "HTTP/3 (QUIC) — optional, gleiche Fläche wie 443"
+hetzner/main.tf:56:      port        = "443"
+windows/Caddyfile:4:	default_sni localhost
+windows/Caddyfile:6:	skip_install_trust
+windows/Caddyfile:7:	admin off
+windows/Caddyfile:11:	tls internal
+windows/Caddyfile:15:		# Echter Loopback-Absender durch network_mode: service:jnpt.
+windows/Caddyfile:16:		reverse_proxy http://127.0.0.1:8484
+windows/Caddyfile:22:	#     reverse_proxy http://127.0.0.1:8484
+windows/docker-compose.yml:7:  runtime: runc
+windows/docker-compose.yml:16:    image: ${JANUAPORT_IMAGE:?Image-Repository oder Tag fehlt}@sha256:${JANUAPORT_IMAGE_DIGEST:?SHA-256-Digest fehlt}
+windows/docker-compose.yml:17:    ports:
+windows/docker-compose.yml:18:      - "443:443"
+windows/docker-compose.yml:19:      - "127.0.0.1:8484:8484"
+windows/docker-compose.yml:22:    volumes:
+windows/docker-compose.yml:34:    network_mode: "service:jnpt"
+windows/docker-compose.yml:38:    volumes:
+windows/docker-compose.yml:48:    runtime: runc
+windows/docker-compose.yml:59:    network_mode: none
+windows/docker-compose.yml:64:    volumes:
+windows/docker-compose.yml:71:    network_mode: none
+windows/docker-compose.yml:72:    volumes:
+windows/docker-compose.yml:80:      JNPT_GATEWAY_URL: http://jnpt:8484
+windows/docker-compose.yml:82:    volumes:
+windows/docker-compose.yml:115:    volumes:
+windows/docker-compose.yml:134:volumes:
+windows/docker-compose.yml:145:    internal: true
+windows/einrichten.ps1:11:$ProfileRef = 'windows-v0.1.0'
+windows/einrichten.ps1:12:$ProfileBase = "https://raw.githubusercontent.com/JanuaPort/januaport-deploy/$ProfileRef/windows"
+windows/einrichten.ps1:26:    foreach ($line in [IO.File]::ReadAllLines((Join-Path $Path 'SHA256SUMS'))) {
+windows/einrichten.ps1:27:        if ($line -cnotmatch '^([a-f0-9]{64})  ([A-Za-z0-9.-]+)$') { throw 'Ungueltige SHA256SUMS-Zeile.' }
+windows/einrichten.ps1:41:    if ($seen.Count -ne $expected.Count) { throw 'Unvollstaendige SHA256SUMS.' }
+windows/einrichten.ps1:68:        $client.Connect('127.0.0.1', 443)
+windows/einrichten.ps1:93:        foreach ($name in @('SHA256SUMS', 'docker-compose.yml', 'Caddyfile', 'einrichten.ps1')) {
+windows/einrichten.ps1:94:            Invoke-WebRequest -UseBasicParsing -Uri "$ProfileBase/$name" -OutFile (Join-Path $staging $name)
+windows/einrichten.ps1:99:        foreach ($name in @('SHA256SUMS', 'docker-compose.yml', 'Caddyfile', 'einrichten.ps1')) {
+windows/einrichten.ps1:102:        $envText = "JANUAPORT_IMAGE=$($image[0])`nJANUAPORT_IMAGE_DIGEST=$($image[1])`n"
+windows/einrichten.ps1:120:                $response = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8484/healthz' -TimeoutSec 3
+windows/einrichten.ps1:132:        Write-Host 'Admin-GUI: http://127.0.0.1:8484'
+hetzner/README.md:52:| `public_web_enabled` | — | `false` | öffnet 80/443 in der Firewall |
+hetzner/README.md:79:  öffentliche Web-Fläche (80/443) nur bei `public_web_enabled = true`.
+hetzner/README.md:80:- **Kein Port 8484 in der Firewall** — JanuaPort ist von außen nie direkt
+hetzner/README.md:90:Wer Beisteller betreibt (Skript-Läufer, agent-runner, google-reporting), braucht auf dem Host eine Regel. Sie verhindert, dass ein Container am Plugin-Netz `jnpt_plugins` über das Bridge-Gateway Dienste des Hosts erreicht, zum Beispiel sshd oder einen lokalen Modell-Server. `internal: true` sperrt nur den Weg nach außen, den Host selbst sperrt es nicht. Gemessen wurde das auf der Showcase am 26.10.2026.
+hetzner/README.md:97:       internal: true
+hetzner/README.md:114:4. **Prüfen**, auch nach jedem Neustart des Hosts: Aus jedem Container am Plugin-Netz darf **kein** lauschender Host-Port (`ss -lnt`) über das Bridge-Gateway erreichbar sein. `jnpt:8484` muss erreichbar bleiben.
+windows/README.en.md:9:TCP ports 443 and 8484 must be available. Registry/GitHub access is required.
+windows/README.en.md:28:`%LOCALAPPDATA%/JanuaPort/windows/.env` with `JANUAPORT_IMAGE` (repository/tag)
+windows/README.en.md:29:and mandatory `JANUAPORT_IMAGE_DIGEST`; Compose combines them into a digest
+windows/README.en.md:35:Open the admin GUI locally at <http://127.0.0.1:8484> and follow the product's
+windows/README.en.md:56:`skip_install_trust` also prevents CA installation inside the container.
+windows/README.en.md:79:- **W8:** Only TCP 443 is published to the LAN. Caddy shares `jnpt`'s network
+windows/README.en.md:80:  namespace and forwards to real loopback `http://127.0.0.1:8484`. This satisfies
+windows/README.en.md:83:  the GUI, `/admin/mcp`, `/api/admin/*`, `/metrics` and `/mcp`. Port 8484 binds
+windows/README.en.md:90:  New-NetFirewallRule -DisplayName 'JanuaPort HTTPS LAN' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 443 -RemoteAddress LocalSubnet -Profile Private
+windows/README.en.md:95:  broad rules. Test 443 from the local subnet and rejection from outside it;
+windows/README.en.md:96:  verify that 8484 cannot be reached from the LAN. Do not forward 443 at the
+windows/README.en.md:111:curl.exe -fsS http://127.0.0.1:8484/healthz
+windows/README.en.md:123:SHA256SUMS in both Windows checkouts and raw downloads.
+windows/README.md:16:- Die TCP-Ports 443 und 8484 sind frei. Kein Router-Portforwarding für 443.
+windows/README.md:26:Das Skript lädt alle Dateien und `SHA256SUMS` genau von diesem festen Tag.
+windows/README.md:40:`%LOCALAPPDATA%/JanuaPort/windows/.env` stehen Repository/Tag als `JANUAPORT_IMAGE`
+windows/README.md:41:und der zwingende `JANUAPORT_IMAGE_DIGEST`; Compose kombiniert beide zu einer
+windows/README.md:48:Die Admin-GUI liegt lokal unter <http://127.0.0.1:8484>. Weiter mit
+windows/README.md:71:Caddy importiert durch `skip_install_trust` auch im Container keine CA.
+windows/README.md:99:- **SEC W8:** Nur TCP 443 geht ins LAN. Caddy teilt `jnpt`'s Netz-Namensraum
+windows/README.md:100:  und spricht `http://127.0.0.1:8484` mit echtem Loopback-Absender an. Das
+windows/README.md:104:  Port 8484 bindet ausschließlich an `127.0.0.1`. Caddys Admin-API ist aus.
+windows/README.md:110:  New-NetFirewallRule -DisplayName 'JanuaPort HTTPS LAN' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 443 -RemoteAddress LocalSubnet -Profile Private
+windows/README.md:116:  Regeln nicht auf. Von einem Gerät im lokalen Subnetz 443 prüfen, von außerhalb
+windows/README.md:117:  des Subnetzes muss der Zugriff scheitern. 8484 auch im LAN negativ prüfen.
+windows/README.md:133:curl.exe -fsS http://127.0.0.1:8484/healthz
+windows/README.md:146:beschrieben. SHA256SUMS enthält die drei ausgeführten Profildateien; `.gitattributes`
+hetzner/variables.tf:119:# `apply`, sondern das Update-Runbook des Produkts fahren: JANUAPORT_IMAGE in
+hetzner/variables.tf:126:    cloud-init schreibt den Wert als JANUAPORT_IMAGE in die .env neben der
+hetzner/variables.tf:293:    Öffnet die öffentlichen Web-Ports (80/tcp, 443/tcp, 443/udp) in der
+windows/test/README.md:29:`live.py` benötigt freie Ports 443 und 8484. Es startet das vollständige Profil
+windows/test/live.py:1:"""Disposable full core round trip; ports 443 and 8484 must be free."""
+windows/test/live.py:22:                conn = http.client.HTTPSConnection('127.0.0.1', 443, timeout=4,
+windows/test/live.py:25:                conn = http.client.HTTPConnection('127.0.0.1', 8484, timeout=4)
+windows/test/live.py:59:                with socket.create_connection((host_ip, 8484), timeout=2):
+windows/test/live.py:64:            self.assertEqual(bindings['8484/tcp'], [{'HostIp': '127.0.0.1', 'HostPort': '8484'}])
+windows/test/live.py:65:            self.assertEqual(set(bindings), {'443/tcp', '8484/tcp'})
+windows/test/live.py:69:            with socket.create_connection(('127.0.0.1', 443), timeout=3) as raw:
+windows/test/mutations.py:26:        for name in ['Caddyfile', 'docker-compose.yml', 'SHA256SUMS', 'einrichten.ps1', '.env.example']:
+windows/test/mutations.py:38:        (target / 'SHA256SUMS').write_text(''.join(
+windows/test/mutations.py:59:    mutant('Caddy admin socket off', 'Caddyfile', '/tadmin off/n', '')
+windows/test/mutations.py:60:    mutant('W10 CA not installed', 'Caddyfile', '/tskip_install_trust/n', '')
+windows/test/mutations.py:61:    mutant('W8 real loopback upstream', 'Caddyfile', 'reverse_proxy http://127.0.0.1:8484/n/t}',
+windows/test/mutations.py:62:           'reverse_proxy http://jnpt:8484/n/t}', command=[str(TESTS / 'live.py')])
+windows/test/mutations.py:63:    mutant('W8 admin port LAN rejection', 'docker-compose.yml', '127.0.0.1:8484:8484', '8484:8484',
+windows/test/mutations.py:65:    mutant('Caddy namespace composition', 'docker-compose.yml', 'network_mode: "service:jnpt"',
+windows/test/mutations.py:66:           'network_mode: "service:script-runner"', command=COMPOSE)
+windows/test/mutations.py:67:    mutant('required core digest', 'docker-compose.yml', '${JANUAPORT_IMAGE_DIGEST:?SHA-256-Digest fehlt}',
+windows/test/mutations.py:68:           '${JANUAPORT_IMAGE_DIGEST:-' + 'a' * 64 + '}', command=COMPOSE)
+windows/test/mutations.py:69:    mutant('required core image', 'docker-compose.yml', '${JANUAPORT_IMAGE:?Image-Repository oder Tag fehlt}',
+windows/test/mutations.py:70:           '${JANUAPORT_IMAGE:-ghcr.io/januaport/januaport:0.87.1}', command=COMPOSE)
+windows/test/mutations.py:77:    mutant('manifest line rejection', 'einrichten.ps1', "throw 'Ungueltige SHA256SUMS-Zeile.'", 'continue', command=manifest_test)
+windows/test/test_install.py:26:            for name in ['SHA256SUMS', 'Caddyfile', 'docker-compose.yml', 'einrichten.ps1', '.env.example']:
+windows/test/test_install.py:28:            original = (target / 'SHA256SUMS').read_text()
+windows/test/test_install.py:36:                (target / 'SHA256SUMS').write_text(manifest)
+windows/test/test_install.py:44:            for name in ["SHA256SUMS", "Caddyfile", "docker-compose.yml", "einrichten.ps1"]:
+windows/test/test_profile.py:19:EXAMPLE = {"JANUAPORT_IMAGE": "ghcr.io/januaport/januaport:0.87.1",
+windows/test/test_profile.py:20:           "JANUAPORT_IMAGE_DIGEST": "81b25ca65d1cf3ff9c0bbf4d3b14fb5362debac9ed120db73cf5e2c5e18a4bfd"}
+windows/test/test_profile.py:37:    rows = (directory / "SHA256SUMS").read_text().splitlines()
+windows/test/test_profile.py:56:            for name in ["SHA256SUMS", "Caddyfile", "docker-compose.yml", "einrichten.ps1"]:
+windows/test/test_profile.py:68:        self.assertEqual(services["caddy"]["network_mode"], "service:jnpt")
+windows/test/test_profile.py:75:                if port["target"] != 443:
+windows/test/test_profile.py:77:                    self.assertEqual(port["target"], 8484)
+windows/test/test_profile.py:80:        self.assertNotEqual(config(extra_env={"JANUAPORT_IMAGE_DIGEST": ""}, check=False).returncode, 0)
+windows/test/test_profile.py:81:        self.assertNotEqual(config(extra_env={"JANUAPORT_IMAGE": ""}, check=False).returncode, 0)
+windows/test/test_profile.py:91:        # A real HTTP backend proves that allowed requests reach reverse_proxy.
+windows/test/test_profile.py:94:            run("docker", "run", "-d", "--name", ident, "-p", "127.0.0.1::443",
+windows/test/test_profile.py:101:                "HTTPServer(('127.0.0.1',8484),H).serve_forever()")
+windows/test/test_profile.py:104:            port = int(run("docker", "port", ident, "443/tcp").stdout.strip().rsplit(":", 1)[1])
