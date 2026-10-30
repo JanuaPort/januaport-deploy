@@ -1,8 +1,8 @@
 # hetzner/ — Terraform-Vorlage für Hetzner Cloud
 
 **Status: von JanuaPort GmbH betrieben (Showcase-Muster).** Dieses Modul ist
-generisch aus dem Terraform-Modul abgeleitet, das unseren öffentlichen
-Showcase (`mcp.januaport.ai`) trägt — ohne unsere konkreten Werte (Domain,
+generisch aus dem Terraform-Modul abgeleitet, das unseren eigenen
+Showcase trägt — ohne unsere konkreten Werte (Domain,
 Tailnet-Name, Kontoname, Tokens, IPs). Es provisioniert eine
 **Single-Node**-VM (kein k8s, kein Postgres — ein Server) und rollt darauf den
 gehärteten Drei-Container-Stack aus dem Produkt-Repo aus (`jnpt` + `caddy` +
