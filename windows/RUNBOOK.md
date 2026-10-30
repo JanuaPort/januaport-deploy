@@ -27,6 +27,9 @@ einrichtet und wartet. „Betreiber“ meint in diesem Runbook und im Produkt im
 - **Kein KI-Werkzeug sieht echte Daten des Kunden.** Gilt bei Kunden mit Berufsgeheimnis, etwa Praxen.
   - Skripte bauen und testen mit KI nur gegen eine Schulungs- oder Testinstanz des Fachsystems mit eigener
     Datenbank. Tests mit echten Daten macht ein Mensch, ohne KI.
+  - Der Kunde bestätigt in Textform, dass diese Instanz nur Testdaten enthält und keine Kopie der echten
+    Datenbank ist. Sie läuft auf einem eigenen Rechner oder in einer VM, nicht auf einem Arbeitsplatz, an dem
+    auch die echte Fachanwendung offen ist. Ein Bildschirmfoto zeigt sonst beides.
   - Zeigt ein Bildschirm echte Daten, etwa die Fachanwendung oder eine Fernsitzung auf einen Arbeitsplatz,
     ist am Zugriffsgerät kein KI-Werkzeug mit Bildschirmzugriff aktiv. Dazu zählen Computer-Use, eine
     Desktop-App mit Bildschirmfreigabe und Screenshot-Synchronisierung. Das ist ein Prüfpunkt im
@@ -48,6 +51,7 @@ einrichtet und wartet. „Betreiber“ meint in diesem Runbook und im Produkt im
 | Ein Zeitfenster, in dem ein Neustart niemanden stört. | Kunde | Docker Desktop verlangt einen Neustart |
 | Ein Sicherungsziel außerhalb des Rechners (NAS oder USB-Laufwerk). | Kunde | Backup der Anlage |
 | Eine feste Adresse des Rechners im lokalen Netz (DHCP-Reservierung oder statische IP). Nötig erst, wenn Läufer auf anderen Arbeitsplätzen koppeln. | Kunde (IT-Dienstleister) | Die Läufer speichern die Adresse aus `pair`. Der Fingerprint prüft nur das Zertifikat, nicht die Adresse. Ändert sich die Adresse, erreichen die Läufer die Anlage nicht mehr. |
+| Freigabe für den Desktop-Läufer auf den Arbeitsplätzen, falls eine Richtlinie (etwa AppLocker) oder ein Virenscanner Programme aus dem Benutzerprofil sperrt. Die EXE des Läufers liegt an einem dauerhaften Ort im Benutzerprofil und ist von der JanuaPort GmbH signiert: Regel nach Herausgeber, nicht nach Pfad. Jeder Lauf startet zusätzlich `python.exe` aus `%LOCALAPPDATA%\JanuaPort\desktop-runner\envs\…`. Diese ist von der Python Software Foundation signiert und braucht eine eigene Regel nach Herausgeber für dieses Verzeichnis. Sind DLL-Regeln aktiv, gilt das auch für die Bibliotheken der Skripte. Mit AppLocker ist dieser Weg ungetestet. | Kunde (IT-Dienstleister) | Sonst startet der Läufer nicht, oder er startet und jeder Lauf scheitert |
 
 ## 3. Ablauf am Termin
 
