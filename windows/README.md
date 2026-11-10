@@ -103,6 +103,13 @@ Daten dem richtigen Konto zuordnen und den Ablauf auf dem Testrechner gemäß
 [Prüfstein B4](PRUEFSTEIN-B4.md) gehen. Das Skript migriert keine Daten eines
 anderen Windows-Kontos automatisch.
 
+**Daten aus einem anderen Windows-Konto:** Docker Desktop hält Container, Images und
+nach unserem Stand auch Volumes je Windows-Konto. Lief 0.1.0 unter einem persönlichen
+Konto, liegen die Daten der Anlage dort und nicht bei `jnpt-dienst`. Das Upgrade der
+Dateien zieht sie nicht um. Vorher im alten Konto `jnpt backup` ausführen und den
+Master-Key getrennt verwahren, dann unter `jnpt-dienst` neu einrichten und die
+Sicherung zurückspielen. Dieser Weg ist ein Schritt im Prüfstein B4.
+
 ## Dienstbetrieb (B2)
 
 Admin-PowerShell, nur auf dem vorgesehenen Betriebsrechner: den vollständigen,

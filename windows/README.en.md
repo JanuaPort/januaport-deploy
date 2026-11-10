@@ -84,6 +84,13 @@ Identify the account holding the existing engine/data before changing deployment
 and exercise the upgrade on the test machine under [B4](PRUEFSTEIN-B4.md).
 The script does not automatically migrate another Windows account's data.
 
+**Data from another Windows account:** Docker Desktop keeps containers, images and,
+as far as we know, volumes per Windows account. If 0.1.0 ran under a personal account,
+the installation's data lives there and not with `jnpt-dienst`. The file upgrade does
+not move it. Run `jnpt backup` in the old account first and keep the master key
+separately, then set up again under `jnpt-dienst` and restore the backup. This path
+is a step of the B4 checkpoint.
+
 ## Service operation (B2)
 
 On the intended deployment machine, use an administrative PowerShell in the
