@@ -18,6 +18,16 @@ import uuid
 ROOT = Path(os.environ.get('JNPT_PROFILE_ROOT', Path(__file__).resolve().parents[1]))
 EXAMPLE = {"JANUAPORT_IMAGE": "ghcr.io/januaport/januaport:0.87.1",
            "JANUAPORT_IMAGE_DIGEST": "81b25ca65d1cf3ff9c0bbf4d3b14fb5362debac9ed120db73cf5e2c5e18a4bfd"}
+MAIL_VALUES = {
+    'JNPT_SMTP_HOST': 'smtp.example.org',
+    'JNPT_SMTP_PORT': '587',
+    'JNPT_SMTP_TLS': 'starttls',
+    'JNPT_SMTP_FROM': 'sender@example.org',
+    'JNPT_SMTP_TO': 'recipient@example.org',
+    'JNPT_SMTP_USERNAME': 'sender@example.org',
+    'JNPT_NOTIFY_STATE': '/data/notify-state.json',
+    'JNPT_NOTIFY_TRANSPORT': 'smtp',
+}
 
 
 def run(*args, input=None, check=True, env=None):
@@ -25,10 +35,13 @@ def run(*args, input=None, check=True, env=None):
                           check=check, env=env, timeout=120)
 
 
-def config(directory=ROOT, extra_env=None, check=True):
-    env = dict(os.environ, **EXAMPLE)
+def config(directory=ROOT, extra_env=None, check=True, env_file=None):
+    # Mail tests must not inherit an operator's settings or credentials.
+    env = {key: value for key, value in os.environ.items()
+           if not key.startswith(('JNPT_SMTP_', 'JNPT_NOTIFY_')) and key != 'JNPT_ADMIN_URL'}
+    env.update(EXAMPLE)
     env.update(extra_env or {})
-    return run("docker", "compose", "--env-file", os.devnull, "-f",
+    return run("docker", "compose", "--env-file", str(env_file or os.devnull), "-f",
                str(directory / "docker-compose.yml"), "config", "--format", "json",
                env=env, check=check)
 
@@ -58,6 +71,77 @@ def create_leaf(cfg, volume, san='DNS:localhost,IP:127.0.0.1'):
 
 
 class Profile(unittest.TestCase):
+    def test_mail_environment(self):
+        cfg = json.loads(config(extra_env=MAIL_VALUES).stdout)
+        environment = cfg['services']['jnpt'].get('environment', {})
+        for name, value in MAIL_VALUES.items():
+            with self.subTest(variable=name):
+                self.assertEqual(environment.get(name), value)
+        self.assertEqual(set(environment), set(MAIL_VALUES) |
+                         {'JNPT_SMTP_PASSWORD_FILE', 'JNPT_ADMIN_URL'})
+
+    def test_mail_password_is_file_only(self):
+        # Try both actual Compose input adapters, including an explicitly supplied
+        # plaintext password. Neither may put it in a container environment.
+        attempted = {'JNPT_SMTP_PASSWORD': 'synthetic mail probe',
+                     'JNPT_SMTP_PASSWORD_FILE': '/tmp/incorrect-password-file'}
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            dotenv = Path(tmp) / '.env'
+            dotenv.write_text(''.join(name + '=' + value + '\n'
+                                      for name, value in attempted.items()))
+            for source in ['process', 'dotenv']:
+                with self.subTest(source=source):
+                    cfg = json.loads(config(
+                        extra_env=attempted if source == 'process' else None,
+                        env_file=dotenv if source == 'dotenv' else None).stdout)
+                    service = cfg['services']['jnpt']
+                    environment = service.get('environment', {})
+                    self.assertNotIn('JNPT_SMTP_PASSWORD', environment)
+                    self.assertEqual(environment.get('JNPT_SMTP_PASSWORD_FILE'),
+                                     '/run/secrets/smtp_password')
+                    self.assertIn({'source': 'smtp_password', 'target': 'smtp_password'},
+                                  service.get('secrets', []))
+                    self.assertEqual(Path(cfg['secrets']['smtp_password']['file']),
+                                     ROOT.resolve() / 'secrets' / 'smtp_password')
+
+    def test_mail_admin_url_is_local(self):
+        cfg = json.loads(config(extra_env={
+            'JNPT_ADMIN_URL': 'https://smtp.example.org'}).stdout)
+        self.assertEqual(cfg['services']['jnpt'].get('environment', {}).get('JNPT_ADMIN_URL'),
+                         'http://127.0.0.1:8484')
+
+    def test_mail_unconfigured(self):
+        for values in [None, dict.fromkeys(MAIL_VALUES, '')]:
+            with self.subTest(values=values):
+                result = config(extra_env=values, check=False)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                cfg = json.loads(result.stdout)
+                environment = cfg['services']['jnpt'].get('environment', {})
+                for name in MAIL_VALUES:
+                    self.assertEqual(environment.get(name), '', name)
+
+    def test_mail_secret_initialization_preserves_operator_files(self):
+        from test_install import ps
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            target = Path(tmp)
+            dotenv = target / '.env'
+            dotenv.write_bytes(b'JNPT_SMTP_HOST=smtp.example.org\n')
+            original_env = dotenv.read_bytes()
+            command = "Initialize-MailSecret '" + str(target) + "'"
+            result = ps(command)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            secret = target / 'secrets' / 'smtp_password'
+            self.assertTrue(secret.is_file())
+            self.assertEqual(secret.read_bytes(), b'')
+            secret.write_bytes(b'synthetic mail probe')
+            result = ps(command)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(secret.read_bytes(), b'synthetic mail probe')
+            self.assertEqual(dotenv.read_bytes(), original_env)
+        ignored = run('git', '-C', str(ROOT), 'check-ignore', '--no-index',
+                      'secrets/smtp_password', check=False)
+        self.assertEqual(ignored.returncode, 0, ignored.stderr)
+
     def test_static_leaf_configuration(self):
         caddyfile = (ROOT / 'Caddyfile').read_text()
         self.assertNotIn('tls internal', caddyfile)
