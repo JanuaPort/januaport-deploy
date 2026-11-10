@@ -46,8 +46,8 @@ namespace Jnpt {
 }
 '@
     }
-    $path = New-Object Text.StringBuilder 1024
-    $result = [Jnpt.UserProfile]::CreateProfile($User.SID.Value, $User.Name, $path, 1024)
+    $path = New-Object Text.StringBuilder 260
+    $result = [Jnpt.UserProfile]::CreateProfile($User.SID.Value, $User.Name, $path, 260)
     if ($result -ne 0) { throw 'Windows-Benutzerprofil konnte nicht angelegt werden.' }
     return $path.ToString()
 }

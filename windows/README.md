@@ -103,6 +103,10 @@ Daten dem richtigen Konto zuordnen und den Ablauf auf dem Testrechner gemäß
 [Prüfstein B4](PRUEFSTEIN-B4.md) gehen. Das Skript migriert keine Daten eines
 anderen Windows-Kontos automatisch.
 
+**Upgrade an Ort und Stelle nur unter `jnpt-dienst`:** Das Skript verlangt die
+Sitzung von `jnpt-dienst`. Lief 0.1.0 unter einem persönlichen Konto, gibt es
+kein Upgrade an Ort und Stelle, nur den folgenden Weg.
+
 **Daten aus einem anderen Windows-Konto:** Docker Desktop hält Container, Images und
 nach unserem Stand auch Volumes je Windows-Konto. Lief 0.1.0 unter einem persönlichen
 Konto, liegen die Daten der Anlage dort und nicht bei `jnpt-dienst`. Das Upgrade der
