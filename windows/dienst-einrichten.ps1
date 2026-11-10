@@ -196,7 +196,10 @@ function Register-DienstTasks {
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew
     $logon = New-ScheduledTaskTrigger -AtLogOn -User $account
     $ps = $env:SystemRoot + '\System32\WindowsPowerShell\v1.0\powershell.exe'
-    $lock = New-ScheduledTaskAction -Execute $ps -Argument '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "C:\JanuaPort\windows\jnpt-sperren.ps1"'
+    # Windows Terminal ignoriert -WindowStyle Hidden (B4 N7); conhost --headless startet ohne Fenster.
+    # Entfällt der Schalter je, kommt nur das Fenster zurück, die Sperre bleibt.
+    $conhost = $env:SystemRoot + '\System32\conhost.exe'
+    $lock = New-ScheduledTaskAction -Execute $conhost -Argument ('--headless "' + $ps + '" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "C:\JanuaPort\windows\jnpt-sperren.ps1"')
     Register-ScheduledTask -TaskName 'JanuaPort Sperren bei Anmeldung' -Action $lock -Trigger $logon -Principal $principal -Settings $settings -Force | Out-Null
     $install = New-ScheduledTaskAction -Execute $ps -WorkingDirectory $DienstDirectory -Argument ('-NoProfile -ExecutionPolicy Bypass -File "' + $DienstDirectory + '\einrichten.ps1"')
     # On demand only: the operator supplies the image tag in the initial
