@@ -22,10 +22,12 @@ class B4(unittest.TestCase):
             task = next(t for t in tasks if t['TaskName'] == 'JanuaPort Sperren bei Anmeldung')
             self.assertIn(task['Trigger'].get('Delay'), [None, '', 'PT0S'])
             self.assertTrue(task['Trigger']['Logon'])
+            # N7 (B4): Windows Terminal ignoriert -WindowStyle Hidden; conhost --headless öffnet kein Fenster.
             self.assertEqual(task['Action']['Execute'].lower(),
-                             (os.environ['SystemRoot'] + r'\System32\WindowsPowerShell\v1.0\powershell.exe').lower())
+                             (os.environ['SystemRoot'] + r'\System32\conhost.exe').lower())
             self.assertEqual(task['Action']['Argument'],
-                             '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden '
+                             '--headless "' + os.environ['SystemRoot'] + r'\System32\WindowsPowerShell\v1.0\powershell.exe'
+                             + '" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden '
                              '-File "C:\\JanuaPort\\windows\\jnpt-sperren.ps1"')
 
     def lock_probe(self, explorer_after=0, locked_after=1, native_error=False, seed_log=False, log_failure=False):
