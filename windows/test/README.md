@@ -12,6 +12,7 @@ python -B windows/test/mutations.py
 python -B windows/test/dienst_mutations.py
 python -B windows/test/b4_mutations.py
 python -B windows/test/f4_mutations.py
+python -B windows/test/sec_r4_mutations.py
 ```
 
 B2/B3 nur in einer **nicht erhöhten** Testsitzung ausführen. Für die neuen
@@ -99,11 +100,19 @@ und der produktive Kontrollfluss bleiben erhalten. Der erste Lauf schreibt
 einmal, der identische zweite Lauf gar nicht. Fast passende DACLs mit vierter
 Regel, fehlendem Schutz, anderen Rechten, Vererbungs-/Propagationsflags oder
 Deny werden ersetzt. Native Schreibfehler muessen abbrechen.
+R4 prueft jede Abweichung einzeln: zusaetzliches Users-Read-ACE,
+fehlendes OI bzw. CI, fehlende SID, geringere Rechte, InheritOnly,
+NoPropagate, fehlender Schutz, Deny sowie zusaetzliche geerbte ACEs.
+Auch die binaere DACL wird geprueft: GetAccessRules kann opaque ACEs
+auslassen oder Callback-ACEs als Allow darstellen. Beide Faelle muessen
+neu geschrieben werden; gueltig sind nur genau drei gewoehnliche Allow-ACEs.
 
 `test_acl_f5.py` enthaelt einen AST-Waechter gegen zwei Schreibschritte oder
 alte Clear-/icacls-Adapter. Auf echtem NTFS unter dem Testordner werden nach
 der ersten Absicherung erbende `.env`-, Secret- und Logdateien angelegt und
-dann Eltern-/Profilordner erneut geschuetzt: Inhalt bleibt lesbar, Besitzer
+anschliessend manuell ein erbendes Users-Read-ACE hinzugefuegt und dann
+Eltern-/Profilordner erneut geschuetzt: Das Users-ACE verschwindet,
+Inhalt bleibt lesbar, Besitzer
 und SDDL bleiben gleich, alle Dateien tragen die drei geerbten ACEs. Breite
 geerbte und explizite Fremdrechte werden in den bestehenden Temp-ACL-Tests
 weiterhin am echten Adapter entfernt. Der Fall eines anderen Dateibesitzers
@@ -121,6 +130,13 @@ erhalten alte explizite Freigaben oder ignorieren einen Schreibfehler. Sie
 sind auch in `dienst_mutations.py` integriert. Die manuelle Reparatur im
 RUNBOOK wird nur als Anleitung geprueft; takeown und icacls /reset werden
 im Test nicht ausgefuehrt.
+
+`sec_r4_mutations.py` ersetzt "genau drei" durch "enthaelt die drei": Der
+Users-Read-Negativfall muss rot werden. Eine zweite Mutation akzeptiert ein
+Callback-ACE als gewoehnliches Allow. Drei weitere entfernen aus den echten
+N5-1-Dokumentationsrezepten den Docker-Anwendungsfilter, Any-Port oder
+Portbereiche. Alle fuenf muessen an Assertions scheitern; die Originalbytes
+bleiben erhalten.
 
 `test_b4.py` prüft den sofortigen Anmeldeauslöser ohne festen Delay und den
 festen Aufruf von `C:\JanuaPort\windows\jnpt-sperren.ps1`. Der echte PS-5.1-
@@ -163,6 +179,13 @@ Profile `Private,Domain`. Die echte Firewall wird nicht verändert. Der echte
 Installer läuft mit Fehlerfallen an allen Firewall-/Netzprofil-Schreibadaptern.
 Weitere Mutationen ersetzen `LocalSubnet` durch `Any`, erlauben öffentliche
 Profile, entfernen die Profilprüfung oder bauen eine automatische Regel ein.
+`test_sec_r4_docs.py` fuehrt die N5-1-Abnahmezeilen aus RUNBOOK und B4 mit
+PS-5.1-Firewall-Fakes aus: Docker-Regeln auch auf anderen Ports sowie
+443 als Einzelport, Liste, Bereich oder Any muessen sichtbar werden;
+unbeteiligte Regeln bleiben herausgefiltert. Kein echter Firewall-Zugriff.
+Die SEC-Texte zu Ruecksicherung, unbeantwortetem Docker-Dialog und
+Konsolenschutz werden in allen geforderten Dokumenten geprueft.
+`<SEKUNDEN>` bleibt genau einmal je README fuer LEADs Nachmessung erlaubt.
 
 ```powershell
 python -B windows/test/operator_mutations.py

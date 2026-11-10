@@ -34,6 +34,12 @@ festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
    weiterhin lesbar, tragen die drei geerbten FullControl-ACEs und niemals
    eine leere DACL wie `D:AI`; Anlagenstart und Sicherung müssen grün sein.
    Bei bereits korrekter Ordner-DACL bleibt der SDDL beim zweiten Lauf gleich.
+   **R4:** Gültig ist ausschließlich eine geschützte DACL mit genau drei
+   expliziten Allow-ACEs (SYSTEM, Administratoren, Dienst-SID), jeweils
+   FullControl mit ContainerInherit und ObjectInherit, ohne InheritOnly oder
+   NoPropagate und ohne weitere explizite oder geerbte Allow-/Deny-ACEs.
+   Zusätzliches Benutzer-Read-ACE und eine ACE ohne ObjectInherit getrennt
+   ausprobieren: erneute Einrichtung muss beide Abweichungen entfernen.
    Der Fall eines anderen Dateibesitzers ist im lokalen NTFS-Test nicht
    nachgestellt und bleibt ausdrücklich BOX-Abnahme.
 4. **W4/W5, B-3, Neustart:** `dienst-einrichten.ps1` auf dem Testrechner als
@@ -58,6 +64,44 @@ festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
    `docker-users` ist praktisch Admin und keine Schutzgrenze. Das Wartungskonto
    löst ausschließlich die Aufgaben aus, z. B. `schtasks /run /tn "JanuaPort
    Sicherung"`; keine Anmeldung/Arbeit des Dienstleisters als `jnpt-dienst`.
+4a. **N5-1, Firewall bei jeder echten Abnahme:** In B4 fand sich keine
+    Allow-Regel für Docker. Docker Desktop hatte nur zwei Block-Regeln für das
+    Profil „Öffentlich“ angelegt, weil der Firewall-Dialog unbeantwortet blieb.
+    Was bei „Zulassen“ entsteht, ist nicht gemessen.
+    Den Firewall-Dialog von Docker Desktop nicht mit ‚Zulassen‘ für öffentliche Netze beantworten.
+    In einer administrativen PowerShell die aktiven eingehenden Allow-Regeln
+    mit Docker-Anwendungsfilter und alle Portfilter, die 443 öffnen, auflisten
+    (auch `Any`, Portlisten und Bereiche). Diese Prüfung liest nur:
+
+<!-- N5-1 -->
+```powershell
+$inboundAllow = @(Get-NetFirewallRule -Enabled True -Direction Inbound -Action Allow)
+foreach ($rule in $inboundAllow) {
+    $applications = @($rule | Get-NetFirewallApplicationFilter)
+    $isDocker = @($applications | Where-Object { $_.Program -match 'docker' }).Count -gt 0
+    foreach ($port in @($rule | Get-NetFirewallPortFilter)) {
+        $opens443 = @($port.LocalPort -split ',' | Where-Object {
+            $_ -eq 'Any' -or $_ -eq '443' -or
+            ($_ -match '^([0-9]+)-([0-9]+)$' -and [int]$Matches[1] -le 443 -and [int]$Matches[2] -ge 443)
+        }).Count -gt 0
+        if ($isDocker -or $opens443) {
+            [pscustomobject]@{
+                Name = $rule.Name; DisplayName = $rule.DisplayName; Profile = $rule.Profile
+                Program = ($applications.Program -join ',')
+                Protocol = $port.Protocol; LocalPort = ($port.LocalPort -join ',')
+                RemoteAddress = (@($rule | Get-NetFirewallAddressFilter).RemoteAddress -join ',')
+            }
+        }
+    }
+}
+```
+
+    Ergebnis im Abnahmeprotokoll festhalten. Außer „JanuaPort 443 LAN“ darf
+    keine Allow-Regel 443 öffnen. Gibt es eine weitere, wird sie deaktiviert
+    oder auf `LocalSubnet` eingeengt. Die benannte Regel muss TCP 443,
+    `LocalSubnet` und `Private,Domain` tragen. HTTPS aus dem lokalen Subnetz,
+    Abweisung von außerhalb und Unerreichbarkeit von 8484 im LAN belegen.
+
 5. **USB-Sicherung:** Separaten USB-Datenträger mit `.jnpt-backup-ziel`
    vorbereiten. Tägliche Aufgabe und manuellen Aufgabenstart prüfen. Ergebnis
    `LastTaskResult = 0`, genau eine Sicherungsdatei pro Lauf, keine `.teil`,
@@ -96,6 +140,8 @@ festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
    Key-Einlege-Muster aus N4 prüfen. Der Kern läuft als UID/GID 65532:
    Key mit Eigentümer 65532:65532 und Modus 600 muss lesbar sein, Restore muss
    bei leerer Ziel-DB erfolgreich sein. Health 200 und Admin-Anmeldung belegen.
+   Den Ordner `/data/beiseite-<zeitstempel>` erst löschen, wenn die Rücksicherung geprüft ist (healthz, Anmeldung, Lesezugriff).
+   Wer den Block auf eine nicht frische Anlage anwendet, verliert sonst den alten Stand.
    USB anschließend abziehen bzw. lokale Key-Kopie entfernen.
 8. **Wartung und Fernzugang:** TeamViewer auf Annahme gemäß AVV Anlage 3:
    ein Mensch beim Betreiber nimmt jede Sitzung an. Kein unbeaufsichtigter

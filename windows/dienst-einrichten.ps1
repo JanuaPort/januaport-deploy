@@ -59,7 +59,17 @@ function Protect-DienstDirectory {
         [Security.AccessControl.InheritanceFlags]::ObjectInherit
     $current = [IO.Directory]::GetAccessControl($Path, [Security.AccessControl.AccessControlSections]::Access)
     $rules = @($current.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
-    $exact = $current.AreAccessRulesProtected -and $rules.Count -eq 3
+    # GetAccessRules can omit opaque ACEs or project callback ACEs as Allow.
+    # Check the complete binary DACL as well as the three expected rules (R4).
+    $raw = New-Object Security.AccessControl.RawSecurityDescriptor($current.GetSecurityDescriptorBinaryForm(), 0)
+    $rawRules = @($raw.DiscretionaryAcl)
+    $exact = $current.AreAccessRulesProtected -and $rules.Count -eq 3 -and $rawRules.Count -eq 3
+    $expectedAceFlags = [Security.AccessControl.AceFlags]'ContainerInherit,ObjectInherit'
+    foreach ($ace in $rawRules) {
+        if ($ace -isnot [Security.AccessControl.CommonAce] -or
+            $ace.AceType -ne [Security.AccessControl.AceType]::AccessAllowed -or
+            $ace.AceFlags -ne $expectedAceFlags) { $exact = $false }
+    }
     foreach ($principal in $principals) {
         $matching = @($rules | Where-Object {
             $_.IdentityReference.Value -ceq $principal -and -not $_.IsInherited -and

@@ -21,8 +21,14 @@ Den Ablauf vor Ort und bei Fernwartung (wer wann was tut) beschreibt das [Runboo
 
 ### LAN-Freigabe bei der Einrichtung (N5)
 
-Docker Desktop legt beim ersten Start Block-Regeln für das öffentliche
-Netzprofil an. Für Desktop-Läufer im LAN prüft der Betreiber bzw. seine IT
+In B4 fand sich keine Allow-Regel für Docker. Docker Desktop hatte nur zwei
+Block-Regeln für das Profil „Öffentlich“ angelegt, weil der Firewall-Dialog
+unbeantwortet blieb. Was bei „Zulassen“ entsteht, ist nicht gemessen.
+Den Firewall-Dialog von Docker Desktop nicht mit ‚Zulassen‘ für öffentliche Netze beantworten.
+Bei jeder echten Abnahme Docker-Anwendungsfilter und alle Portfilter, die 443
+öffnen, gemäß [RUNBOOK, N5-1](RUNBOOK.md) auflisten. Außer „JanuaPort 443 LAN“
+darf keine Allow-Regel 443 öffnen; weitere Regeln deaktivieren oder auf
+`LocalSubnet` einengen. Für Desktop-Läufer im LAN prüft der Betreiber bzw. seine IT
 in einer administrativen PowerShell das Netzprofil: Es muss **Privat** oder
 **Domäne** sein. Ein öffentliches Netz erst nach Prüfung durch die IT als
 vertrauenswürdiges privates Netz einordnen. Dann TCP 443 ausschließlich für
@@ -159,6 +165,8 @@ Das Skript prüft zuerst `SHA256SUMS`, legt `jnpt-dienst` an, nimmt ihn in
 `C:\JanuaPort\windows` wird jeweils eine vollständige geschützte DACL mit genau
 drei expliziten Allow-Regeln vorbereitet: `jnpt-dienst`, Administratoren und
 SYSTEM erhalten FullControl mit ContainerInherit und ObjectInherit.
+R4 verlangt außerdem Propagation None: kein InheritOnly oder NoPropagate,
+keine weiteren ACEs, weder Allow noch Deny, weder explizit noch geerbt.
 Ein einzelner `Directory.SetAccessControl`-Aufruf ersetzt nur den Access-Abschnitt,
 ohne vorheriges Leeren. Vorherige zusätzliche Freigaben und die Vererbung vom
 Elternordner entfallen zusammen; Besitzer, Gruppe und Audit bleiben erhalten.
@@ -205,8 +213,8 @@ belegten Sperre oder `nicht_gesperrt`, Versuchszahl und Exit-Code. Sie enthält
 keine Benutzernamen oder Fensterinhalte; erhalten bleiben die letzten 100 Zeilen.
 Die Einrichtung legt den Ordner unter der B-7-ACL an. Ein Protokollfehler
 liefert ebenfalls Exit ungleich 0.
-Für wenige Sekunden nach dem Neustart, bis der Desktop steht, ist die Sitzung
-von `jnpt-dienst` ungesperrt. Schutz in dieser Zeit ist der Zutritt zum Raum beim Betreiber.
+Nach dem Neustart bleibt die Sitzung von `jnpt-dienst` bis zur belegten Sperre
+für `<SEKUNDEN>` Sekunden ungesperrt. Schutz in dieser Zeit ist der Zutritt zum Raum beim Betreiber.
 Zusätzlich sperrt ein kennwortgeschützter Bildschirmschoner nach 60 Sekunden.
 `powercfg` deaktiviert Standby an Netz
 und Akku sowie den Ruhezustand. Im Windows-Profil von `jnpt-dienst` wird
@@ -244,10 +252,9 @@ schtasks /run /tn "JanuaPort Anlage starten"
 schtasks /run /tn "JanuaPort Sicherung"
 ```
 
-**`docker-users` ist keine Schutzgrenze:** Mitglieder können Container mit
-Bind-Mount auf `C:\` starten und sind damit praktisch Admin. „Standardbenutzer“
-beschreibt nur die Ordnung. Bei Autologon hängt der Konsolenschutz an der Sperre
-bei Anmeldung. Der [Prüfstein B4](PRUEFSTEIN-B4.md) verlangt ein Foto des
+`docker-users` ist praktisch Admin des Rechners. Schutz der Konsole sind Sperre und Raumzutritt beim Betreiber.
+Mitglieder können Container mit Bind-Mount auf `C:\` starten. „Standardbenutzer“
+beschreibt nur die Ordnung. Der [Prüfstein B4](PRUEFSTEIN-B4.md) verlangt ein Foto des
 Sperrbildschirms nach Neustart und die früheste Kennwortabfrage bei Tastendruck
 alle 5 Sekunden ab dem ersten Bild. Aufgabenresultat und Protokollzeit gehören
 zum Nachweis; ein Foto allein genügt nicht. Dieser Nachweis steht noch aus.
@@ -359,7 +366,10 @@ curl.exe --fail http://127.0.0.1:8484/healthz
 ```
 
 Danach eine Admin-Anmeldung prüfen: Health muss 200 liefern und die erwarteten
-Daten müssen verfügbar sein. USB-Datenträger anschließend abziehen. Lag eine
+Daten müssen verfügbar sein.
+Den Ordner `/data/beiseite-<zeitstempel>` erst löschen, wenn die Rücksicherung geprüft ist (healthz, Anmeldung, Lesezugriff).
+Wer den Block auf eine nicht frische Anlage anwendet, verliert sonst den alten Stand.
+USB-Datenträger anschließend abziehen. Lag eine
 Key-Kopie auf dem Rechner, diese nach der Prüfung wieder entfernen; der
 getrennt verwahrte Original-Key bleibt erhalten. `docs/disaster-recovery.md`
 der eingesetzten Kern-Version beschreibt die weitere Prüfung.

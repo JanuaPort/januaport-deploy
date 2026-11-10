@@ -8,7 +8,7 @@ from test_operator_docs import recipe
 
 
 class SecDocs(unittest.TestCase):
-    def assertIn(self, member, container, msg=None):
+    def assert_contains(self, member, container, msg=None):
         # Avoid dumping complete operator documents on assertion failure.
         self.assertTrue(member in container, msg or ('missing text: ' + member))
 
@@ -17,11 +17,11 @@ class SecDocs(unittest.TestCase):
             with self.subTest(file=name):
                 text = ' '.join((ROOT / name).read_text(encoding='utf-8').split())
                 if name.endswith('.en.md'):
-                    self.assertIn('Delete `/data/beiseite-<zeitstempel>` only after verifying the restore (healthz, login, read access).', text)
-                    self.assertIn('Applying the block to an existing installation otherwise loses its previous state.', text)
+                    self.assert_contains('Delete `/data/beiseite-<zeitstempel>` only after verifying the restore (healthz, login, read access).', text)
+                    self.assert_contains('Applying the block to an existing installation otherwise loses its previous state.', text)
                 else:
-                    self.assertIn('Den Ordner `/data/beiseite-<zeitstempel>` erst löschen, wenn die Rücksicherung geprüft ist (healthz, Anmeldung, Lesezugriff).', text)
-                    self.assertIn('Wer den Block auf eine nicht frische Anlage anwendet, verliert sonst den alten Stand.', text)
+                    self.assert_contains('Den Ordner `/data/beiseite-<zeitstempel>` erst löschen, wenn die Rücksicherung geprüft ist (healthz, Anmeldung, Lesezugriff).', text)
+                    self.assert_contains('Wer den Block auf eine nicht frische Anlage anwendet, verliert sonst den alten Stand.', text)
 
     def test_service_risk_and_measurement_placeholder_in_both_readmes(self):
         for name in ['README.md','README.en.md']:
@@ -29,11 +29,11 @@ class SecDocs(unittest.TestCase):
                 text = ' '.join((ROOT / name).read_text(encoding='utf-8').split())
                 self.assertEqual(text.count('<SEKUNDEN>'), 1)
                 if name == 'README.md':
-                    self.assertIn('`docker-users` ist praktisch Admin des Rechners. Schutz der Konsole sind Sperre und Raumzutritt beim Betreiber.', text)
+                    self.assert_contains('`docker-users` ist praktisch Admin des Rechners. Schutz der Konsole sind Sperre und Raumzutritt beim Betreiber.', text)
                     self.assertNotIn('Für wenige Sekunden', text)
                 else:
-                    self.assertIn('`docker-users` effectively grants administrator control of the computer.', text)
-                    self.assertIn("Console protection relies on locking and controlled access to the operator's room.", text)
+                    self.assert_contains('`docker-users` effectively grants administrator control of the computer.', text)
+                    self.assert_contains("Console protection relies on locking and controlled access to the operator's room.", text)
                     self.assertNotIn('For a few seconds', text)
 
     def test_firewall_dialog_evidence_and_operator_check_documented(self):
@@ -41,13 +41,13 @@ class SecDocs(unittest.TestCase):
             with self.subTest(file=name):
                 text = ' '.join((ROOT / name).read_text(encoding='utf-8').split())
                 if name.endswith('.en.md'):
-                    self.assertIn('Do not answer the Docker Desktop firewall dialog with “Allow” for public networks.', text)
-                    self.assertIn('The effect of choosing “Allow” was not measured.', text)
+                    self.assert_contains('Do not answer the Docker Desktop firewall dialog with “Allow” for public networks.', text)
+                    self.assert_contains('The effect of choosing “Allow” was not measured.', text)
                 else:
-                    self.assertIn('Den Firewall-Dialog von Docker Desktop nicht mit ‚Zulassen‘ für öffentliche Netze beantworten.', text)
-                    self.assertIn('Was bei „Zulassen“ entsteht, ist nicht gemessen.', text)
-                self.assertIn('LocalSubnet', text)
-                self.assertIn('JanuaPort 443 LAN', text)
+                    self.assert_contains('Den Firewall-Dialog von Docker Desktop nicht mit ‚Zulassen‘ für öffentliche Netze beantworten.', text)
+                    self.assert_contains('Was bei „Zulassen“ entsteht, ist nicht gemessen.', text)
+                self.assert_contains('LocalSubnet', text)
+                self.assert_contains('JanuaPort 443 LAN', text)
 
     def test_firewall_audit_finds_docker_and_every_443_allow_rule(self):
         for name in ['RUNBOOK.md','PRUEFSTEIN-B4.md']:

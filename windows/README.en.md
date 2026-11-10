@@ -10,8 +10,14 @@ TCP ports 443 and 8484 must be available. Registry/GitHub access is required.
 
 ### LAN access during setup (N5)
 
-Docker Desktop creates blocking rules for the public network profile on first
-start. For LAN desktop runners, the operator or their IT checks the network
+B4 found no Docker allow rule. Docker Desktop had created only two block rules
+for the Public profile because the firewall dialog was left unanswered.
+The effect of choosing “Allow” was not measured.
+Do not answer the Docker Desktop firewall dialog with “Allow” for public networks.
+At every real acceptance, list Docker application filters and all port filters
+opening 443 using [RUNBOOK, N5-1](RUNBOOK.md). Apart from “JanuaPort 443 LAN”,
+no allow rule may open 443; disable additional rules or restrict them to
+`LocalSubnet`. For LAN desktop runners, the operator or their IT checks the network
 profile in an administrative PowerShell: it must be **Private** or **Domain**.
 Have IT verify trust before reclassifying a public network as private. Then
 allow TCP 443 only from `LocalSubnet` on `Private,Domain` profiles:
@@ -134,7 +140,9 @@ the tag after review. The script verifies `SHA256SUMS`, creates `jnpt-dienst`,
 adds it to `docker-users`. **B-7/F5:** For both `C:\JanuaPort` and
 `C:\JanuaPort\windows`, setup prepares a complete protected DACL with exactly
 three explicit Allow rules: `jnpt-dienst`, Administrators and SYSTEM receive
-FullControl with ContainerInherit and ObjectInherit. One
+FullControl with ContainerInherit and ObjectInherit. R4 also requires
+Propagation None: no InheritOnly or NoPropagate and no additional ACEs,
+whether Allow or Deny, explicit or inherited. One
 `Directory.SetAccessControl` call replaces only the Access section, without
 clearing it first. Additional grants and inheritance from the parent are
 removed together; owner, group and audit remain unchanged. An already matching
@@ -176,7 +184,7 @@ ISO start time, ISO confirmed-lock time or `nicht_gesperrt`, attempt count and
 exit code. It contains no usernames or window contents and retains the last
 100 lines. Setup creates the directory under the B-7 ACL. A log failure also
 returns a nonzero exit code.
-For a few seconds after reboot, until the desktop is ready, the `jnpt-dienst`
+For `<SEKUNDEN>` seconds after reboot, until locking is confirmed, the `jnpt-dienst`
 session is unlocked. Protection during this interval depends on controlling
 access to the operator's room. A password-protected screen saver also locks after
 60 seconds. `powercfg` disables AC/battery standby and
@@ -211,10 +219,10 @@ schtasks /run /tn "JanuaPort Anlage starten"
 schtasks /run /tn "JanuaPort Sicherung"
 ```
 
-**`docker-users` is not a security boundary:** members can bind-mount `C:\`
-into containers and are effectively administrators. “Standard user” is an
-organizational choice. Autologon console protection depends on locking at
-logon. [B4](PRUEFSTEIN-B4.md) requires a photo and the earliest password prompt
+`docker-users` effectively grants administrator control of the computer.
+Console protection relies on locking and controlled access to the operator's room.
+Members can bind-mount `C:\` into containers. “Standard user” is an
+organizational choice. [B4](PRUEFSTEIN-B4.md) requires a photo and the earliest password prompt
 while pressing a key every 5 seconds from the first image after reboot,
 together with task result and log time; a photo alone does not prove locking.
 acceptance remains open.
@@ -319,7 +327,10 @@ curl.exe --fail http://127.0.0.1:8484/healthz
 ```
 
 Then verify an admin login: health must return 200 and the expected data must
-be available. Unplug the USB drive afterwards. If a key copy was placed on the
+be available.
+Delete `/data/beiseite-<zeitstempel>` only after verifying the restore (healthz, login, read access).
+Applying the block to an existing installation otherwise loses its previous state.
+Unplug the USB drive afterwards. If a key copy was placed on the
 computer, remove that copy after verification; retain the separately stored
 original. See the deployed core version's `docs/disaster-recovery.md` for further
 verification.

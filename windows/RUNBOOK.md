@@ -114,8 +114,11 @@ Autologon wird alle 500 ms bis höchstens 10 Sekunden nachgeprüft. Neustarten.
 B-7: `icacls C:\JanuaPort` und `icacls C:\JanuaPort\windows` zeigen ausschließlich
 `jnpt-dienst`, Administratoren und SYSTEM. Vererbung vom Laufwerksstamm ist aus.
 F5: Die Einrichtung ersetzt die vollständige DACL in einem einzigen
-Access-Schreibaufruf; bei bereits exakt passenden drei Regeln schreibt sie
-nichts. Besitzer und andere Sicherheitsabschnitte bleiben unverändert.
+Access-Schreibaufruf. R4: Nur eine geschützte DACL mit genau drei expliziten
+Allow-ACEs für die genannten SIDs, jeweils FullControl, ContainerInherit und
+ObjectInherit, ohne InheritOnly oder NoPropagate und ohne weitere explizite
+oder geerbte Allow-/Deny-ACEs bleibt ohne Schreibzugriff erhalten. Jede
+Abweichung wird ersetzt. Besitzer und andere Sicherheitsabschnitte bleiben unverändert.
 Bei einem Altprofil den [Upgrade-Weg 0.1.0 → 0.2.0](README.md#von-010-auf-020) und
 die zusätzliche Abnahme in B4 verwenden. Die
 Erstkonfiguration von Docker Desktop und die Schritte in [„Zwei Befehle“](README.md#zwei-befehle)
@@ -138,6 +141,9 @@ trifft der Betreiber. Wiederherstellung nach Kennwortreset und getrennte Rücksi
 Für eine frische Installation den getrennten Key vor dem ersten Start einlegen;
 nach Erststart DB und erzeugten Key bei gestoppter Anlage beiseitelegen.
 Die festen Befehle stehen unter [Rücksicherung (N4)](README.md#rücksicherung-in-eine-frische-installation-n4).
+Nach der Rücksicherung healthz, Admin-Anmeldung und Lesezugriff prüfen.
+Den Ordner `/data/beiseite-<zeitstempel>` erst löschen, wenn die Rücksicherung geprüft ist (healthz, Anmeldung, Lesezugriff).
+Wer den Block auf eine nicht frische Anlage anwendet, verliert sonst den alten Stand.
 
 **Das Admin-Passwort setzt der Kunde selbst am Rechner, nicht der Dienstleister.** Wer das Admin-Passwort
 kennt, verwaltet die Anlage. Der Dienstleister beendet dafür die Fernsitzung. Der Kunde setzt das Passwort in
@@ -168,8 +174,11 @@ icacls C:\JanuaPort /reset /t
 
 ### 3.5 LAN-Freigabe vor dem Koppeln (N5)
 
-Docker Desktop legt beim ersten Start Block-Regeln für das öffentliche Profil
-an. Der Betreiber bzw. seine IT prüft in einer administrativen PowerShell das
+In B4 fand sich keine Allow-Regel für Docker. Docker Desktop hatte nur zwei
+Block-Regeln für das Profil „Öffentlich“ angelegt, weil der Firewall-Dialog
+unbeantwortet blieb. Was bei „Zulassen“ entsteht, ist nicht gemessen.
+Den Firewall-Dialog von Docker Desktop nicht mit ‚Zulassen‘ für öffentliche Netze beantworten.
+Der Betreiber bzw. seine IT prüft in einer administrativen PowerShell das
 Netzprofil: **Privat** oder **Domäne**. Ein öffentliches Netz erst nach Prüfung
 als vertrauenswürdiges privates Netz einordnen. Dann TCP 443 ausschließlich
 für das lokale Subnetz freigeben:
@@ -184,6 +193,41 @@ Kein `Any` bei Gegenstellen. Die Regel gilt nur für `Private,Domain`.
 `einrichten.ps1` ändert weder Firewall noch Netzprofil; dieser Schritt bleibt
 beim Menschen. HTTPS anschließend von einem Arbeitsplatz im lokalen Subnetz
 prüfen. Port 8484 bleibt am Server auf Loopback beschränkt.
+
+#### N5-1: Firewall bei jeder echten Abnahme prüfen
+
+In einer administrativen PowerShell alle aktiven eingehenden Allow-Regeln
+mit Docker-Anwendungsfilter sowie alle Portfilter auflisten, die 443 öffnen
+(auch `Any`, Portlisten und Bereiche). Die folgende Prüfung liest nur:
+
+<!-- N5-1 -->
+```powershell
+$inboundAllow = @(Get-NetFirewallRule -Enabled True -Direction Inbound -Action Allow)
+foreach ($rule in $inboundAllow) {
+    $applications = @($rule | Get-NetFirewallApplicationFilter)
+    $isDocker = @($applications | Where-Object { $_.Program -match 'docker' }).Count -gt 0
+    foreach ($port in @($rule | Get-NetFirewallPortFilter)) {
+        $opens443 = @($port.LocalPort -split ',' | Where-Object {
+            $_ -eq 'Any' -or $_ -eq '443' -or
+            ($_ -match '^([0-9]+)-([0-9]+)$' -and [int]$Matches[1] -le 443 -and [int]$Matches[2] -ge 443)
+        }).Count -gt 0
+        if ($isDocker -or $opens443) {
+            [pscustomobject]@{
+                Name = $rule.Name; DisplayName = $rule.DisplayName; Profile = $rule.Profile
+                Program = ($applications.Program -join ',')
+                Protocol = $port.Protocol; LocalPort = ($port.LocalPort -join ',')
+                RemoteAddress = (@($rule | Get-NetFirewallAddressFilter).RemoteAddress -join ',')
+            }
+        }
+    }
+}
+```
+
+Ergebnis im Abnahmeprotokoll festhalten. Außer „JanuaPort 443 LAN“ darf keine
+Allow-Regel 443 öffnen. Gibt es eine weitere, wird sie deaktiviert oder auf
+`LocalSubnet` eingeengt. Auch die benannte Regel auf TCP 443, `LocalSubnet`
+und `Private,Domain` prüfen. Danach HTTPS aus dem lokalen Subnetz und die
+Abweisung von außerhalb sowie die Unerreichbarkeit von 8484 im LAN belegen.
 
 
 ### 3.6 Desktop-Läufer auf dem Rechner selbst
