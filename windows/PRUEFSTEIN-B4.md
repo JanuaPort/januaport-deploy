@@ -22,7 +22,8 @@ festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
    Download. Profilpfad und Windows-Konto separat prüfen: keine automatische
    Migration einer Engine oder ihrer Volumes zwischen Konten.
 3. **B-7, Ordnerrechte:** Nach Diensteinrichtung `icacls C:\JanuaPort` und
-   `icacls C:\JanuaPort\windows` prüfen. Nur `jnpt-dienst`, Administratoren und
+   `icacls C:\JanuaPort\windows` prüfen, dazu `icacls C:\JanuaPort /t` für
+   explizite Freigaben auf einzelnen Dateien darunter (SEC, nicht blockierend). Nur `jnpt-dienst`, Administratoren und
    SYSTEM dürfen eingetragen sein. Keine Rechte für Benutzer oder
    Authentifizierte Benutzer. Mit einem anderen Standardkonto den Lesezugriff
    auf `secrets/smtp_password` und den Schreibzugriff auf `docker-compose.yml`
@@ -84,7 +85,11 @@ foreach ($rule in $inboundAllow) {
             $_ -eq 'Any' -or $_ -eq '443' -or
             ($_ -match '^([0-9]+)-([0-9]+)$' -and [int]$Matches[1] -le 443 -and [int]$Matches[2] -ge 443)
         }).Count -gt 0
-        if ($isDocker -or $opens443) {
+        # N8: Nur Regeln, die den Docker-Listener auf TCP 443 öffnen könnten (Programm Any, kein App-Paket).
+        $tcp = $port.Protocol -in @('TCP', 'Any')
+        $anyProgram = @($applications | Where-Object { $_.Program -eq 'Any' }).Count -gt 0
+        $package = @($applications | Where-Object { $_.Package }).Count -gt 0
+        if ($isDocker -or ($opens443 -and $tcp -and $anyProgram -and -not $package)) {
             [pscustomobject]@{
                 Name = $rule.Name; DisplayName = $rule.DisplayName; Profile = $rule.Profile
                 Program = ($applications.Program -join ',')

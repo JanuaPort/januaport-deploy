@@ -184,8 +184,9 @@ ISO start time, ISO confirmed-lock time or `nicht_gesperrt`, attempt count and
 exit code. It contains no usernames or window contents and retains the last
 100 lines. Setup creates the directory under the B-7 ACL. A log failure also
 returns a nonzero exit code.
-For `<SEKUNDEN>` seconds after reboot, until locking is confirmed, the `jnpt-dienst`
-session is unlocked. Protection during this interval depends on controlling
+After reboot, the `jnpt-dienst` desktop is visible and unlocked for at most about 7 seconds
+until locking is confirmed (measured in checkpoint B4: lock 12.6 seconds after start, about
+6 seconds of which are conhost and PowerShell start-up). Protection during this interval depends on controlling
 access to the operator's room. A password-protected screen saver also locks after
 60 seconds. `powercfg` disables AC/battery standby and
 hibernation. The account's `.wslconfig` sets `[wsl2]` / `memory=4GB`; conflicting

@@ -211,7 +211,11 @@ foreach ($rule in $inboundAllow) {
             $_ -eq 'Any' -or $_ -eq '443' -or
             ($_ -match '^([0-9]+)-([0-9]+)$' -and [int]$Matches[1] -le 443 -and [int]$Matches[2] -ge 443)
         }).Count -gt 0
-        if ($isDocker -or $opens443) {
+        # N8: Nur Regeln, die den Docker-Listener auf TCP 443 öffnen könnten (Programm Any, kein App-Paket).
+        $tcp = $port.Protocol -in @('TCP', 'Any')
+        $anyProgram = @($applications | Where-Object { $_.Program -eq 'Any' }).Count -gt 0
+        $package = @($applications | Where-Object { $_.Package }).Count -gt 0
+        if ($isDocker -or ($opens443 -and $tcp -and $anyProgram -and -not $package)) {
             [pscustomobject]@{
                 Name = $rule.Name; DisplayName = $rule.DisplayName; Profile = $rule.Profile
                 Program = ($applications.Program -join ',')

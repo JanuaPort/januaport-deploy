@@ -213,8 +213,10 @@ belegten Sperre oder `nicht_gesperrt`, Versuchszahl und Exit-Code. Sie enthält
 keine Benutzernamen oder Fensterinhalte; erhalten bleiben die letzten 100 Zeilen.
 Die Einrichtung legt den Ordner unter der B-7-ACL an. Ein Protokollfehler
 liefert ebenfalls Exit ungleich 0.
-Nach dem Neustart bleibt die Sitzung von `jnpt-dienst` bis zur belegten Sperre
-für `<SEKUNDEN>` Sekunden ungesperrt. Schutz in dieser Zeit ist der Zutritt zum Raum beim Betreiber.
+Nach dem Neustart ist der Desktop von `jnpt-dienst` bis zur belegten Sperre
+höchstens rund 7 Sekunden sichtbar und ungesperrt (gemessen im Prüfstein B4: Sperre
+12,6 Sekunden nach dem Start, davon rund 6 Sekunden Start von conhost und PowerShell).
+Schutz in dieser Zeit ist der Zutritt zum Raum beim Betreiber.
 Zusätzlich sperrt ein kennwortgeschützter Bildschirmschoner nach 60 Sekunden.
 `powercfg` deaktiviert Standby an Netz
 und Akku sowie den Ruhezustand. Im Windows-Profil von `jnpt-dienst` wird

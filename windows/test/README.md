@@ -185,7 +185,7 @@ PS-5.1-Firewall-Fakes aus: Docker-Regeln auch auf anderen Ports sowie
 unbeteiligte Regeln bleiben herausgefiltert. Kein echter Firewall-Zugriff.
 Die SEC-Texte zu Ruecksicherung, unbeantwortetem Docker-Dialog und
 Konsolenschutz werden in allen geforderten Dokumenten geprueft.
-`<SEKUNDEN>` bleibt genau einmal je README fuer LEADs Nachmessung erlaubt.
+Beide READMEs nennen das in B4 gemessene Restfenster (hoechstens rund 7 s sichtbar, Sperre 12,6 s nach Start); ein Platzhalter ist nicht mehr erlaubt. Die Firewall-Pruefzeile (N5-1/N8) zeigt nur Docker-Regeln und TCP-443-Regeln mit Programm Any ohne App-Paket.
 
 ```powershell
 python -B windows/test/operator_mutations.py
