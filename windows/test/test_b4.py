@@ -12,7 +12,7 @@ MESSAGE = ('Docker Desktop einmal in jnpt-dienst starten und die Einstellungen '
            'pruefen (AutoStart an, 2375 aus, Auto-Update aus)')
 
 class B4(unittest.TestCase):
-    def test_logon_task_delay_and_fixed_script(self):
+    def test_logon_task_has_no_delay_and_fixed_script(self):
         with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
             command = ". '" + str(Path(__file__).with_name('dienst_fakes.ps1')) + "'; "
             command += "$BackupTarget='E:\\Backup'; Register-DienstTasks"
@@ -20,7 +20,7 @@ class B4(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             tasks = [json.loads(line) for line in (Path(tmp) / 'tasks.jsonl').read_text().splitlines()]
             task = next(t for t in tasks if t['TaskName'] == 'JanuaPort Sperren bei Anmeldung')
-            self.assertEqual(task['Trigger'].get('Delay'), 'PT30S')
+            self.assertIn(task['Trigger'].get('Delay'), [None, '', 'PT0S'])
             self.assertTrue(task['Trigger']['Logon'])
             self.assertEqual(task['Action']['Execute'].lower(),
                              (os.environ['SystemRoot'] + r'\System32\WindowsPowerShell\v1.0\powershell.exe').lower())
@@ -28,7 +28,7 @@ class B4(unittest.TestCase):
                              '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden '
                              '-File "C:\\JanuaPort\\windows\\jnpt-sperren.ps1"')
 
-    def lock_probe(self, explorer_after=0, locked_after=1, native_error=False):
+    def lock_probe(self, explorer_after=0, locked_after=1, native_error=False, seed_log=False, log_failure=False):
         source = ROOT / 'jnpt-sperren.ps1'
         self.assertTrue(source.is_file(), 'lock script must be shipped')
         with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
@@ -52,6 +52,8 @@ namespace Jnpt {
 }
 '@
 $script:elapsed = 0
+$SessionLockLogPath = $env:PROBE_LOG
+function Get-SessionLockElapsedSeconds { param($Timer) $script:elapsed / 1000 }
 function Add-Type { throw 'FORBIDDEN real native binding' }
 function Start-Sleep { param($Seconds,$Milliseconds)
     $ms = if ($Milliseconds) {$Milliseconds} else {1000*$Seconds}
@@ -77,12 +79,28 @@ function logoff.exe { Add-Content $env:PROBE_TRACE 'FORBIDDEN logoff'; throw 'FO
             script = root / 'probe.ps1'
             script.write_text(text.replace(anchor, bootstrap + '\n' + anchor), encoding='utf-8-sig')
             env = {k: v for k, v in os.environ.items() if k.lower() != 'psmodulepath'}
-            env.update(PROBE_TRACE=str(root / 'trace'), PROBE_EXPLORER_AFTER=str(explorer_after),
+            log = root / ('missing/sperren.log' if log_failure else 'sperren.log')
+            if seed_log:
+                log.write_text('2000-01-01T00:00:00.0000000Z\tnicht_gesperrt\tattempts=0\texit=1\n' * 105)
+            env.update(PROBE_TRACE=str(root / 'trace'), PROBE_LOG=str(log), PROBE_EXPLORER_AFTER=str(explorer_after),
                        PROBE_LOCKED_AFTER=str(locked_after), PROBE_ERROR='yes' if native_error else 'no')
             result = run('powershell', '-NoProfile', '-File', str(script), env=env, check=False)
             trace = (root / 'trace').read_text().splitlines()
             self.assertEqual(result.stdout + result.stderr, '', 'exit code is the only output')
             self.assertFalse(any(s.startswith('FORBIDDEN') for s in trace), trace)
+            if log_failure:
+                self.assertFalse(log.exists())
+            else:
+                self.assertTrue(log.is_file(), 'exactly one log entry per invocation is required')
+                lines = log.read_text().splitlines()
+                self.assertEqual(len(lines), 100 if seed_log else 1)
+                timestamp = r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{7}Z'
+                self.assertRegex(lines[-1], '^' + timestamp + '\t(?:' + timestamp + r'|nicht_gesperrt)\tattempts=\d+\texit=[01]$')
+                self.assertEqual(lines[-1].split('\t')[2:], ['attempts=' + str(trace.count('lock')), 'exit=' + str(result.returncode)])
+                if not result.returncode:
+                    self.assertNotIn('nicht_gesperrt', lines[-1])
+                self.assertNotIn('jnpt-dienst', lines[-1])
+                self.assertNotIn(os.environ.get('USERNAME', 'unused-user'), lines[-1])
             return result, trace
 
     def test_lock_own_explorer_then_first_verified_success(self):
@@ -96,15 +114,46 @@ function logoff.exe { Add-Content $env:PROBE_TRACE 'FORBIDDEN logoff'; throw 'FO
     def test_lock_retries_until_verified(self):
         result, trace = self.lock_probe(locked_after=3)
         self.assertEqual(result.returncode, 0)
-        self.assertEqual([s for s in trace if s in ('lock', 'verify', 'sleep:5000')],
-                         ['lock', 'verify', 'sleep:5000', 'lock', 'verify', 'sleep:5000', 'lock', 'verify'])
+        self.assertEqual([s for s in trace if s in ('lock', 'verify', 'sleep:1000')],
+                         ['lock', 'verify', 'sleep:1000', 'lock', 'verify', 'sleep:1000', 'lock', 'verify'])
+        self.assertFalse(any(s.startswith('sleep:') and s != 'sleep:1000' for s in trace))
 
     def test_unlocked_after_all_attempts_is_failure(self):
-        result, trace = self.lock_probe(locked_after=99)
+        result, trace = self.lock_probe(locked_after=999)
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(trace.count('lock'), 12)
-        self.assertEqual(trace.count('verify'), 12)
-        self.assertEqual(trace.count('sleep:5000'), 11)
+        self.assertEqual(trace.count('lock'), 120)
+        self.assertEqual(trace.count('verify'), 120)
+        self.assertEqual(trace.count('sleep:1000'), 120)
+
+    def test_readiness_and_lock_share_one_120_second_budget(self):
+        result, trace = self.lock_probe(explorer_after=118000, locked_after=999)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(trace.count('lock'), 2)
+        self.assertEqual(trace.count('sleep:1000'), 120)
+
+    def test_log_is_bounded_to_last_100_lines(self):
+        result, _ = self.lock_probe(seed_log=True)
+        self.assertEqual(result.returncode, 0)
+
+    def test_log_failure_is_silent_and_nonzero(self):
+        result, _ = self.lock_probe(log_failure=True)
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_setup_creates_log_directory_before_registering_task(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            root = Path(tmp)
+            (root / 'user').mkdir()
+            command = ". '" + str(Path(__file__).with_name('dienst_fakes.ps1')) + "'; "
+            command += r'''
+$DienstDirectory=Join-Path $env:PROBE_ROOT 'profile'
+$BackupTarget='E:\Backup'
+function Register-DienstTasks {
+    if (-not (Test-Path -LiteralPath (Join-Path $DienstDirectory 'log') -PathType Container)) { throw 'log directory missing' }
+}
+Initialize-Dienst
+'''
+            result = ps(command, ROOT / 'dienst-einrichten.ps1', dict(PROBE_ROOT=tmp, PROBE_FAIL=''))
+            self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_foreign_explorer_cannot_allow_lock_and_wait_is_bounded(self):
         result, trace = self.lock_probe(explorer_after=121000)
