@@ -6,7 +6,7 @@ import shutil
 import tempfile
 import unittest
 
-from test_profile import ROOT, run
+from test_profile import PROFILE_FILES, ROOT, run
 
 
 def ps(script, source=ROOT / "einrichten.ps1", extra_env=None):
@@ -24,7 +24,7 @@ class Installer(unittest.TestCase):
     def test_manifest_shape_and_allowed_files(self):
         with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
             target = Path(tmp)
-            for name in ['SHA256SUMS', 'Caddyfile', 'docker-compose.yml', 'einrichten.ps1', '.env.example']:
+            for name in ('SHA256SUMS', '.env.example', *PROFILE_FILES):
                 shutil.copyfile(ROOT / name, target / name)
             original = (target / 'SHA256SUMS').read_text()
             rows = original.splitlines()
@@ -42,12 +42,12 @@ class Installer(unittest.TestCase):
     def test_real_checksum_adapter_rejects_corruption(self):
         with tempfile.TemporaryDirectory(dir=ROOT / "test") as tmp:
             target = Path(tmp)
-            for name in ["SHA256SUMS", "Caddyfile", "docker-compose.yml", "einrichten.ps1"]:
+            for name in ('SHA256SUMS', *PROFILE_FILES):
                 shutil.copyfile(ROOT / name, target / name)
             command = "Test-ProfileFiles '" + str(target) + "'"
             clean = ps(command)
             self.assertEqual(clean.returncode, 0, clean.stderr)
-            for name in ["Caddyfile", "docker-compose.yml", "einrichten.ps1"]:
+            for name in PROFILE_FILES:
                 original = (target / name).read_bytes()
                 (target / name).write_bytes(original + b"# corrupted\n")
                 result = ps(command)

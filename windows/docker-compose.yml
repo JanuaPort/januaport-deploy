@@ -14,6 +14,21 @@ services:
   jnpt:
     # Zwei Pflichtwerte: Compose selbst verweigert einen fehlenden Digest.
     image: ${JANUAPORT_IMAGE:?Image-Repository oder Tag fehlt}@sha256:${JANUAPORT_IMAGE_DIGEST:?SHA-256-Digest fehlt}
+    environment:
+      JNPT_SMTP_HOST: ${JNPT_SMTP_HOST:-}
+      JNPT_SMTP_PORT: ${JNPT_SMTP_PORT:-}
+      JNPT_SMTP_TLS: ${JNPT_SMTP_TLS:-}
+      JNPT_SMTP_FROM: ${JNPT_SMTP_FROM:-}
+      JNPT_SMTP_TO: ${JNPT_SMTP_TO:-}
+      JNPT_SMTP_USERNAME: ${JNPT_SMTP_USERNAME:-}
+      # Das Passwort kommt ausschliesslich aus der Datei, nie aus der .env.
+      JNPT_SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+      JNPT_NOTIFY_STATE: ${JNPT_NOTIFY_STATE:-}
+      JNPT_NOTIFY_TRANSPORT: ${JNPT_NOTIFY_TRANSPORT:-}
+      # SEC W8: Admin-GUI nur am lokalen Rechner.
+      JNPT_ADMIN_URL: http://127.0.0.1:8484
+    secrets:
+      - smtp_password
     ports:
       - "443:443"
       - "127.0.0.1:8484:8484"
@@ -170,6 +185,10 @@ services:
 # Desktop-Pins liefert der vermittler ohne Sandbox. Lokale tools/call enden
 # mit refused/state und isolation=invalid; ein Start einer Sandbox aendert
 # diese Zusage.
+secrets:
+  smtp_password:
+    file: ./secrets/smtp_password
+
 volumes:
   jnpt-data:
   plugin-keys:

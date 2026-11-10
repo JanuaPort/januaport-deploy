@@ -87,6 +87,8 @@ eine neue Sitzung nötig ist.
 Schritte im [README](README.md#zwei-befehle), Abschnitt „Zwei Befehle“. Am Ende gibt `einrichten.ps1` den
 Zertifikats-Fingerprint aus. Ihn abschreiben und beim Dienstleister ablegen, nicht beim Kunden aushängen.
 
+Mail anschließend gemäß [README, Abschnitt „Mail“](README.md#mail) einrichten.
+
 **Das Admin-Passwort setzt der Kunde selbst am Rechner, nicht der Dienstleister.** Wer das Admin-Passwort
 kennt, verwaltet die Anlage. Der Dienstleister beendet dafür die Fernsitzung. Der Kunde setzt das Passwort in
 der Admin-Oberfläche (`http://127.0.0.1:8484`), sichert den Master-Schlüssel und startet danach eine neue

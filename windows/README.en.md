@@ -2,7 +2,7 @@
 
 **English** · [Deutsch](README.md)
 
-Package A (#1246), tested locally with Docker Desktop. Requires Windows 10/11
+Package A with B1 mail forwarding (#1246), tested locally with Docker Desktop. Requires Windows 10/11
 Pro (amd64), WSL2 Linux containers, Docker Desktop **≥ 4.44.3**
 (CVE-2025-9074), Compose ≥ 2.35 and PowerShell ≥ 5.1. Keep **“Expose daemon on
 tcp://localhost:2375” disabled**; approve automatic updates only after review.
@@ -46,6 +46,51 @@ is computed from that PEM certificate in the volume.
 The GUI output is exactly `Admin-GUI: http://127.0.0.1:8484`. Follow the product's
 `docs/inbetriebnahme.md`: secure the master key, set the admin password and
 create the first admin token.
+
+## Mail
+
+`einrichten.ps1` still prompts only for the image tag. Before starting Compose,
+it creates an empty `secrets/smtp_password` in the profile directory, preserving
+an existing password file. The profile starts as before without mail settings.
+**The operator attribute (Betreiber-Merkmal), network gate (Netztür), construction
+phase (Bauphase) and case token (Fall-Token) require deliverable mail.**
+Verify sending and actual receipt before using them.
+
+Configure mail manually afterwards in the installed profile directory (by default
+`%LOCALAPPDATA%\JanuaPort\windows`). Add these optional settings to `.env`;
+missing or empty values remain empty in the container:
+
+| Variable | Meaning |
+|---|---|
+| `JNPT_SMTP_HOST` | SMTP server, e.g. `smtp.example.org` |
+| `JNPT_SMTP_PORT` | SMTP server port |
+| `JNPT_SMTP_TLS` | TLS setting as defined by the core configuration |
+| `JNPT_SMTP_FROM` | Sender, e.g. `sender@example.org` |
+| `JNPT_SMTP_TO` | Recipient, e.g. `recipient@example.org` |
+| `JNPT_SMTP_USERNAME` | SMTP username |
+| `JNPT_NOTIFY_STATE` | Optional notification state path inside the container |
+| `JNPT_NOTIFY_TRANSPORT` | Mail transport as defined by the core configuration |
+
+**The SMTP password must never appear in `.env` or the container environment.**
+Store it only as the contents of the local `secrets/smtp_password` file (UTF-8
+without BOM). The `secrets/` directory is gitignored; the password file is neither
+distributed nor included in `SHA256SUMS`. Restrict local file access to the
+responsible users and Docker Desktop. Compose mounts it as a secret at
+`/run/secrets/smtp_password`. `JNPT_SMTP_PASSWORD_FILE` is fixed to this container
+path; `JNPT_SMTP_PASSWORD` is not forwarded. Neither variable belongs in `.env`.
+`JNPT_ADMIN_URL` is fixed to `http://127.0.0.1:8484` (SEC W8): admin links are
+accessible only on the machine running the installation.
+
+Keep the empty password file even without SMTP. `docker compose config` does
+not check whether it exists. With a missing file, Compose may fail at startup
+or mount a directory instead of a readable file. Before starting manually,
+prepare the profile with `einrichten.ps1`. After changing `.env` or the password
+file, run these commands in the profile directory:
+
+```powershell
+docker compose config --quiet
+docker compose up -d --force-recreate jnpt
+```
 
 ## Pair a desktop runner
 
@@ -151,7 +196,8 @@ prove package delivery or job completion.
 
 Repository checks: `python -B -m unittest discover -s windows/test -v`
 (Python standard library and Docker). See [test/README.md](test/README.md) for
-live checks and mutations. `.gitattributes` preserves the LF bytes covered by
+live checks and mutations. SHA256SUMS covers Compose, Caddyfile, the installer,
+`.gitignore`, both READMEs and the runbook. `.gitattributes` preserves the LF bytes covered by
 SHA256SUMS in both Windows checkouts and raw downloads.
 
 Updates, backup and autologon are package B. Docker Desktop must already be

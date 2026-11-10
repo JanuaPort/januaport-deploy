@@ -11,7 +11,7 @@ import sys
 import tempfile
 import urllib.request
 
-from test_profile import ROOT, run
+from test_profile import PROFILE_FILES, ROOT, run
 
 TESTS = ROOT / 'test'
 HTTPS = ['-m', 'unittest', 'test_profile.Profile.test_caddy_adapter_and_https_rejections', '-v']
@@ -23,7 +23,7 @@ def mutant(label, file=None, old=None, new=None, command=None, extra_env=None):
     originals = {path: path.read_bytes() for path in ROOT.rglob('*') if path.is_file()}
     with tempfile.TemporaryDirectory(prefix='mutation-', dir=TESTS) as tmp:
         target = Path(tmp)
-        for name in ['Caddyfile', 'docker-compose.yml', 'SHA256SUMS', 'einrichten.ps1', '.env.example']:
+        for name in ('SHA256SUMS', '.env.example', *PROFILE_FILES):
             shutil.copyfile(ROOT / name, target / name)
         (target / 'test').mkdir()
         shutil.copyfile(TESTS / 'seed_runner.py', target / 'test' / 'seed_runner.py')
@@ -37,14 +37,16 @@ def mutant(label, file=None, old=None, new=None, command=None, extra_env=None):
         # its own negative test, not an unrelated stale checksum.
         (target / 'SHA256SUMS').write_text(''.join(
             hashlib.sha256((target / name).read_bytes()).hexdigest() + '  ' + name + '\n'
-            for name in ['docker-compose.yml', 'Caddyfile', 'einrichten.ps1']), newline='\n')
+            for name in PROFILE_FILES), newline='\n')
         env = dict(os.environ, JNPT_PROFILE_ROOT=str(target), PYTHONPATH=str(TESTS))
         env.update(extra_env or {})
         result = run(sys.executable, '-B', *(command or HTTPS), env=env, check=False)
         if result.returncode == 0:
             raise AssertionError('SURVIVED: ' + label + '\n' + result.stdout + result.stderr)
         # Failures must be assertion failures, not broken adapters or missing files.
-        if 'FAIL:' not in result.stderr or 'FAILED (failures=' not in result.stderr or 'errors=' in result.stderr:
+        if ('FAIL:' not in result.stderr or 'FAILED (failures=' not in result.stderr
+                or 'errors=' in result.stderr or 'Docker fehlgeschlagen:' in result.stderr
+                or 'OCI runtime create failed' in result.stderr):
             raise AssertionError('invalid mutation result: ' + label + '\n' + result.stdout + result.stderr)
         if label.startswith('W6') and ("'end': 'ok'" not in result.stderr or 'probe-executed' not in result.stderr):
             raise AssertionError('W6 mutation did not execute the real script:\n' + result.stderr)
@@ -55,6 +57,30 @@ def mutant(label, file=None, old=None, new=None, command=None, extra_env=None):
 
 
 def main():
+    mutant('SMTP password excluded from container environment', 'docker-compose.yml',
+           '      JNPT_SMTP_HOST:',
+           '      JNPT_SMTP_PASSWORD: ${JNPT_SMTP_PASSWORD:-}\n      JNPT_SMTP_HOST:',
+           command=['-m', 'unittest', 'test_profile.Profile.test_mail_password_is_file_only', '-v'])
+    mutant('SMTP password file path fixed', 'docker-compose.yml',
+           'JNPT_SMTP_PASSWORD_FILE: /run/secrets/smtp_password',
+           'JNPT_SMTP_PASSWORD_FILE: ${JNPT_SMTP_PASSWORD_FILE:-/run/secrets/smtp_password}',
+           command=['-m', 'unittest', 'test_profile.Profile.test_mail_password_is_file_only', '-v'])
+    mutant('mail admin URL remains local', 'docker-compose.yml',
+           'JNPT_ADMIN_URL: http://127.0.0.1:8484',
+           'JNPT_ADMIN_URL: ${JNPT_ADMIN_URL:-http://127.0.0.1:8484}',
+           command=['-m', 'unittest', 'test_profile.Profile.test_mail_admin_url_is_local', '-v'])
+    mutant('SMTP password file retained', 'einrichten.ps1', '[IO.FileMode]::OpenOrCreate',
+           '[IO.FileMode]::Create',
+           command=['-m', 'unittest',
+                    'test_profile.Profile.test_mail_secret_initialization_preserves_operator_files', '-v'])
+    mutant('SMTP password gitignored', '.gitignore', 'secrets/', '!secrets/',
+           command=['-m', 'unittest',
+                    'test_profile.Profile.test_mail_secret_initialization_preserves_operator_files', '-v'])
+    mutant('SMTP empty password file created', 'einrichten.ps1',
+           '    $file = [IO.File]::Open((Join-Path $secretDirectory',
+           '    return\n    $file = [IO.File]::Open((Join-Path $secretDirectory',
+           command=['-m', 'unittest',
+                    'test_profile.Profile.test_mail_secret_initialization_preserves_operator_files', '-v'])
     mutant('W8 LAN route allowlist', 'Caddyfile', '@device path /api/device/v1/* /healthz', '@device path /*')
     mutant('Caddy admin socket off', 'Caddyfile', '\tadmin off\n', '')
     mutant('K1 no plaintext listener', 'Caddyfile', '\tadmin off\n}\n',

@@ -1,4 +1,4 @@
-# Prüfungen für Paket A
+# Prüfungen für das Windows-Profil (Paket A und B1)
 
 Vom Repo-Root unter Windows: Python-Standardbibliothek, Windows PowerShell 5.1
 und Docker Desktop (Linux/amd64). Kein Python-Paket und kein PowerShell-Modul
@@ -10,6 +10,16 @@ python -B -m unittest discover -s windows/test -v
 python -B windows/test/live.py
 python -B windows/test/mutations.py
 ```
+
+Die Mail-Tests lesen die SMTP-/Notify-Umgebung aus echtem `docker compose config`:
+gesetzte, fehlende und leere Werte, fester Secret-Dateipfad und feste lokale
+Admin-URL. Prozessumgebung und eine echte temporäre `.env` versuchen ausdrücklich,
+ein Klartext-SMTP-Passwort sowie andere Passwort-/Admin-Pfade einzuschleusen.
+Die Werte werden nicht übernommen. PowerShell 5.1 legt die leere Passwortdatei
+an und erhält vorhandenen Inhalt sowie `.env`. Ein isolierter Compose-Aufruf
+mit dem vorhandenen Python-Beisteller prüft die leere Datei am tatsächlichen
+Secret-Mount; dafür ist kein SMTP-Server erforderlich. Die Zustellung selbst
+ist eine zusätzliche Betreiberprüfung gemäß [Mail](../README.md#mail).
 
 Die Standardtests prüfen Summen samt beschädigter Dateien, echte
 PowerShell-Summenprüfung einschließlich Format-/Dateinamen-/Duplikat- und
@@ -51,7 +61,9 @@ werden LAN-Pfadfilter, Caddy-Admin-Socket, statisches Leaf, Zertifikatserhalt,
 `CA:FALSE`, Loopback-Upstream,
 Admin-Portbindung, Netz-Namensraum, Pflicht-Image und -Digest, Beisteller-Digest,
 Download-Summen, Summenformat/Dateinamen/Duplikate/Vollständigkeit,
-Image-Eingaben, vorhandenes Ziel und W6.
+Image-Eingaben, vorhandenes Ziel und W6. Dazu kommen B1-Mutationen für ein
+Klartext-SMTP-Passwort im Container-Env, überschreibbare Passwortdatei/Admin-URL,
+überschriebene oder fehlende Passwortdatei und aufgehobenen Git-Ausschluss.
 
 Die W6-Mutation startet absichtlich einen echten Guard im Testcontainer-Verbund
 mit dem originalen Seccomp-Profil von `script-runner-v0.3.1`. Es wird über HTTPS
