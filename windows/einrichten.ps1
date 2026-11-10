@@ -12,6 +12,8 @@ $ErrorActionPreference = 'Stop'
 $ProfileRef = 'windows-v0.1.0'
 $ProfileBase = "https://raw.githubusercontent.com/JanuaPort/januaport-deploy/$ProfileRef/windows"
 $Repository = 'ghcr.io/januaport/januaport'
+$ProfileFiles = @('docker-compose.yml', 'Caddyfile', 'einrichten.ps1', '.gitignore',
+    'README.md', 'README.en.md', 'RUNBOOK.md')
 
 function Invoke-Docker {
     param([string[]]$Arguments)
@@ -22,7 +24,7 @@ function Invoke-Docker {
 
 function Test-ProfileFiles {
     param([string]$Path)
-    $expected = @('docker-compose.yml', 'Caddyfile', 'einrichten.ps1')
+    $expected = $ProfileFiles
     $seen = @{}
     foreach ($line in [IO.File]::ReadAllLines((Join-Path $Path 'SHA256SUMS'))) {
         if ($line -cnotmatch '^([a-f0-9]{64})  ([A-Za-z0-9.-]+)$') { throw 'Ungueltige SHA256SUMS-Zeile.' }
@@ -105,11 +107,23 @@ function Get-ServedLeafFingerprint {
     }
 }
 
+function Initialize-MailSecret {
+    param([string]$Path)
+    $secretDirectory = Join-Path $Path 'secrets'
+    New-Item -ItemType Directory -Path $secretDirectory -Force | Out-Null
+    # OpenOrCreate legt nur bei Bedarf an und kuerzt vorhandene Secrets nicht.
+    foreach ($name in @('smtp_password', 'graph_client_secret')) {
+        $file = [IO.File]::Open((Join-Path $secretDirectory $name),
+            [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        $file.Dispose()
+    }
+}
+
 function Install-Profile {
     Get-Command docker -ErrorAction Stop | Out-Null
     Invoke-Docker @('compose', 'version') | Out-Host
     if (Test-Path -LiteralPath $Directory) {
-        foreach ($name in @('.env', 'SHA256SUMS', 'docker-compose.yml', 'Caddyfile', 'einrichten.ps1')) {
+        foreach ($name in (@('.env', 'SHA256SUMS') + $ProfileFiles)) {
             if (-not (Test-Path -LiteralPath (Join-Path $Directory $name) -PathType Leaf)) {
                 throw 'Ziel existiert bereits und ist kein vollstaendiges Profil.'
             }
@@ -120,13 +134,13 @@ function Install-Profile {
         $staging = Join-Path ([IO.Path]::GetTempPath()) ('jnpt-profile-' + [Guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $staging | Out-Null
         try {
-            foreach ($name in @('SHA256SUMS', 'docker-compose.yml', 'Caddyfile', 'einrichten.ps1')) {
+            foreach ($name in (@('SHA256SUMS') + $ProfileFiles)) {
                 Invoke-WebRequest -UseBasicParsing -Uri "$ProfileBase/$name" -OutFile (Join-Path $staging $name)
             }
             Test-ProfileFiles $staging
             $image = Resolve-CoreImage (Read-Host 'JanuaPort Image-Tag (z.B. 0.87.1) oder sha256:Digest')
             New-Item -ItemType Directory -Path $Directory | Out-Null
-            foreach ($name in @('SHA256SUMS', 'docker-compose.yml', 'Caddyfile', 'einrichten.ps1')) {
+            foreach ($name in (@('SHA256SUMS') + $ProfileFiles)) {
                 Copy-Item -LiteralPath (Join-Path $staging $name) -Destination (Join-Path $Directory $name)
             }
             $envText = "JANUAPORT_IMAGE=$($image[0])`nJANUAPORT_IMAGE_DIGEST=$($image[1])`n"
@@ -141,6 +155,7 @@ function Install-Profile {
             Remove-Item -LiteralPath $resolvedStaging -Recurse -Force
         }
     }
+    Initialize-MailSecret $Directory
     Push-Location $Directory
     try {
         Invoke-Docker @('compose', 'config', '--quiet') | Out-Host

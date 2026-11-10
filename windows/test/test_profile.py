@@ -7,7 +7,7 @@ import hashlib
 import http.client
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import ssl
 import subprocess
 import tempfile
@@ -18,6 +18,22 @@ import uuid
 ROOT = Path(os.environ.get('JNPT_PROFILE_ROOT', Path(__file__).resolve().parents[1]))
 EXAMPLE = {"JANUAPORT_IMAGE": "ghcr.io/januaport/januaport:0.87.1",
            "JANUAPORT_IMAGE_DIGEST": "81b25ca65d1cf3ff9c0bbf4d3b14fb5362debac9ed120db73cf5e2c5e18a4bfd"}
+MAIL_VALUES = {
+    'JNPT_SMTP_HOST': 'smtp.example.org',
+    'JNPT_SMTP_PORT': '587',
+    'JNPT_SMTP_TLS': 'starttls',
+    'JNPT_SMTP_FROM': 'sender@example.org',
+    'JNPT_SMTP_TO': 'recipient@example.org',
+    'JNPT_SMTP_USERNAME': 'sender@example.org',
+    'JNPT_NOTIFY_STATE': '/data/notify-state.json',
+    'JNPT_NOTIFY_TRANSPORT': 'smtp',
+    'JNPT_NOTIFY_GRAPH_TENANT_ID': 'example-tenant',
+    'JNPT_NOTIFY_GRAPH_CLIENT_ID': 'example-client',
+    'JNPT_NOTIFY_GRAPH_SENDER': 'sender@example.org',
+    'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_EXPIRES': '2030-01-01T00:00:00Z',
+}
+PROFILE_FILES = ('docker-compose.yml', 'Caddyfile', 'einrichten.ps1', '.gitignore',
+                 'README.md', 'README.en.md', 'RUNBOOK.md')
 
 
 def run(*args, input=None, check=True, env=None):
@@ -25,17 +41,20 @@ def run(*args, input=None, check=True, env=None):
                           check=check, env=env, timeout=120)
 
 
-def config(directory=ROOT, extra_env=None, check=True):
-    env = dict(os.environ, **EXAMPLE)
+def config(directory=ROOT, extra_env=None, check=True, env_file=None):
+    # Mail tests must not inherit an operator's settings or credentials.
+    env = {key: value for key, value in os.environ.items()
+           if not key.startswith(('JNPT_SMTP_', 'JNPT_NOTIFY_')) and key != 'JNPT_ADMIN_URL'}
+    env.update(EXAMPLE)
     env.update(extra_env or {})
-    return run("docker", "compose", "--env-file", os.devnull, "-f",
+    return run("docker", "compose", "--env-file", str(env_file or os.devnull), "-f",
                str(directory / "docker-compose.yml"), "config", "--format", "json",
                env=env, check=check)
 
 
 def verify_sums(directory):
     rows = (directory / "SHA256SUMS").read_text().splitlines()
-    expected = {"docker-compose.yml", "Caddyfile", "einrichten.ps1"}
+    expected = set(PROFILE_FILES)
     found = set()
     for row in rows:
         digest, name = row.split("  ")
@@ -58,6 +77,211 @@ def create_leaf(cfg, volume, san='DNS:localhost,IP:127.0.0.1'):
 
 
 class Profile(unittest.TestCase):
+    def test_mail_environment(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            dotenv = Path(tmp) / '.env'
+            dotenv.write_text(''.join(name + '=' + value + '\n'
+                                      for name, value in MAIL_VALUES.items()))
+            for source in ['process', 'dotenv']:
+                cfg = json.loads(config(
+                    extra_env=MAIL_VALUES if source == 'process' else None,
+                    env_file=dotenv if source == 'dotenv' else None).stdout)
+                environment = cfg['services']['jnpt'].get('environment', {})
+                for name, value in MAIL_VALUES.items():
+                    with self.subTest(source=source, variable=name):
+                        self.assertEqual(environment.get(name), value)
+                self.assertEqual(set(environment), set(MAIL_VALUES) |
+                                 {'JNPT_SMTP_PASSWORD_FILE', 'JNPT_ADMIN_URL',
+                                  'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE'})
+
+    def test_graph_client_secret_is_file_only(self):
+        attempted = {'JNPT_NOTIFY_GRAPH_CLIENT_SECRET': 'synthetic graph probe'}
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            dotenv = Path(tmp) / '.env'
+            dotenv.write_text(''.join(name + '=' + value + '\n'
+                                      for name, value in attempted.items()))
+            for source in ['process', 'dotenv']:
+                with self.subTest(source=source):
+                    cfg = json.loads(config(
+                        extra_env=attempted if source == 'process' else None,
+                        env_file=dotenv if source == 'dotenv' else None).stdout)
+                    for name, service in cfg['services'].items():
+                        self.assertNotIn('JNPT_NOTIFY_GRAPH_CLIENT_SECRET',
+                                         service.get('environment', {}), name)
+                    service = cfg['services']['jnpt']
+                    mounts = [item for item in service.get('secrets', [])
+                              if item['source'] == 'graph_client_secret']
+                    self.assertEqual(len(mounts), 1)
+                    self.assertEqual(str(PurePosixPath('/run/secrets') / mounts[0]['target']),
+                                     '/run/secrets/graph_client_secret')
+                    self.assertEqual(Path(cfg['secrets']['graph_client_secret']['file']),
+                                     ROOT.resolve() / 'secrets' / 'graph_client_secret')
+
+    def test_graph_client_secret_file_path_is_optional(self):
+        variable = 'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE'
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            dotenv = Path(tmp) / '.env'
+            for value in [None, '', '/run/secrets/graph_client_secret']:
+                dotenv.write_text('' if value is None else variable + '=' + value + '\n')
+                for source in ['process', 'dotenv']:
+                    with self.subTest(value=value, source=source):
+                        cfg = json.loads(config(
+                            extra_env={variable: value} if source == 'process' and value is not None else None,
+                            env_file=dotenv if source == 'dotenv' else None).stdout)
+                        self.assertEqual(cfg['services']['jnpt']['environment'].get(variable),
+                                         value or '')
+
+    def test_smtp_has_no_graph_values(self):
+        smtp = {name: value for name, value in MAIL_VALUES.items()
+                if not name.startswith('JNPT_NOTIFY_GRAPH_') and name != 'JNPT_NOTIFY_TRANSPORT'}
+        graph_names = {name for name in MAIL_VALUES if name.startswith('JNPT_NOTIFY_GRAPH_')}
+        graph_names.add('JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE')
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            dotenv = Path(tmp) / '.env'
+            for transport in [None, '', 'smtp']:
+                with self.subTest(transport=transport):
+                    settings = dict(smtp)
+                    if transport is not None:
+                        settings['JNPT_NOTIFY_TRANSPORT'] = transport
+                    dotenv.write_text(''.join(name + '=' + value + '\n'
+                                              for name, value in settings.items()))
+                    cfg = json.loads(config(env_file=dotenv).stdout)
+                    graph = {name: value for name, value in cfg['services']['jnpt']['environment'].items()
+                             if name.startswith('JNPT_NOTIFY_GRAPH_')}
+                    self.assertEqual(graph, dict.fromkeys(graph_names, ''))
+
+    def test_graph_certificates_not_forwarded(self):
+        attempted = {'JNPT_NOTIFY_GRAPH_CERT_FILE': '/tmp/incorrect-graph-cert',
+                     'JNPT_NOTIFY_GRAPH_KEY_FILE': '/tmp/incorrect-graph-key'}
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            dotenv = Path(tmp) / '.env'
+            dotenv.write_text(''.join(name + '=' + value + '\n'
+                                      for name, value in attempted.items()))
+            for source in ['process', 'dotenv']:
+                with self.subTest(source=source):
+                    cfg = json.loads(config(
+                        extra_env=attempted if source == 'process' else None,
+                        env_file=dotenv if source == 'dotenv' else None).stdout)
+                    for name, service in cfg['services'].items():
+                        for variable in attempted:
+                            self.assertNotIn(variable, service.get('environment', {}), name)
+
+    def test_mail_password_is_file_only(self):
+        # Try both actual Compose input adapters, including an explicitly supplied
+        # plaintext password. Neither may put it in a container environment.
+        attempted = {'JNPT_SMTP_PASSWORD': 'synthetic mail probe',
+                     'JNPT_SMTP_PASSWORD_FILE': '/tmp/incorrect-password-file'}
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            dotenv = Path(tmp) / '.env'
+            dotenv.write_text(''.join(name + '=' + value + '\n'
+                                      for name, value in attempted.items()))
+            for source in ['process', 'dotenv']:
+                with self.subTest(source=source):
+                    cfg = json.loads(config(
+                        extra_env=attempted if source == 'process' else None,
+                        env_file=dotenv if source == 'dotenv' else None).stdout)
+                    service = cfg['services']['jnpt']
+                    environment = service.get('environment', {})
+                    self.assertNotIn('JNPT_SMTP_PASSWORD', environment)
+                    self.assertEqual(environment.get('JNPT_SMTP_PASSWORD_FILE'),
+                                     '/run/secrets/smtp_password')
+                    mounts = [item for item in service.get('secrets', [])
+                              if item['source'] == 'smtp_password']
+                    self.assertEqual(len(mounts), 1)
+                    # Compose 2 emits a relative target, Compose 5 an absolute one.
+                    self.assertEqual(str(PurePosixPath('/run/secrets') / mounts[0]['target']),
+                                     '/run/secrets/smtp_password')
+                    self.assertEqual(Path(cfg['secrets']['smtp_password']['file']),
+                                     ROOT.resolve() / 'secrets' / 'smtp_password')
+
+    def test_mail_admin_url_is_local(self):
+        attempted = {'JNPT_ADMIN_URL': 'https://smtp.example.org'}
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            dotenv = Path(tmp) / '.env'
+            dotenv.write_text('JNPT_ADMIN_URL=https://smtp.example.org\n')
+            for source in ['process', 'dotenv']:
+                with self.subTest(source=source):
+                    cfg = json.loads(config(
+                        extra_env=attempted if source == 'process' else None,
+                        env_file=dotenv if source == 'dotenv' else None).stdout)
+                    self.assertEqual(cfg['services']['jnpt'].get('environment', {}).get('JNPT_ADMIN_URL'),
+                                     'http://127.0.0.1:8484')
+
+    def test_mail_unconfigured(self):
+        for values in [None, dict.fromkeys(MAIL_VALUES, '')]:
+            with self.subTest(values=values):
+                result = config(extra_env=values, check=False)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                cfg = json.loads(result.stdout)
+                environment = cfg['services']['jnpt'].get('environment', {})
+                for name in MAIL_VALUES:
+                    self.assertEqual(environment.get(name), '', name)
+
+    def test_mail_secret_initialization_preserves_operator_files(self):
+        self.assert_secret_initialization('smtp_password', b'synthetic mail probe')
+
+    def test_graph_secret_initialization_preserves_operator_files(self):
+        self.assert_secret_initialization('graph_client_secret', b'synthetic graph probe')
+
+    def assert_secret_initialization(self, name, contents):
+        from test_install import ps
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            target = Path(tmp)
+            dotenv = target / '.env'
+            dotenv.write_bytes(b'JNPT_SMTP_HOST=smtp.example.org\n')
+            original_env = dotenv.read_bytes()
+            command = "Initialize-MailSecret '" + str(target) + "'"
+            result = ps(command)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            secret = target / 'secrets' / name
+            self.assertTrue(secret.is_file())
+            self.assertEqual(secret.read_bytes(), b'')
+            secret.write_bytes(contents)
+            result = ps(command)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(secret.read_bytes(), contents)
+            self.assertEqual(dotenv.read_bytes(), original_env)
+        ignored = run('git', '-C', str(ROOT), 'check-ignore', '--no-index',
+                      'secrets/' + name, check=False)
+        self.assertEqual(ignored.returncode, 0, ignored.stderr)
+
+    def test_mail_empty_secret_compose_adapter(self):
+        from test_install import ps
+        cfg = json.loads(config().stdout)
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            target = Path(tmp)
+            initialized = ps("Initialize-MailSecret '" + str(target) + "'")
+            self.assertEqual(initialized.returncode, 0, initialized.stderr)
+            # Use the profile's actual secret declaration with its source rebased
+            # to the disposable installation, and its existing Python sidecar image.
+            declarations = {}
+            for name in ['smtp_password', 'graph_client_secret']:
+                self.assertIn(name, cfg['secrets'])
+                declarations[name] = dict(cfg['secrets'][name],
+                                          file=str(target / 'secrets' / name))
+            probe = {
+                'services': {'probe': {
+                    'image': cfg['services']['script-runner']['image'],
+                    'network_mode': 'none',
+                    'entrypoint': ['python3', '-I', '-c'],
+                    'command': ["from pathlib import Path; "
+                                "paths=[Path('/run/secrets')/name for name in "
+                                "('smtp_password', 'graph_client_secret')]; "
+                                "assert all(p.is_file() and p.read_bytes() == b'' for p in paths)"],
+                    'secrets': cfg['services']['jnpt']['secrets'],
+                }},
+                'secrets': declarations,
+            }
+            manifest = target / 'probe.json'
+            manifest.write_text(json.dumps(probe))
+            args = ('docker', 'compose', '-p', 'jnpt-mail-test-' + uuid.uuid4().hex[:10],
+                    '-f', str(manifest))
+            try:
+                result = run(*args, 'run', '--rm', '-T', '--no-deps', 'probe', check=False)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            finally:
+                run(*args, 'down', '-v', '--remove-orphans')
+
     def test_static_leaf_configuration(self):
         caddyfile = (ROOT / 'Caddyfile').read_text()
         self.assertNotIn('tls internal', caddyfile)
@@ -103,9 +327,9 @@ class Profile(unittest.TestCase):
         verify_sums(ROOT)
         with tempfile.TemporaryDirectory(dir=ROOT / "test") as tmp:
             dst = Path(tmp)
-            for name in ["SHA256SUMS", "Caddyfile", "docker-compose.yml", "einrichten.ps1"]:
+            for name in ('SHA256SUMS', *PROFILE_FILES):
                 (dst / name).write_bytes((ROOT / name).read_bytes())
-            for name in ["Caddyfile", "docker-compose.yml", "einrichten.ps1"]:
+            for name in PROFILE_FILES:
                 original = (dst / name).read_bytes()
                 (dst / name).write_bytes(original + b"# tampered\n")
                 with self.assertRaisesRegex(ValueError, "checksum mismatch"):

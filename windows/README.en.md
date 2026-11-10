@@ -2,7 +2,7 @@
 
 **English** · [Deutsch](README.md)
 
-Package A (#1246), tested locally with Docker Desktop. Requires Windows 10/11
+Package A with B1 mail forwarding (#1246), tested locally with Docker Desktop. Requires Windows 10/11
 Pro (amd64), WSL2 Linux containers, Docker Desktop **≥ 4.44.3**
 (CVE-2025-9074), Compose ≥ 2.35 and PowerShell ≥ 5.1. Keep **“Expose daemon on
 tcp://localhost:2375” disabled**; approve automatic updates only after review.
@@ -46,6 +46,79 @@ is computed from that PEM certificate in the volume.
 The GUI output is exactly `Admin-GUI: http://127.0.0.1:8484`. Follow the product's
 `docs/inbetriebnahme.md`: secure the master key, set the admin password and
 create the first admin token.
+
+## Mail
+
+`einrichten.ps1` still prompts only for the image tag. Before starting Compose,
+it creates empty `secrets/smtp_password` and `secrets/graph_client_secret` files
+in the profile directory, preserving existing contents. The profile starts as
+before without mail settings.
+**The operator attribute (Betreiber-Merkmal), network gate (Netztür), construction
+phase (Bauphase) and case token (Fall-Token) require deliverable mail.**
+Verify sending and actual receipt before using them.
+
+Configure mail manually afterwards in the installed profile directory (by default
+`%LOCALAPPDATA%\JanuaPort\windows`). Add these optional settings to `.env`;
+missing or empty values remain empty in the container:
+
+| Variable | Meaning |
+|---|---|
+| `JNPT_SMTP_HOST` | SMTP server, e.g. `smtp.example.org` |
+| `JNPT_SMTP_PORT` | SMTP server port |
+| `JNPT_SMTP_TLS` | TLS setting as defined by the core configuration |
+| `JNPT_SMTP_FROM` | Sender, e.g. `sender@example.org` |
+| `JNPT_SMTP_TO` | Recipient, e.g. `recipient@example.org` |
+| `JNPT_SMTP_USERNAME` | SMTP username |
+| `JNPT_NOTIFY_STATE` | Optional notification state path inside the container |
+| `JNPT_NOTIFY_TRANSPORT` | Mail transport as defined by the core configuration |
+| `JNPT_NOTIFY_GRAPH_TENANT_ID` | Graph tenant ID |
+| `JNPT_NOTIFY_GRAPH_CLIENT_ID` | Client ID of the Graph application |
+| `JNPT_NOTIFY_GRAPH_SENDER` | Graph sender, e.g. `sender@example.org` |
+| `JNPT_NOTIFY_GRAPH_CLIENT_SECRET_EXPIRES` | Client-secret expiry as defined by the core configuration |
+| `JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE` | For Graph only: `/run/secrets/graph_client_secret`; otherwise leave empty |
+
+**The SMTP password must never appear in `.env` or the container environment.**
+Store it only as the contents of the local `secrets/smtp_password` file (UTF-8
+without BOM). The `secrets/` directory is gitignored; secret files are neither
+distributed nor included in `SHA256SUMS`. Restrict local file access to the
+responsible users and Docker Desktop. Compose mounts it as a secret at
+`/run/secrets/smtp_password`. `JNPT_SMTP_PASSWORD_FILE` is fixed to this container
+path; `JNPT_SMTP_PASSWORD` is not forwarded. Neither variable belongs in `.env`.
+
+For Graph, set `JNPT_NOTIFY_TRANSPORT=graph` and the Graph settings in `.env`.
+Also add this line to `.env`:
+
+```dotenv
+JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE=/run/secrets/graph_client_secret
+```
+
+**The Graph client secret must also never appear in `.env` or the container
+environment.** Store it only in `secrets/graph_client_secret` (UTF-8 without BOM).
+Compose mounts it at `/run/secrets/graph_client_secret`;
+no other path is intended. Without a value set in `.env`,
+`JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE` remains empty in the container.
+`JNPT_NOTIFY_GRAPH_CLIENT_SECRET` is not forwarded and does not belong in `.env`.
+**Graph v1 supports client-secret authentication only.**
+`JNPT_NOTIFY_GRAPH_CERT_FILE` and `JNPT_NOTIFY_GRAPH_KEY_FILE` are not forwarded;
+certificate authentication will follow if needed.
+
+For SMTP, leave all `JNPT_NOTIFY_GRAPH_*` settings empty or absent in `.env`,
+including `JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE`. This avoids the core's warning
+about ignored Graph settings. The secret mount with its empty file remains present.
+
+`JNPT_ADMIN_URL` is fixed to `http://127.0.0.1:8484` (SEC W8): admin links are
+accessible only on the machine running the installation.
+
+Keep both secret files even without mail settings. `docker compose config` does
+not check whether they exist. With a missing file, Compose may fail at startup
+or mount a directory instead of a readable file. Before starting manually,
+prepare the profile with `einrichten.ps1`. After changing `.env` or a secret
+file, run these commands in the profile directory:
+
+```powershell
+docker compose config --quiet
+docker compose up -d --force-recreate jnpt
+```
 
 ## Pair a desktop runner
 
@@ -151,7 +224,8 @@ prove package delivery or job completion.
 
 Repository checks: `python -B -m unittest discover -s windows/test -v`
 (Python standard library and Docker). See [test/README.md](test/README.md) for
-live checks and mutations. `.gitattributes` preserves the LF bytes covered by
+live checks and mutations. SHA256SUMS covers Compose, Caddyfile, the installer,
+`.gitignore`, both READMEs and the runbook. `.gitattributes` preserves the LF bytes covered by
 SHA256SUMS in both Windows checkouts and raw downloads.
 
 Updates, backup and autologon are package B. Docker Desktop must already be
