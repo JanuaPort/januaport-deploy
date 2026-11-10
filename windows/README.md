@@ -108,7 +108,12 @@ nach unserem Stand auch Volumes je Windows-Konto. Lief 0.1.0 unter einem persön
 Konto, liegen die Daten der Anlage dort und nicht bei `jnpt-dienst`. Das Upgrade der
 Dateien zieht sie nicht um. Vorher im alten Konto `jnpt backup` ausführen und den
 Master-Key getrennt verwahren, dann unter `jnpt-dienst` neu einrichten und die
-Sicherung zurückspielen. Dieser Weg ist ein Schritt im Prüfstein B4.
+Sicherung zurückspielen. Erst wenn die Anlage unter `jnpt-dienst` läuft und die
+Rücksicherung geprüft ist, im alten Konto im alten Profilordner
+`docker compose down -v` ausführen. Sonst liegt dort weiter eine vollständige
+Anlage mit Tresor und Master-Key, und Docker Desktop startet sie beim Anmelden
+vielleicht wieder. Danach zeigt `docker volume ls` im alten Konto kein
+`jnpt-windows_*`-Volume mehr. Dieser Weg ist ein Schritt im Prüfstein B4.
 
 ## Dienstbetrieb (B2)
 

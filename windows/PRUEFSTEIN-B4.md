@@ -65,7 +65,7 @@ festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
    Betreiber vor Ort. Wartungskonto startet nur Aufgaben. B5-Update-Aufgabe
    bleibt bis zu deren eigenem Paket offen. Docker-Desktop-Lizenz und
    unterstütztes Windows/ESU separat bestätigen.
-2a. **Kontowechsel der Daten:** Eine 0.1.0-Anlage, die unter einem persönlichen Konto lief, per `jnpt backup` sichern, unter `jnpt-dienst` neu einrichten und mit dem getrennt verwahrten Master-Key zurückspielen. Danach Anmeldung und ein Lesewerkzeug grün.
+2a. **Kontowechsel der Daten:** Eine 0.1.0-Anlage, die unter einem persönlichen Konto lief, per `jnpt backup` sichern, unter `jnpt-dienst` neu einrichten und mit dem getrennt verwahrten Master-Key zurückspielen. Danach Anmeldung und ein Lesewerkzeug grün. Dann im alten Konto `docker compose down -v`; `docker volume ls` im alten Konto zeigt kein `jnpt-windows_*`-Volume mehr (SEC E1).
 
 Abnahmestatus: **offen**. Auf dem Entwicklungsrechner wird keiner dieser
 Systemeingriffe ausgeführt.
