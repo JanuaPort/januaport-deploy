@@ -6,6 +6,7 @@ import unittest
 import uuid
 
 from test_profile import ROOT, run
+from test_install import ps
 
 
 def recipe(file, marker):
@@ -56,3 +57,45 @@ class RecoveryDocs(unittest.TestCase):
                     helper.group(1), 'sh', '-ec', 'test -r /data/jnpt.key && touch /data/new-db-probe')
             finally:
                 run('docker', 'volume', 'rm', volume, check=False)
+
+
+class FirewallDocs(unittest.TestCase):
+    def test_n5_recipe_is_manual_private_domain_and_local_subnet_only(self):
+        for file in ['README.md', 'README.en.md', 'RUNBOOK.md']:
+            with self.subTest(file=file):
+                code = recipe(file, 'N5')
+                command = r'''
+$script:queried=$false
+function Get-NetConnectionProfile {$script:queried=$true}
+function New-NetFirewallRule {param($DisplayName,$Direction,$Protocol,$LocalPort,$RemoteAddress,$Action,$Profile)
+    if (-not $script:queried) {throw 'network profile must be checked first'}
+    $PSBoundParameters | ConvertTo-Json -Compress
+}
+'''
+                result = ps(command + code)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                rule = __import__('json').loads(result.stdout)
+                self.assertEqual(rule, dict(DisplayName='JanuaPort 443 LAN', Direction='Inbound',
+                    Protocol='TCP', LocalPort=443, RemoteAddress='LocalSubnet', Action='Allow',
+                    Profile=['Private', 'Domain']))
+
+    def test_installer_never_changes_firewall(self):
+        from test_profile import PROFILE_FILES
+        import shutil
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            target = Path(tmp)
+            for name in ('SHA256SUMS', *PROFILE_FILES): shutil.copyfile(ROOT / name, target / name)
+            (target / '.env').write_text('synthetic env')
+            command = r'''
+function New-NetFirewallRule {throw 'FORBIDDEN automatic firewall change'}
+function Set-NetFirewallRule {throw 'FORBIDDEN automatic firewall change'}
+function Set-NetConnectionProfile {throw 'FORBIDDEN automatic network profile change'}
+function Get-CurrentAccount {$env:COMPUTERNAME+'\jnpt-dienst'}
+function Invoke-Docker {param($Arguments)}
+function Get-LeafFingerprint {'synthetic fingerprint'}
+function Get-ServedLeafFingerprint {'synthetic fingerprint'}
+function Invoke-WebRequest {[pscustomobject]@{StatusCode=200}}
+Install-Profile
+'''
+            result = ps("$Directory='" + tmp + "'; " + command)
+            self.assertEqual(result.returncode, 0, result.stderr)
