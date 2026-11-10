@@ -143,7 +143,27 @@ Sitzung. Hat doch der Dienstleister das Passwort gesetzt, setzt der Kunde es neu
 
 Den Master-Schlüssel der Anlage auf Papier sichern. Das Papier bleibt beim Kunden, an einem verschlossenen Ort.
 
-### 3.5 Desktop-Läufer auf dem Rechner selbst
+### 3.5 LAN-Freigabe vor dem Koppeln (N5)
+
+Docker Desktop legt beim ersten Start Block-Regeln für das öffentliche Profil
+an. Der Betreiber bzw. seine IT prüft in einer administrativen PowerShell das
+Netzprofil: **Privat** oder **Domäne**. Ein öffentliches Netz erst nach Prüfung
+als vertrauenswürdiges privates Netz einordnen. Dann TCP 443 ausschließlich
+für das lokale Subnetz freigeben:
+
+<!-- N5 -->
+```powershell
+Get-NetConnectionProfile
+New-NetFirewallRule -DisplayName 'JanuaPort 443 LAN' -Direction Inbound -Protocol TCP -LocalPort 443 -RemoteAddress LocalSubnet -Action Allow -Profile Private,Domain
+```
+
+Kein `Any` bei Gegenstellen. Die Regel gilt nur für `Private,Domain`.
+`einrichten.ps1` ändert weder Firewall noch Netzprofil; dieser Schritt bleibt
+beim Menschen. HTTPS anschließend von einem Arbeitsplatz im lokalen Subnetz
+prüfen. Port 8484 bleibt am Server auf Loopback beschränkt.
+
+
+### 3.6 Desktop-Läufer auf dem Rechner selbst
 1. In der Admin-Oberfläche ein Gerät anlegen: Art `dedicated`, gerätebezogener Name wie `desktop-01`,
    kein Personenname. Kopplungscode holen (gilt 15 Minuten).
 2. Läufer aus dem Release `desktop-runner-v*` laden und die Prüfsumme gegen `SHA256SUMS` prüfen.
@@ -158,7 +178,7 @@ Den Master-Schlüssel der Anlage auf Papier sichern. Das Papier bleibt beim Kund
 Läufer auf Arbeitsplätzen im lokalen Netz koppeln mit `https://<Adresse des Rechners>` und demselben
 Fingerprint. Die CA des Rechners kommt nie in den Zertifikatsspeicher der Arbeitsplätze.
 
-### 3.6 Erster Lauf
+### 3.7 Erster Lauf
 Ein harmloses Test-Skript ohne Bezug zum Kunden, etwa eines, das den Editor öffnet, belegt die Kette aus
 Anlage, Skript-Läufer, Kopplung und Lauf. Den Zeitplan danach löschen.
 
@@ -182,4 +202,4 @@ Daten des Kunden. Vor dem Start hakt die Person ab:
 | Nach dem Neustart keine Sitzung möglich | kein unbeaufsichtigter Zugriff (gewollt) | Mensch beim Kunden nimmt TeamViewer erneut an (3.3); Wartung nur über Wartungskonto |
 | `docker version` zeigt keinen Server | Docker Desktop startet noch oder ist nicht angemeldet | einige Minuten warten; Docker Desktop startet nur in einer angemeldeten Sitzung |
 | `pair` scheitert ohne TLS-Fehler | Kopplung über HTTP an einen Container | immer über `https://` mit Fingerprint koppeln |
-| Läufer im Netz erreicht die Anlage nicht | Windows-Firewall oder falsche Adresse | Freigabe für 443 aus dem lokalen Netz prüfen |
+| Läufer im Netz erreicht die Anlage nicht | Windows-Firewall oder falsche Adresse | Netzprofil Privat/Domäne und Regel „JanuaPort 443 LAN“ gemäß 3.5 prüfen (`LocalSubnet`, TCP 443) |

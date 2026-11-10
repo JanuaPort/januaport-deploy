@@ -1,5 +1,6 @@
 """Operator recipes: test their contract and execute helper shell on own volumes."""
 import re
+import json
 import tempfile
 from pathlib import Path
 import unittest
@@ -74,7 +75,7 @@ function New-NetFirewallRule {param($DisplayName,$Direction,$Protocol,$LocalPort
 '''
                 result = ps(command + code)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                rule = __import__('json').loads(result.stdout)
+                rule = json.loads(result.stdout)
                 self.assertEqual(rule, dict(DisplayName='JanuaPort 443 LAN', Direction='Inbound',
                     Protocol='TCP', LocalPort=443, RemoteAddress='LocalSubnet', Action='Allow',
                     Profile=['Private', 'Domain']))

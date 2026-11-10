@@ -8,6 +8,25 @@ Pro (amd64), WSL2 Linux containers, Docker Desktop **≥ 4.44.3**
 tcp://localhost:2375” disabled**, AutoStart enabled, automatic downloads/updates disabled. Review updates manually.
 TCP ports 443 and 8484 must be available. Registry/GitHub access is required.
 
+### LAN access during setup (N5)
+
+Docker Desktop creates blocking rules for the public network profile on first
+start. For LAN desktop runners, the operator or their IT checks the network
+profile in an administrative PowerShell: it must be **Private** or **Domain**.
+Have IT verify trust before reclassifying a public network as private. Then
+allow TCP 443 only from `LocalSubnet` on `Private,Domain` profiles:
+
+<!-- N5 -->
+```powershell
+Get-NetConnectionProfile
+New-NetFirewallRule -DisplayName 'JanuaPort 443 LAN' -Direction Inbound -Protocol TCP -LocalPort 443 -RemoteAddress LocalSubnet -Action Allow -Profile Private,Domain
+```
+
+Do not use `Any` for remote addresses. This is a manual operator step;
+`einrichten.ps1` changes neither firewall nor network profile. Verify HTTPS
+from a workstation in the local subnet afterwards. Admin port 8484 stays on loopback.
+
+
 ## Two commands
 
 The publisher must first publish the immutable **profile release tag**
@@ -433,13 +452,9 @@ completed job separately from pairing.
   to `127.0.0.1` only; Caddy's admin API is disabled. Enable the commented exact
   `/mcp` block only when a LAN AI client needs it and after reviewing permissions
   and route tests again.
-- **W9:** Example in an administrative PowerShell:
-
-  ```powershell
-  New-NetFirewallRule -DisplayName 'JanuaPort HTTPS LAN' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 443 -RemoteAddress LocalSubnet -Profile Private
-  ```
-
-  Use a private network and keep the default inbound firewall policy at Block.
+- **W9:** Manually follow [LAN access during setup](#lan-access-during-setup-n5):
+  Private or Domain profile, rule “JanuaPort 443 LAN”, TCP 443 from
+  `LocalSubnet` only. Keep the default inbound firewall policy at Block.
   Restrict broader Docker/WSL allow rules; adding a narrow rule does not revoke
   broad rules. Test 443 from the local subnet and rejection from outside it;
   verify that 8484 cannot be reached from the LAN. Do not forward 443 at the

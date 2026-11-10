@@ -19,6 +19,26 @@ Den Ablauf vor Ort und bei Fernwartung (wer wann was tut) beschreibt das [Runboo
 - Zugang zur öffentlichen Image-Registry und zu GitHub. Für Desktop-Pins später
   ein eigenes Skript-Repository und dessen Nur-Lese-Deploy-Key.
 
+### LAN-Freigabe bei der Einrichtung (N5)
+
+Docker Desktop legt beim ersten Start Block-Regeln für das öffentliche
+Netzprofil an. Für Desktop-Läufer im LAN prüft der Betreiber bzw. seine IT
+in einer administrativen PowerShell das Netzprofil: Es muss **Privat** oder
+**Domäne** sein. Ein öffentliches Netz erst nach Prüfung durch die IT als
+vertrauenswürdiges privates Netz einordnen. Dann TCP 443 ausschließlich für
+`LocalSubnet` und die Profile `Private,Domain` freigeben:
+
+<!-- N5 -->
+```powershell
+Get-NetConnectionProfile
+New-NetFirewallRule -DisplayName 'JanuaPort 443 LAN' -Direction Inbound -Protocol TCP -LocalPort 443 -RemoteAddress LocalSubnet -Action Allow -Profile Private,Domain
+```
+
+Kein `Any` bei den Gegenstellen. Die Freigabe ist ein menschlicher Schritt;
+`einrichten.ps1` ändert weder Firewall noch Netzprofil. Danach HTTPS von einem
+Arbeitsplatz im lokalen Subnetz prüfen. Der Admin-Port 8484 bleibt auf Loopback.
+
+
 ## Zwei Befehle
 
 Der Herausgeber muss zuerst den unveränderlichen Profil-Tag `windows-v0.2.0`
@@ -481,13 +501,9 @@ erfolgreicher Auftragslauf sind zusätzlich zur Kopplung zu prüfen.
   Port 8484 bindet ausschließlich an `127.0.0.1`. Caddys Admin-API ist aus.
   Der auskommentierte `/mcp`-Block ist erst bei Bedarf eines KI-Clients im LAN
   und nach erneuter Berechtigungs- und Pfadprüfung zu aktivieren.
-- **SEC W9:** In einer administrativen PowerShell beispielsweise:
-
-  ```powershell
-  New-NetFirewallRule -DisplayName 'JanuaPort HTTPS LAN' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 443 -RemoteAddress LocalSubnet -Profile Private
-  ```
-
-  Das Netz muss als privat eingestuft sein. Windows-Firewall eingehend auf
+- **SEC W9:** Die [LAN-Freigabe bei der Einrichtung](#lan-freigabe-bei-der-einrichtung-n5)
+  manuell ausführen: Privat oder Domäne, Regel „JanuaPort 443 LAN“, TCP 443
+  ausschließlich aus `LocalSubnet`. Windows-Firewall eingehend auf
   Standard „Blockieren“ belassen. Vorhandene breitere Docker-/WSL-Freigaben
   prüfen und einschränken; eine zusätzliche enge Allow-Regel hebt breite
   Regeln nicht auf. Von einem Gerät im lokalen Subnetz 443 prüfen, von außerhalb

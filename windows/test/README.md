@@ -11,6 +11,7 @@ python -B windows/test/live.py
 python -B windows/test/mutations.py
 python -B windows/test/dienst_mutations.py
 python -B windows/test/b4_mutations.py
+python -B windows/test/f4_mutations.py
 ```
 
 B2/B3 nur in einer **nicht erhöhten** Testsitzung ausführen. Für die neuen
@@ -136,6 +137,16 @@ READMEs gegen ein eigenes zufälliges Test-Volume und synthetische Key-Dateien
 aus: bisherige DB/Key-Dateien bleiben beiseitegelegt erhalten, der neue Key
 ist als UID 65532 mit Modus 600 lesbar. `operator_mutations.py` muss Löschen
 statt Verschieben sowie falschen Eigentümer und Modus am echten Adapter erkennen.
+N5 führt die drei Dokumentationsrezepte in PS 5.1 mit einem aufzeichnenden
+Firewall-Adapter aus: Netzprofil zuerst, TCP 443 eingehend, `LocalSubnet`,
+Profile `Private,Domain`. Die echte Firewall wird nicht verändert. Der echte
+Installer läuft mit Fehlerfallen an allen Firewall-/Netzprofil-Schreibadaptern.
+Weitere Mutationen ersetzen `LocalSubnet` durch `Any`, erlauben öffentliche
+Profile, entfernen die Profilprüfung oder bauen eine automatische Regel ein.
+
+```powershell
+python -B windows/test/operator_mutations.py
+```
 
 Die manuelle B4-Abnahme steht in [PRUEFSTEIN-B4.md](../PRUEFSTEIN-B4.md):
 DPAPI-unabhängige Wiederherstellung nach Kennwortreset, Sperrbildschirmfoto nach

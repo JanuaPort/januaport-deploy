@@ -29,10 +29,10 @@ def mutant(label, file=None, old=None, new=None, command=None, extra_env=None):
         shutil.copyfile(TESTS / 'seed_runner.py', target / 'test' / 'seed_runner.py')
         if file:
             path = target / file
-            original = path.read_text()
+            original = path.read_text(encoding='utf-8')
             if original.count(old) != 1:
                 raise RuntimeError('mutation anchor is not unique: ' + label)
-            path.write_text(original.replace(old, new), newline='\n')
+            path.write_text(original.replace(old, new), encoding='utf-8', newline='\n')
         # Keep the fixture internally consistent: a mutant must be killed by
         # its own negative test, not an unrelated stale checksum.
         (target / 'SHA256SUMS').write_text(''.join(
