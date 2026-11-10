@@ -147,14 +147,22 @@ class Dienst(unittest.TestCase):
                 self.assertTrue(self.task_command(backup).endswith("-Target '" + target.replace("'", "''") + "'"))
 
     def test_setup_failure_never_prints_password(self):
-        for mode in ['admin', 'privileged', 'disabled', 'power', 'task']:
+        for mode in ['admin', 'privileged', 'disabled', 'root-acl', 'power', 'task']:
             with self.subTest(mode=mode):
                 extra = '$script:exists=$true; $script:autologon=$true' if mode == 'privileged' else '$null=$null'
                 result, _, _ = self.fake_setup(mode, repeat=False, extra=extra)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn({'admin': 'admin', 'privileged': 'Standardbenutzer',
-                               'disabled': 'deaktiviert', 'power': 'powercfg', 'task': 'task'}[mode], result.stderr)
+                               'disabled': 'deaktiviert', 'root-acl': 'icacls', 'power': 'powercfg', 'task': 'task'}[mode], result.stderr)
                 self.assertNotIn('KANARIE-NICHT-ECHT', result.stdout + result.stderr)
+
+    def test_b7_root_is_protected_before_profile_files_and_tasks(self):
+        result, _, _ = self.fake_setup()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        events = json.loads(result.stdout.strip())
+        self.assertEqual(events.count('root-acl'), 2)
+        self.assertLess(events.index('root-acl'), events.index('acl'))
+        self.assertLess(events.index('root-acl'), next(i for i, event in enumerate(events) if event.startswith('task:')))
 
     def test_existing_account_requires_explicit_password_reset_without_autologon(self):
         result, _, _ = self.fake_setup(repeat=False, extra='$script:exists=$true')
