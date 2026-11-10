@@ -90,6 +90,7 @@ Werte in `.env` ergänzen; fehlende oder leere Werte bleiben im Container leer:
 | `JNPT_NOTIFY_GRAPH_CLIENT_ID` | Client-ID der Graph-Anwendung |
 | `JNPT_NOTIFY_GRAPH_SENDER` | Graph-Absender, z. B. `sender@example.org` |
 | `JNPT_NOTIFY_GRAPH_CLIENT_SECRET_EXPIRES` | Ablaufzeitpunkt des Client-Secrets gemäß der Kern-Konfiguration |
+| `JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE` | Nur für Graph: `/run/secrets/graph_client_secret`, sonst leer lassen |
 
 **Das SMTP-Passwort steht nie in `.env` und nie in der Container-Umgebung.**
 Es ausschließlich als Inhalt der lokalen Datei `secrets/smtp_password` speichern
@@ -102,14 +103,25 @@ Compose bindet sie als Secret unter `/run/secrets/smtp_password` ein.
 in `.env`.
 
 Für Graph `JNPT_NOTIFY_TRANSPORT=graph` und die Graph-Werte in `.env` setzen.
+In `.env` zusätzlich diese Zeile eintragen:
+
+```dotenv
+JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE=/run/secrets/graph_client_secret
+```
+
 **Das Graph-Client-Secret steht ebenfalls nie in `.env` oder im Container-Env.**
 Es ausschließlich in `secrets/graph_client_secret` speichern (UTF-8 ohne BOM).
 Compose bindet die Datei unter `/run/secrets/graph_client_secret` ein;
-`JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE` ist fest auf diesen Pfad gesetzt.
-`JNPT_NOTIFY_GRAPH_CLIENT_SECRET` wird nicht durchgereicht. Beide Variablen
-gehören nicht in `.env`. **Graph unterstützt in v1 ausschließlich Client-Secret.**
+ein anderer Pfad ist nicht vorgesehen. Ohne gesetzten `.env`-Wert bleibt
+`JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE` im Container leer.
+`JNPT_NOTIFY_GRAPH_CLIENT_SECRET` wird nicht durchgereicht und gehört nicht
+in `.env`. **Graph unterstützt in v1 ausschließlich Client-Secret.**
 `JNPT_NOTIFY_GRAPH_CERT_FILE` und `JNPT_NOTIFY_GRAPH_KEY_FILE` werden nicht
 durchgereicht; Zertifikatsauthentifizierung folgt bei Bedarf.
+
+Bei SMTP alle `JNPT_NOTIFY_GRAPH_*`-Werte in `.env` leer lassen oder weglassen,
+auch `JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE`. So meldet der Kern keine ignorierte
+Graph-Konfiguration. Der Secret-Mount mit der leeren Datei bleibt vorhanden.
 
 `JNPT_ADMIN_URL` ist fest `http://127.0.0.1:8484` (SEC W8):
 Admin-Links sind ausschließlich am Rechner der Anlage erreichbar.

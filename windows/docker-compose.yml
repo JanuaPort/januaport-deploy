@@ -30,7 +30,7 @@ services:
       JNPT_NOTIFY_GRAPH_SENDER: ${JNPT_NOTIFY_GRAPH_SENDER:-}
       JNPT_NOTIFY_GRAPH_CLIENT_SECRET_EXPIRES: ${JNPT_NOTIFY_GRAPH_CLIENT_SECRET_EXPIRES:-}
       # Graph v1: Client-Secret nur als Datei; keine Zertifikat-Konfiguration.
-      JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE: /run/secrets/graph_client_secret
+      JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE: ${JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE:-}
       # SEC W8: Admin-GUI nur am lokalen Rechner.
       JNPT_ADMIN_URL: http://127.0.0.1:8484
     secrets:

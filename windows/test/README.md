@@ -12,9 +12,14 @@ python -B windows/test/mutations.py
 ```
 
 Die Mail-Tests lesen die SMTP-/Notify-Umgebung aus echtem `docker compose config`:
-gesetzte, fehlende und leere Werte, fester Secret-Dateipfad und feste lokale
-Admin-URL. Prozessumgebung und eine echte temporäre `.env` versuchen ausdrücklich,
-ein Klartext-SMTP-Passwort, ein Graph-Client-Secret sowie andere Secret-/Admin-Pfade
+gesetzte, fehlende und leere Werte, fester SMTP-Secret-Dateipfad und feste lokale
+Admin-URL. Der Graph-Secret-Dateipfad ist standardmäßig leer; der vorgesehene
+Wert `/run/secrets/graph_client_secret` wird aus einer echten `.env` übernommen.
+Eine reine SMTP-`.env` muss alle `JNPT_NOTIFY_GRAPH_*`-Werte leer ergeben,
+damit der Kern keine ignorierte Graph-Konfiguration meldet. Dies wird für
+fehlenden, leeren und auf `smtp` gesetzten Transport am Compose-Adapter geprüft.
+Prozessumgebung und eine echte temporäre `.env` versuchen ausdrücklich,
+ein Klartext-SMTP-Passwort, ein Graph-Client-Secret sowie andere SMTP-/Admin-Pfade
 einzuschleusen. Auch Graph-Zertifikat- und Schlüsselpfade werden angeboten und
 nicht übernommen: v1 unterstützt ausschließlich Client-Secret. PowerShell 5.1
 legt beide leeren Secret-Dateien an und erhält vorhandene Inhalte sowie `.env`.
@@ -65,9 +70,11 @@ Admin-Portbindung, Netz-Namensraum, Pflicht-Image und -Digest, Beisteller-Digest
 Download-Summen, Summenformat/Dateinamen/Duplikate/Vollständigkeit,
 Image-Eingaben, vorhandenes Ziel und W6. Dazu kommen B1-Mutationen für ein
 Klartext-SMTP-Passwort und Graph-Client-Secret im Container-Env, überschreibbare
-Secret-Pfade/Admin-URL, überschriebene oder fehlende Secret-Dateien und aufgehobenen
+SMTP-Secret-Pfad/Admin-URL, überschriebene oder fehlende Secret-Dateien und aufgehobenen
 Git-Ausschluss. Je eine Mutation reicht den Graph-Zertifikat- bzw. Schlüsselpfad
 durch und muss die zugehörige Negativprüfung rot machen.
+Die frühere feste Graph-Secret-Dateipfad-Zeile macht die reine SMTP-Prüfung rot;
+ein dauerhaft leerer Graph-Dateipfad macht die Prüfung des gesetzten Werts rot.
 
 Die W6-Mutation startet absichtlich einen echten Guard im Testcontainer-Verbund
 mit dem originalen Seccomp-Profil von `script-runner-v0.3.1`. Es wird über HTTPS

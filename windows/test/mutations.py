@@ -86,10 +86,14 @@ def main():
            '      JNPT_NOTIFY_GRAPH_CLIENT_SECRET: ${JNPT_NOTIFY_GRAPH_CLIENT_SECRET:-}\n'
            '      JNPT_NOTIFY_GRAPH_TENANT_ID:',
            command=['-m', 'unittest', 'test_profile.Profile.test_graph_client_secret_is_file_only', '-v'])
-    mutant('Graph client secret file path fixed', 'docker-compose.yml',
+    mutant('SMTP has no Graph values', 'docker-compose.yml',
+           'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE: ${JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE:-}',
            'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE: /run/secrets/graph_client_secret',
-           'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE: ${JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE:-/run/secrets/graph_client_secret}',
-           command=['-m', 'unittest', 'test_profile.Profile.test_graph_client_secret_is_file_only', '-v'])
+           command=['-m', 'unittest', 'test_profile.Profile.test_smtp_has_no_graph_values', '-v'])
+    mutant('Graph client secret file path forwarded when set', 'docker-compose.yml',
+           'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE: ${JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE:-}',
+           'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE: ""',
+           command=['-m', 'unittest', 'test_profile.Profile.test_graph_client_secret_file_path_is_optional', '-v'])
     graph_files = ['-m', 'unittest',
                    'test_profile.Profile.test_graph_secret_initialization_preserves_operator_files', '-v']
     mutant('Graph client secret file retained', 'einrichten.ps1', '[IO.FileMode]::OpenOrCreate',

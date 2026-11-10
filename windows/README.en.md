@@ -75,6 +75,7 @@ missing or empty values remain empty in the container:
 | `JNPT_NOTIFY_GRAPH_CLIENT_ID` | Client ID of the Graph application |
 | `JNPT_NOTIFY_GRAPH_SENDER` | Graph sender, e.g. `sender@example.org` |
 | `JNPT_NOTIFY_GRAPH_CLIENT_SECRET_EXPIRES` | Client-secret expiry as defined by the core configuration |
+| `JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE` | For Graph only: `/run/secrets/graph_client_secret`; otherwise leave empty |
 
 **The SMTP password must never appear in `.env` or the container environment.**
 Store it only as the contents of the local `secrets/smtp_password` file (UTF-8
@@ -85,14 +86,25 @@ responsible users and Docker Desktop. Compose mounts it as a secret at
 path; `JNPT_SMTP_PASSWORD` is not forwarded. Neither variable belongs in `.env`.
 
 For Graph, set `JNPT_NOTIFY_TRANSPORT=graph` and the Graph settings in `.env`.
+Also add this line to `.env`:
+
+```dotenv
+JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE=/run/secrets/graph_client_secret
+```
+
 **The Graph client secret must also never appear in `.env` or the container
 environment.** Store it only in `secrets/graph_client_secret` (UTF-8 without BOM).
 Compose mounts it at `/run/secrets/graph_client_secret`;
-`JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE` is fixed to this path.
-`JNPT_NOTIFY_GRAPH_CLIENT_SECRET` is not forwarded. Neither variable belongs in
-`.env`. **Graph v1 supports client-secret authentication only.**
+no other path is intended. Without a value set in `.env`,
+`JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE` remains empty in the container.
+`JNPT_NOTIFY_GRAPH_CLIENT_SECRET` is not forwarded and does not belong in `.env`.
+**Graph v1 supports client-secret authentication only.**
 `JNPT_NOTIFY_GRAPH_CERT_FILE` and `JNPT_NOTIFY_GRAPH_KEY_FILE` are not forwarded;
 certificate authentication will follow if needed.
+
+For SMTP, leave all `JNPT_NOTIFY_GRAPH_*` settings empty or absent in `.env`,
+including `JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE`. This avoids the core's warning
+about ignored Graph settings. The secret mount with its empty file remains present.
 
 `JNPT_ADMIN_URL` is fixed to `http://127.0.0.1:8484` (SEC W8): admin links are
 accessible only on the machine running the installation.
