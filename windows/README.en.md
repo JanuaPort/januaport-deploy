@@ -84,6 +84,10 @@ Identify the account holding the existing engine/data before changing deployment
 and exercise the upgrade on the test machine under [B4](PRUEFSTEIN-B4.md).
 The script does not automatically migrate another Windows account's data.
 
+**In-place upgrade only under `jnpt-dienst`:** The script requires the
+`jnpt-dienst` session. If 0.1.0 ran under a personal account, there is no
+in-place upgrade, only the following path.
+
 **Data from another Windows account:** Docker Desktop keeps containers, images and,
 as far as we know, volumes per Windows account. If 0.1.0 ran under a personal account,
 the installation's data lives there and not with `jnpt-dienst`. The file upgrade does
