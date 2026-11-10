@@ -88,8 +88,12 @@ The script does not automatically migrate another Windows account's data.
 as far as we know, volumes per Windows account. If 0.1.0 ran under a personal account,
 the installation's data lives there and not with `jnpt-dienst`. The file upgrade does
 not move it. Run `jnpt backup` in the old account first and keep the master key
-separately, then set up again under `jnpt-dienst` and restore the backup. This path
-is a step of the B4 checkpoint.
+separately, then set up again under `jnpt-dienst` and restore the backup. Only once the installation
+runs under `jnpt-dienst` and the restore is checked, run `docker compose down -v`
+in the old profile folder under the old account. Otherwise a complete installation
+with vault and master key stays there, and Docker Desktop may start it again at
+sign-in. Afterwards `docker volume ls` in the old account shows no
+`jnpt-windows_*` volume. This path is a step of the B4 checkpoint.
 
 ## Service operation (B2)
 
