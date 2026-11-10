@@ -67,7 +67,9 @@ The script recognizes the three unchanged original `windows-v0.1.0` files
 complete profile and manifest only from `windows-v0.2.0` into a temporary directory
 and verifies everything before writing to the target. It then replaces the
 release-managed files and adds the missing READMEs, `.gitignore`, runbook, B2/B3
-scripts including `jnpt-sperren.ps1` and the acceptance checklist. Locally changed legacy files require manual
+scripts including `jnpt-sperren.ps1` and the acceptance checklist. Setup and upgrade
+also create the local `backups\` directory under the B-7 ACL; this runtime directory
+is excluded from SHA256SUMS. Locally changed legacy files require manual
 reconciliation and abort before downloading. Download or checksum failure leaves
 existing files unchanged. A second successful run downloads nothing.
 
@@ -218,14 +220,28 @@ trigger the task:
 powershell -NoProfile -File C:\JanuaPort\windows\jnpt-backup.ps1 -Target 'E:\JanuaPort-Backup'
 ```
 
-The script runs `docker compose exec -T jnpt /jnpt backup --output
-/data/backups/<name>`, reads container size/SHA-256 and copies exactly this file
-with `docker compose cp`, without a bind mount. It writes `.teil`, renames it,
-and reads back size and `Get-FileHash` before and after renaming. Every error
-returns nonzero and removes its own incomplete destination; no fallback.
-After the destination hash matches, exactly this container copy is removed.
-A removal failure also fails the run and removes its destination file. v1 never
-automatically deletes older backups. Monitor free space and `LastTaskResult`.
+Compose binds the relative profile directory `./backups` to `/backups`. Setup
+creates `C:\JanuaPort\windows\backups` under the B-7 ACL. The only container
+command is `docker compose exec -T jnpt /jnpt backup --output /backups/<name>`.
+The core writes atomically using a temporary file and rename. The distroless
+image has no file utilities; the script reads size and SHA-256 on the host,
+copies exactly that file to `.teil` at the destination, verifies size/hash,
+renames it and verifies again. It then removes the local staging file.
+Every error returns nonzero and removes the run's own destination file.
+A staging removal failure also invalidates the run and removes its destination.
+Staging cleanup only deletes names matching `jnpt-<UTC-time>-<GUID>.jnpt-backup`,
+including leftovers from earlier runs; foreign files remain untouched.
+The exact pattern is `^jnpt-[0-9]{8}T[0-9]{9}Z-[a-f0-9]{32}\.jnpt-backup$`.
+Older external backups are not automatically deleted. Monitor free space and
+`LastTaskResult`.
+
+**B4/F4 still requires deployment evidence:** the nonroot core must be able to
+write and atomically rename on the Docker Desktop bind mount. Run
+`python -B windows/test/backup_live.py` against the real pinned core in its own
+project. A locally blocked live test is not success; BOX must rerun it.
+The backup path has no helper-container fallback.
+Inventory leftovers from earlier broken runs in the volume's `/data/backups`
+separately with LEAD/BOX; this host workflow only cleans `backups\`.
 
 **Keep the master key separately from backups.** The script never copies the
 key file or all of `/data`. Without `JNPT_MASTER_KEY_FILE`, the key is beside

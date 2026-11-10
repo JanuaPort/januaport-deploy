@@ -53,10 +53,20 @@ festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
    vorbereiten. Tägliche Aufgabe und manuellen Aufgabenstart prüfen. Ergebnis
    `LastTaskResult = 0`, genau eine Sicherungsdatei pro Lauf, keine `.teil`,
    keine Key-Datei. Fehlenden Marker, abgezogenen USB-Datenträger, Schreibfehler
-   und gestoppten Container prüfen: Aufgabe jeweils fehlgeschlagen. Container-
-   Kopie nach erfolgreichem Hashvergleich entfernt. Alte Zieldateien bleiben.
+   und gestoppten Container prüfen: Aufgabe jeweils fehlgeschlagen.
+   Sicherung über `/jnpt backup --output /backups/<name>` im relativen
+   Bind-Mount `./backups:/backups` prüfen. Der nonroot-Kern muss dort schreiben
+   und atomar umbenennen können. Größen-/SHA-256-Prüfung und Löschen erfolgen
+   auf dem Host. `backups\` danach ohne generierte Sicherungsdatei; eine dort
+   absichtlich abgelegte fremde Datei bleibt erhalten. Auch Altlastenbereinigung
+   darf nur das exakte Namensmuster treffen. Alte Zieldateien bleiben.
+   `python -B windows/test/backup_live.py` mit dem echten gepinnten Kern-Image
+   ausführen. Bei lokaler Blockade (z. B. seccomp errno 524) bleibt dies offen
+   für BOX. Kann UID 65532 im Bind-Mount nicht schreiben/umbenennen, an LEAD
+   melden; ein Hilfscontainer-Ersatz ist nicht Teil dieses Pakets.
 6. **B-1, Kennwort zurücksetzen:** Vorher synthetische Anlage, Admin-Anmeldung,
-   Mailversand und Sicherung grün belegen. Lokales Kennwort von `jnpt-dienst`
+   Mailversand und Sicherung nach F4 einschließlich Host-Hash und leerem Staging
+   erneut grün belegen. Lokales Kennwort von `jnpt-dienst`
    als Admin zurücksetzen, danach `dienst-einrichten.ps1 -KennwortNeu
    -BackupTarget <USB-Ziel>` aus dem geprüften Profil ausführen. Es erzeugt ein
    weiteres Zufallskennwort und setzt Autologon neu; es zeigt das Kennwort nicht

@@ -29,7 +29,8 @@ class BackupLive(unittest.TestCase):
             # sidecars or persistent deployment objects are needed for backup.
             core.pop('depends_on', None)
             core['ports'] = []
-            core['networks'] = ['default']
+            core.pop('networks', None)
+            core['network_mode'] = 'none'
             core['restart'] = 'no'
             for mount in core['volumes']:
                 if mount['type'] == 'bind' and mount['target'] == '/backups': mount['source'] = str(profile / 'backups')
@@ -37,7 +38,7 @@ class BackupLive(unittest.TestCase):
             manifest = dict(name=project, services={'jnpt': core},
                             volumes={name: {} for name in ['jnpt-data', 'plugin-keys']},
                             secrets={name: dict(file=str(profile / 'secrets' / name)) for name in ['smtp_password','graph_client_secret']},
-                            networks={'default': {}})
+                            )
             (profile / 'docker-compose.yml').write_text(json.dumps(manifest))
             compose = ('docker', 'compose', '-p', project, '-f', str(profile / 'docker-compose.yml'))
             target = root / 'usb'; target.mkdir()

@@ -192,6 +192,8 @@ function Install-Profile {
         }
     }
     Initialize-MailSecret $Directory
+    # Relative Compose bind source; inherits the service profile's B-7 ACL.
+    New-Item -ItemType Directory -Path (Join-Path $Directory 'backups') -Force | Out-Null
     Push-Location $Directory
     try {
         Invoke-Docker @('compose', 'config', '--quiet') | Out-Host

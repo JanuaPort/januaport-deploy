@@ -124,6 +124,10 @@ alle Desktop-Läufer mit neuem Code und dem neuen Fingerprint erneut koppeln.
 
 Mail anschließend durch den Betreiber in `jnpt-dienst` gemäß [README, Abschnitt „Mail“](README.md#mail)
 einrichten. USB-Ziel und Marker vorbereiten, Aufgabe „JanuaPort Sicherung“ prüfen.
+Die Einrichtung legt `backups\` im B-7-geschützten Profilordner an. Der Kern
+schreibt dort über den relativen Bind-Mount `/backups`; Größe, Hash, Zielkopie
+und Aufräumen erfolgen auf dem Host. Schreibrecht und atomisches Rename durch
+den nonroot-Kern sowie alle USB-Fehlerfälle in B4/F4 erneut belegen.
 Master-Key getrennt von Sicherungen verwahren. Ein vom Rechner beschreibbares Ziel schützt nicht
 gegen einen Angreifer auf dem Rechner; wechselndes, abgezogenes USB dagegen schon. Die Wahl
 trifft der Betreiber. Wiederherstellung nach Kennwortreset und getrennte Rücksicherung gemäß

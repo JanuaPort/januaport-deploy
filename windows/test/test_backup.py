@@ -9,10 +9,12 @@ import tempfile
 import unittest
 
 from test_profile import ROOT, run, config
+from test_install import ps
 
 PATTERN = r'^jnpt-\d{8}T\d{9}Z-[a-f0-9]{32}\.jnpt-backup$'
 OLD = 'jnpt-20000101T000000000Z-' + 'a' * 32 + '.jnpt-backup'
-FOREIGN = {'jnpt.key': b'synthetic foreign fixture', 'foreign.jnpt-backup': b'foreign'}
+FOREIGN = {'jnpt.key': b'synthetic foreign fixture', 'foreign.jnpt-backup': b'foreign',
+           OLD + '.extra': b'not an exact backup name'}
 
 SHIM = r'''
 import hashlib,json,os,pathlib,sys
@@ -64,6 +66,7 @@ class Backup(unittest.TestCase):
                 target_value = target.drive + os.path.relpath(target, Path.cwd())
             adapters = r'''
 function Copy-Item { param($LiteralPath,$Destination,[switch]$Force)
+    Add-Content (Join-Path $env:PROBE_ROOT 'copies.txt') $Destination
     Microsoft.PowerShell.Management\Copy-Item -LiteralPath $LiteralPath -Destination $Destination -Force:$Force
     if ($env:PROBE_FAIL -eq 'copy') {throw 'copy probe'}
     if ($env:PROBE_FAIL -eq 'size') {[IO.File]::AppendAllText($Destination,'extra')}
@@ -85,6 +88,8 @@ function Remove-Item { param($LiteralPath,[switch]$Force)
             result = run('powershell.exe', '-NoProfile', '-File', str(driver), check=False, env=env)
             files = {p.name: p.read_bytes() for p in target.iterdir() if p.is_file()}
             self.staged = {p.name: p.read_bytes() for p in staging.iterdir() if p.is_file()}
+            self.copies = (root / 'copies.txt').read_text().splitlines() if (root / 'copies.txt').exists() else []
+            self.assertTrue(outside.is_file(), 'cleanup deleted a file outside staging')
             self.assertEqual(outside.read_bytes(), b'outside staging')
             calls = [json.loads(line) for line in (root / 'docker.jsonl').read_text().splitlines()] if (root / 'docker.jsonl').exists() else []
             return result, files, calls
@@ -100,6 +105,9 @@ function Remove-Item { param($LiteralPath,[switch]$Force)
         self.assertEqual(calls[0][:7], ['compose','exec','-T','jnpt','/jnpt','backup','--output'])
         self.assertEqual(calls[0][7], '/backups/' + backups[0])
         self.assertEqual(self.staged, FOREIGN)
+        self.assertEqual(len(self.copies), 1)
+        self.assertTrue(self.copies[0].endswith('.teil'), self.copies)
+        self.assertFalse(any(n.endswith('.teil') for n in files))
         self.assertNotIn('jnpt.key', files)
 
     def test_every_docker_and_verification_error_is_nonzero_without_target_file(self):
@@ -111,6 +119,20 @@ function Remove-Item { param($LiteralPath,[switch]$Force)
                 self.assertEqual(len(calls), 1, calls)
                 self.assertTrue(all(self.staged.get(n) == b for n,b in FOREIGN.items()))
                 if mode != 'cleanup': self.assertEqual(self.staged, FOREIGN)
+
+    def test_host_size_gate_at_real_file_adapter(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            path = Path(tmp) / 'probe'
+            path.write_bytes(b'synthetic size probe')
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            result = ps("Assert-BackupCopy '" + str(path) + "' " + str(path.stat().st_size + 1) + " '" + digest + "'", ROOT / 'jnpt-backup.ps1')
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Sicherungsgroesse', result.stderr)
+
+    def test_native_docker_error_at_real_adapter(self):
+        result, _, calls = self.invoke(mode='backup', extra="Invoke-BackupDocker @('exec','-T','jnpt','/jnpt','backup','--output','/backups/probe'); exit 0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(len(calls), 1)
 
     def test_exec_guard_rejects_non_jnpt_program_before_native_docker(self):
         for program in ['stat', 'sha256sum', 'rm', 'sh']:

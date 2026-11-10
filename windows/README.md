@@ -83,8 +83,10 @@ Es lädt sämtliche Dateien und die Summenliste ausschließlich von `windows-v0.
 in einen temporären Ordner und prüft sie vollständig, bevor es im Ziel schreibt.
 Danach ersetzt es die releaseverwalteten Dateien und ergänzt die bisher fehlenden
 READMEs, `.gitignore`, das Runbook sowie B2/B3-Skripte einschließlich
-`jnpt-sperren.ps1` und Prüfstein. Änderungen
-an den drei alten Originaldateien erfordern eine manuelle Abstimmung und führen
+`jnpt-sperren.ps1` und Prüfstein.
+Der lokale Ordner `backups\` wird bei der Einrichtung und beim Upgrade angelegt;
+er erbt die B-7-ACL und ist kein Bestandteil von SHA256SUMS.
+Änderungen an den drei alten Originaldateien erfordern eine manuelle Abstimmung und führen
 zum Abbruch vor dem Download. Bei Download- oder Prüfsummenfehlern bleiben die
 vorhandenen Dateien unverändert. Nach einem erfolgreichen Upgrade lädt der
 zweite Lauf nichts mehr nach.
@@ -251,16 +253,30 @@ Manuell in `jnpt-dienst`, sonst über die Aufgabe:
 powershell -NoProfile -File C:\JanuaPort\windows\jnpt-backup.ps1 -Target 'E:\JanuaPort-Backup'
 ```
 
-Der Ablauf ist `/jnpt backup --output /data/backups/<name>` über
-`docker compose exec -T jnpt`, dann Größen-/SHA-Abfrage im Container und
-`docker compose cp` für genau diese Datei auf den Host. Kein Bind-Mount.
-Geschrieben wird unter `.teil`, dann umbenannt, Größe und `Get-FileHash` werden
-vor und nach dem Umbenennen gegen die Container-Werte gelesen. Jeder Fehler
-liefert Exit ungleich 0 und räumt die eigene unfertige Zieldatei auf; es gibt
-keinen Ausweichweg. Nach geprüftem Ziel-Hash wird genau die Container-Kopie
-unter `/data/backups/` gelöscht. Schlägt das Löschen fehl, ist auch der Lauf
-fehlgeschlagen und die Zieldatei wird entfernt. v1 löscht keine älteren Sicherungen
-automatisch. Freien Speicher und `LastTaskResult` regelmäßig prüfen.
+Compose bindet den relativen Profilordner `./backups` nach `/backups` ein.
+Die Einrichtung legt `C:\JanuaPort\windows\backups` unter der B-7-ACL an;
+der Lauf ruft ausschließlich `docker compose exec -T jnpt /jnpt backup --output
+/backups/<name>` auf. Der Kern schreibt atomar über Temp-Datei und Rename.
+Das distroless-Image enthält keine Dateiverwaltungswerkzeuge; Größe und
+SHA-256 liest das Skript auf dem Host aus genau dieser Datei. Es kopiert sie
+auf das Sicherungsziel unter `.teil`, prüft Größe und Hash, benennt um und
+prüft erneut. Anschließend löscht es die Datei im lokalen Staging.
+Jeder Fehler liefert Exit ungleich 0 und räumt die eigene Zieldatei auf.
+Auch ein Löschfehler macht den Lauf ungültig und entfernt seine Zieldatei.
+Nur Namen nach `jnpt-<UTC-Zeit>-<GUID>.jnpt-backup` werden im Staging gelöscht,
+auch beim Aufräumen liegengebliebener Läufe. Fremde Dateien bleiben erhalten.
+Das exakte Muster ist `^jnpt-[0-9]{8}T[0-9]{9}Z-[a-f0-9]{32}\.jnpt-backup$`.
+Ältere Sicherungen am externen Ziel werden nicht automatisch gelöscht.
+Freien Speicher und `LastTaskResult` regelmäßig prüfen.
+
+**B4/F4 bleibt am Betriebsmodell zu belegen:** Der nonroot-Kern muss auf dem
+Bind-Mount unter Docker Desktop schreiben können; das atomare Rename muss
+funktionieren. Der Live-Test `python -B windows/test/backup_live.py` prüft das
+echte gepinnte Kern-Image in einem eigenen Projekt. Ein hier blockierter
+Live-Test ist kein Erfolgsbeleg; BOX fährt ihn erneut. Es gibt keinen
+Hilfscontainer als Ersatz im Sicherungsablauf.
+Altlasten aus früheren fehlerhaften Läufen unter `/data/backups` im Volume
+separat mit LEAD/BOX erfassen; dieser Host-Ablauf bereinigt nur `backups\`.
 
 **Master-Key getrennt von den Sicherungen verwahren.** Das Skript kopiert keine
 Key-Datei und niemals ganz `/data`. Ohne `JNPT_MASTER_KEY_FILE` liegt der Key

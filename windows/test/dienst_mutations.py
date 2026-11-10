@@ -110,9 +110,9 @@ def main():
     probe('B2 installer account gate', 'einrichten.ps1', '    Assert-DienstSession\n', '',
           'test_install.Dienst.test_installer_rejects_other_account_before_docker')
     probe('B-4 master key must stay separate', 'jnpt-backup.ps1',
-          "        Invoke-BackupDocker @('cp', ('jnpt:' + $remote), $partial) | Out-Null",
-          "        Invoke-BackupDocker @('cp', ('jnpt:' + $remote), $partial) | Out-Null\n"
-          "        Invoke-BackupDocker @('cp', 'jnpt:/data', $Target) | Out-Null", backup_ok)
+          '        Copy-Item -LiteralPath $source -Destination $partial -Force',
+          '        Copy-Item -LiteralPath $source -Destination $partial -Force\n'
+          "        Copy-Item -LiteralPath (Join-Path $staging 'jnpt.key') -Destination (Join-Path $Target 'jnpt.key')", backup_ok)
     probe('B3 nonzero error exit', 'jnpt-backup.ps1', '        exit 1', '        exit 0', backup_errors)
     probe('B3 marker gate', 'jnpt-backup.ps1',
           'if (-not (Test-Path -LiteralPath $marker -PathType Leaf))', 'if ($false)',
@@ -127,13 +127,21 @@ def main():
           "throw 'Profil unvollstaendig.'", '$null=$null',
           'test_backup.Backup.test_incomplete_profile_rejected_before_docker')
     probe('B3 Docker exit code', 'jnpt-backup.ps1',
-          "if ($LASTEXITCODE -ne 0) { throw 'Docker-Sicherung fehlgeschlagen.' }", '$null=$null', backup_errors)
-    probe('B3 container size metadata', 'jnpt-backup.ps1',
-          "if ($sizeText -cnotmatch '^[1-9][0-9]*$' -or -not [long]::TryParse($sizeText, [ref]$size))", 'if ($false)', backup_errors)
-    probe('B3 container hash metadata', 'jnpt-backup.ps1',
-          "if ($hashText -cnotmatch ('^([a-f0-9]{64})  ' + [regex]::Escape($remote) + '$'))", 'if ($false)', backup_errors)
+          "if ($LASTEXITCODE -ne 0) { throw 'Docker-Sicherung fehlgeschlagen.' }", '$null=$null',
+          'test_backup.Backup.test_native_docker_error_at_real_adapter')
+    probe('F4 empty host staging rejected', 'jnpt-backup.ps1',
+          'if ($size -le 0)', 'if ($false)', backup_errors)
+    probe('F4 only jnpt in distroless exec adapter', 'jnpt-backup.ps1',
+          "throw 'Im Kern-Container ist nur /jnpt erlaubt.'", '$null=$null',
+          'test_backup.Backup.test_exec_guard_rejects_non_jnpt_program_before_native_docker')
+    probe('F4 exact staging deletion path and filename', 'jnpt-backup.ps1',
+          "throw 'Nur benannte Sicherungsdateien im Staging loeschen.'", '$null=$null',
+          'test_backup.Backup.test_cleanup_guard_rejects_foreign_filename_and_file_outside_staging')
+    probe('F4 foreign staging file preserved', 'jnpt-backup.ps1',
+          'if ($file.Name -cmatch $BackupNamePattern)', 'if ($true)', backup_ok)
     probe('B3 size comparison', 'jnpt-backup.ps1',
-          "if ((Get-Item -LiteralPath $Path).Length -ne $Size)", 'if ($false)', backup_errors)
+          "if ((Get-Item -LiteralPath $Path).Length -ne $Size)", 'if ($false)',
+          'test_backup.Backup.test_host_size_gate_at_real_file_adapter')
     probe('B3 hash comparison', 'jnpt-backup.ps1',
           'if ((Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() -cne $Digest)',
           'if ($false)', backup_errors)
@@ -148,8 +156,8 @@ def main():
     probe('B3 no automatic retention deletion', 'jnpt-backup.ps1',
           '        $success = $true', "        Remove-Item -LiteralPath (Join-Path $Target 'old.jnpt-backup')\n        $success = $true",
           'test_backup.Backup.test_previous_backups_are_retained')
-    probe('B3 successful container cleanup', 'jnpt-backup.ps1',
-          "        Invoke-BackupDocker @('exec', '-T', 'jnpt', 'rm', '--', $remote) | Out-Null\n", '', backup_ok)
+    probe('F4 successful staging cleanup', 'jnpt-backup.ps1',
+          '{ Remove-Item -LiteralPath $resolved -Force }', '{ $null=$null }', backup_ok)
     print(f'B2/B3 mutations: {TOTAL} killed; original profile bytes unchanged.', flush=True)
 
 

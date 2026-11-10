@@ -247,6 +247,7 @@ function Initialize-Dienst {
         Protect-DienstDirectory $DienstDirectory $user.SID
         # Inherits the private B-7 ACL; created before the logon task is installed.
         New-Item -ItemType Directory -Path (Join-Path $DienstDirectory 'log') -Force | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $DienstDirectory 'backups') -Force | Out-Null
         foreach ($name in (@('SHA256SUMS') + $ProfileFiles)) {
             $destination = Join-Path $DienstDirectory $name
             $source = Join-Path $PSScriptRoot $name

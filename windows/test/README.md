@@ -25,16 +25,32 @@ JSON-Dateiadapter prüfen AutoStart, TCP 2375, `autoDownloadUpdates`,
 `disableUpdate` und `silentModulesUpdate` ohne Schreibzugriff.
 
 `test_backup.py` startet den echten PS-5.1-Einstieg `Start-JnptBackup` mit einem
-Docker-Shim auf `PATH`. Der Shim implementiert `exec`, `stat`, `sha256sum`, `cp`
-und `rm`. Backup-Dateien, `.teil`, Umbenennen und Hash-Rücklesen sind echte
+Docker-Shim auf `PATH`. Der Shim implementiert ausschließlich
+`exec -T jnpt /jnpt backup --output /backups/<name>`; alle anderen Programme
+werden wie beim distroless-Image abgewiesen. Backup-Dateien, Host-Kopie,
+`.teil`, Umbenennen und Hash-Rücklesen sind echte
 Dateioperationen im temporären Ordner. Fehlender Marker, falsches Konto,
 relatives Ziel mit vorhandenem Marker, unvollständiges Profil, jeder native
-Docker-Fehler, ungültige Metadaten, Größen-/Hashfehler, Fehler nach Umbenennung
-und Container-Aufräumfehler müssen Exit ungleich 0 und keine neue Zieldatei
+Docker-Fehler, leere/fehlende Staging-Datei, Größen-/Hashfehler, Fehler nach Umbenennung
+und Host-Aufräumfehler müssen Exit ungleich 0 und keine neue Zieldatei
 liefern. Alte Sicherungen bleiben erhalten. Bei Erfolg gibt es genau eine
-Sicherungsdatei und keine Key-Datei; die Container-Kopie ist entfernt.
+Sicherungsdatei und keine Key-Datei; die Staging-Kopie ist entfernt.
+Liegengebliebene Dateien nach dem exakten Namensmuster werden entfernt; fremde
+Dateien und Pfade außerhalb von `backups\` bleiben erhalten. Der native
+Docker-Adapter weist `stat`, `sha256sum`, `rm` und `sh` vor dem Aufruf ab.
+Beide Installer müssen `backups\` anlegen. Compose wird mit dem echten Adapter
+auf den relativen Bind-Mount und den Git-Ausschluss geprüft.
 
-Nur die neuen Prüfungen ohne laufenden Docker-Daemon:
+Der zusätzliche Live-Test ist bewusst außerhalb der Standardsuite:
+`python -B windows/test/backup_live.py`. Er startet nur den echten gepinnten
+Kern aus der Compose-Konfiguration in einem eigenen zufälligen Projekt ohne
+Netzzugang oder veröffentlichte Ports und führt das echte Backup-Skript aus
+(nur Kontoidentität ersetzt). Host-Quellhash und Zielhash stimmen überein,
+genau eine Sicherung und keine Key-Datei liegen am Ziel, Staging ist leer.
+Seccomp errno 524 wird als blockierter Live-Test markiert, den BOX in B4
+ausführen muss; andere Fehler bleiben Fehler. Kern-Logs werden nicht ausgegeben.
+
+Die Windows-Adapterprüfungen (F4 enthält auch `docker compose config`):
 
 ```powershell
 $env:PYTHONPATH = 'windows/test'
@@ -46,8 +62,10 @@ python -B windows/test/dienst_mutations.py
 Assertion-Fehler. Unter anderem werden Hash-Pin bei gültiger Signatur,
 Microsoft-Herausgeber, Admin-/Kontosperren, bestehende Dateien, Docker-Einstellungen,
 Kennwort-Ausgabesperre, cmdkey-Verbot, ACLs und Sperrbildschirmrichtlinien entfernt.
-Die B-4-Mutation kopiert zusätzlich ganz `/data`: der Shim legt dabei tatsächlich
-eine synthetische Key-Datei am Ziel ab, die Erfolgsprüfung muss rot werden.
+Die B-4-Mutation kopiert zusätzlich eine synthetische Key-Datei aus dem
+Staging ins Ziel: die Erfolgsprüfung muss rot werden. F4-Mutationen erlauben
+`stat` im nativen Container-Adapter, entfernen den Löschwächter, versuchen
+fremde Dateien zu löschen oder lassen alte/neue Sicherungsdateien im Staging.
 Weitere Mutationen entfernen Exit ungleich 0, Marker-, Größen- und Hashprüfung,
 Rücklesen nach Umbenennung und beide Aufräumwege. Originale werden bytegenau
 verglichen. Mutationen und Standardsuite nacheinander ausführen; die
@@ -83,19 +101,19 @@ rot machen; weitere Mutationen entfernen die Elternordnersperre, das Entfernen
 alter expliziter Rechte, die Upgrade-Summenprüfung oder den Erhalt von `.env`
 und Secrets. Diese Proben sind in `dienst_mutations.py` enthalten.
 
-`test_b4.py` pr�ft den sofortigen Anmeldeausl�ser ohne festen Delay und den
+`test_b4.py` prüft den sofortigen Anmeldeauslöser ohne festen Delay und den
 festen Aufruf von `C:\JanuaPort\windows\jnpt-sperren.ps1`. Der echte PS-5.1-
-Einstieg l�uft mit verwaltetem Ersatz f�r user32/WTS und virtuellem Sekundentakt.
-Nur Explorer derselben Sitzung z�hlt; Bereitschaft und Sperre teilen sich ein
-120-Sekunden-Limit. Erste/dritte best�tigte Sperre, nie gesperrte Sitzung und
-sp�ter Explorer werden gepr�ft. Das echte Dateiadapter-Protokoll enth�lt genau
+Einstieg läuft mit verwaltetem Ersatz für user32/WTS und virtuellem Sekundentakt.
+Nur Explorer derselben Sitzung zählt; Bereitschaft und Sperre teilen sich ein
+120-Sekunden-Limit. Erste/dritte bestätigte Sperre, nie gesperrte Sitzung und
+später Explorer werden geprüft. Das echte Dateiadapter-Protokoll enthält genau
 eine Zeile (ISO-Start, ISO-Sperre oder `nicht_gesperrt`, Versuche, Exit), ohne
 Benutzernamen; maximal 100 Zeilen. Ein Schreibfehler ergibt Exit ungleich 0.
-Die Einrichtung muss den B-7-gesch�tzten Logordner vor der Aufgabe anlegen.
-Der C#-WTS-Decoder l�uft mit ausschlie�lich ersetzten P/Invoke-Deklarationen:
+Die Einrichtung muss den B-7-geschützten Logordner vor der Aufgabe anlegen.
+Der C#-WTS-Decoder läuft mit ausschließlich ersetzten P/Invoke-Deklarationen:
 aktuelle Sitzung, Klasse 26, LOCK/UNLOCK/UNKNOWN, kurze/falsche/fehlgeschlagene
 Antwort und Speicherfreigabe. Keine echte native Sperre oder WTS-Abfrage.
-Autologon nutzt einen lokalen `.cmd`-Ersatz und virtuellen Takt (Best�tigung
+Autologon nutzt einen lokalen `.cmd`-Ersatz und virtuellen Takt (Bestätigung
 nach 2 Sekunden oder Fehler nach 10 Sekunden). Beide JSON-Dateivarianten und
 die feste Meldung bei fehlenden Docker-Einstellungen verwenden echte Dateien.
 
@@ -105,19 +123,19 @@ python -B -m unittest test_b4 -v
 python -B windows/test/b4_mutations.py
 ```
 
-Die 15 SEC-Mutationen f�hren Delay, zu langsamen Takt, ersten Abbruch,
-fehlende/personenbezogene/unbegrenzte Protokollierung, fehlende Sperrpr�fung,
+Die 15 SEC-Mutationen führen Delay, zu langsamen Takt, ersten Abbruch,
+fehlende/personenbezogene/unbegrenzte Protokollierung, fehlende Sperrprüfung,
 fremde Sitzung, falschen Erfolgs-Exit und unerlaubte Fehlerausgabe ein.
-Au�erdem werden Autologon-Nachfragen und die feste N2-Meldung entfernt.
-Abmelden/Herunterfahren werden an protokollierenden Fehlerfallen tats�chlich
+Außerdem werden Autologon-Nachfragen und die feste N2-Meldung entfernt.
+Abmelden/Herunterfahren werden an protokollierenden Fehlerfallen tatsächlich
 versucht. Jede isolierte Kopie muss an einer Assertion scheitern; die
 Originalbytes bleiben erhalten.
 
-`test_operator_docs.py` f�hrt die gepinnten N4-Hilfscontainer-Befehle aus den
-READMEs gegen ein eigenes zuf�lliges Test-Volume und synthetische Key-Dateien
+`test_operator_docs.py` führt die gepinnten N4-Hilfscontainer-Befehle aus den
+READMEs gegen ein eigenes zufälliges Test-Volume und synthetische Key-Dateien
 aus: bisherige DB/Key-Dateien bleiben beiseitegelegt erhalten, der neue Key
-ist als UID 65532 mit Modus 600 lesbar. `operator_mutations.py` muss L�schen
-statt Verschieben sowie falschen Eigent�mer und Modus am echten Adapter erkennen.
+ist als UID 65532 mit Modus 600 lesbar. `operator_mutations.py` muss Löschen
+statt Verschieben sowie falschen Eigentümer und Modus am echten Adapter erkennen.
 
 Die manuelle B4-Abnahme steht in [PRUEFSTEIN-B4.md](../PRUEFSTEIN-B4.md):
 DPAPI-unabhängige Wiederherstellung nach Kennwortreset, Sperrbildschirmfoto nach
