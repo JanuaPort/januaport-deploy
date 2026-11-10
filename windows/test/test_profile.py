@@ -95,8 +95,7 @@ class Profile(unittest.TestCase):
                                   'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE'})
 
     def test_graph_client_secret_is_file_only(self):
-        attempted = {'JNPT_NOTIFY_GRAPH_CLIENT_SECRET': 'synthetic graph probe',
-                     'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE': '/tmp/incorrect-graph-file'}
+        attempted = {'JNPT_NOTIFY_GRAPH_CLIENT_SECRET': 'synthetic graph probe'}
         with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
             dotenv = Path(tmp) / '.env'
             dotenv.write_text(''.join(name + '=' + value + '\n'
@@ -110,8 +109,6 @@ class Profile(unittest.TestCase):
                         self.assertNotIn('JNPT_NOTIFY_GRAPH_CLIENT_SECRET',
                                          service.get('environment', {}), name)
                     service = cfg['services']['jnpt']
-                    self.assertEqual(service['environment'].get('JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE'),
-                                     '/run/secrets/graph_client_secret')
                     mounts = [item for item in service.get('secrets', [])
                               if item['source'] == 'graph_client_secret']
                     self.assertEqual(len(mounts), 1)
@@ -119,6 +116,39 @@ class Profile(unittest.TestCase):
                                      '/run/secrets/graph_client_secret')
                     self.assertEqual(Path(cfg['secrets']['graph_client_secret']['file']),
                                      ROOT.resolve() / 'secrets' / 'graph_client_secret')
+
+    def test_graph_client_secret_file_path_is_optional(self):
+        variable = 'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE'
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            dotenv = Path(tmp) / '.env'
+            for value in [None, '', '/run/secrets/graph_client_secret']:
+                dotenv.write_text('' if value is None else variable + '=' + value + '\n')
+                for source in ['process', 'dotenv']:
+                    with self.subTest(value=value, source=source):
+                        cfg = json.loads(config(
+                            extra_env={variable: value} if source == 'process' and value is not None else None,
+                            env_file=dotenv if source == 'dotenv' else None).stdout)
+                        self.assertEqual(cfg['services']['jnpt']['environment'].get(variable),
+                                         value or '')
+
+    def test_smtp_has_no_graph_values(self):
+        smtp = {name: value for name, value in MAIL_VALUES.items()
+                if not name.startswith('JNPT_NOTIFY_GRAPH_') and name != 'JNPT_NOTIFY_TRANSPORT'}
+        graph_names = {name for name in MAIL_VALUES if name.startswith('JNPT_NOTIFY_GRAPH_')}
+        graph_names.add('JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE')
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            dotenv = Path(tmp) / '.env'
+            for transport in [None, '', 'smtp']:
+                with self.subTest(transport=transport):
+                    settings = dict(smtp)
+                    if transport is not None:
+                        settings['JNPT_NOTIFY_TRANSPORT'] = transport
+                    dotenv.write_text(''.join(name + '=' + value + '\n'
+                                              for name, value in settings.items()))
+                    cfg = json.loads(config(env_file=dotenv).stdout)
+                    graph = {name: value for name, value in cfg['services']['jnpt']['environment'].items()
+                             if name.startswith('JNPT_NOTIFY_GRAPH_')}
+                    self.assertEqual(graph, dict.fromkeys(graph_names, ''))
 
     def test_graph_certificates_not_forwarded(self):
         attempted = {'JNPT_NOTIFY_GRAPH_CERT_FILE': '/tmp/incorrect-graph-cert',
