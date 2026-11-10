@@ -2,36 +2,41 @@
 
 **English** · [Deutsch](README.md)
 
-Package A with B1 mail forwarding (#1246), tested locally with Docker Desktop. Requires Windows 10/11
+Package A with B1 mail forwarding, B2 service operation and B3 backups (#1246), tested locally with Docker Desktop. Requires Windows 10/11
 Pro (amd64), WSL2 Linux containers, Docker Desktop **≥ 4.44.3**
 (CVE-2025-9074), Compose ≥ 2.35 and PowerShell ≥ 5.1. Keep **“Expose daemon on
-tcp://localhost:2375” disabled**; approve automatic updates only after review.
+tcp://localhost:2375” disabled**, AutoStart enabled, automatic downloads/updates disabled. Review updates manually.
 TCP ports 443 and 8484 must be available. Registry/GitHub access is required.
 
 ## Two commands
 
 The publisher must first publish the immutable **profile release tag**
-`windows-v0.1.0` at the reviewed commit. The following URL works only after
+`windows-v0.2.0` at the reviewed commit. The following URL works only after
 publication. `<tag>` in distribution instructions means this profile release,
 not the core image tag or `main`. The installer downloads the profile and its
 checksum manifest from this fixed tag. New profile releases must update the
 embedded reference and checksums together. The initial script download trusts
 HTTPS/GitHub; the checksums are not an independent publisher signature.
 
+After [service setup](#service-operation-b2), the operator commissions the system
+in the `jnpt-dienst` session. The maintenance account only triggers tasks.
+
 ```powershell
-curl.exe -fLo e.ps1 https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.1.0/windows/einrichten.ps1
+curl.exe -fLo e.ps1 https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.2.0/windows/einrichten.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\e.ps1
 ```
 
 Enter only a core image tag (e.g. `0.87.1`) or `sha256:<64 lowercase hex digits>`.
 Docker resolves tags to registry digests. The installer creates
-`%LOCALAPPDATA%\JanuaPort\windows\.env` with `JANUAPORT_IMAGE` (repository/tag)
+`C:\JanuaPort\windows\.env` with `JANUAPORT_IMAGE` (repository/tag)
 and mandatory `JANUAPORT_IMAGE_DIGEST`; Compose combines them into a digest
 reference. Caddy, OpenSSL and script-runner images are already pinned. A complete
 existing profile is verified and started again, preserving its files, `.env`,
 certificate and key, without downloading files or prompting for an image again.
-Other existing or incomplete target directories are rejected. Use
-`-Directory C:\JanuaPort\windows` for another directory.
+Unmodified 0.1.0 profiles use the [upgrade path](#from-010-to-020); other
+incomplete target directories are still rejected. Use
+`-Directory <profile-directory>` for another directory; service tasks always
+use `C:\JanuaPort\windows`.
 
 The script creates a self-signed ECDSA P-256 **leaf** once, valid for ten years
 (3653 days), using a digest-pinned OpenSSL container. SANs include `127.0.0.1`,
@@ -47,6 +52,155 @@ The GUI output is exactly `Admin-GUI: http://127.0.0.1:8484`. Follow the product
 `docs/inbetriebnahme.md`: secure the master key, set the admin password and
 create the first admin token.
 
+## From 0.1.0 to 0.2.0
+
+After GATE publishes the tag, download the **new** `einrichten.ps1` (see “Two
+commands”) and run it in `jnpt-dienst` with the existing profile directory:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\e.ps1 -Directory '<existing profile directory>'
+```
+
+The script recognizes the three unchanged original `windows-v0.1.0` files
+(`docker-compose.yml`, `Caddyfile`, `einrichten.ps1`) by their fixed SHA-256 hashes.
+`.env` must exist; the old `SHA256SUMS` may be present or absent. It downloads the
+complete profile and manifest only from `windows-v0.2.0` into a temporary directory
+and verifies everything before writing to the target. It then replaces the
+release-managed files and adds the missing READMEs, `.gitignore`, runbook, B2/B3
+scripts and acceptance checklist. Locally changed legacy files require manual
+reconciliation and abort before downloading. Download or checksum failure leaves
+existing files unchanged. A second successful run downloads nothing.
+
+**`.env` and all existing contents under `secrets/` are preserved byte for byte.**
+Missing mail secret files are created empty as before. There is no image prompt
+or change to the saved core image. Without `-NeuesZertifikat`, the certificate
+and key remain unchanged. Local staging by `dienst-einrichten.ps1` recognizes
+the same legacy files and uses its already verified release directory.
+
+This file upgrade moves neither the profile directory nor engines or volumes
+between Windows accounts. Service operation still uses `C:\JanuaPort\windows`;
+`%LOCALAPPDATA%\JanuaPort\windows` is a legacy location, not the new default.
+Identify the account holding the existing engine/data before changing deployment
+and exercise the upgrade on the test machine under [B4](PRUEFSTEIN-B4.md).
+The script does not automatically migrate another Windows account's data.
+
+**Data from another Windows account:** Docker Desktop keeps containers, images and,
+as far as we know, volumes per Windows account. If 0.1.0 ran under a personal account,
+the installation's data lives there and not with `jnpt-dienst`. The file upgrade does
+not move it. Run `jnpt backup` in the old account first and keep the master key
+separately, then set up again under `jnpt-dienst` and restore the backup. This path
+is a step of the B4 checkpoint.
+
+## Service operation (B2)
+
+On the intended deployment machine, use an administrative PowerShell in the
+`windows` directory of the complete, verified `windows-v0.2.0` release:
+`.\dienst-einrichten.ps1 -BackupTarget 'E:\JanuaPort-Backup'`. GATE publishes
+the tag after review. The script verifies `SHA256SUMS`, creates `jnpt-dienst`,
+adds it to `docker-users`. **B-7:** First it disables inheritance on the parent
+`C:\JanuaPort` with `icacls /inheritance:r` and grants inheritable full access
+only to `jnpt-dienst`, Administrators and SYSTEM. Previous explicit grants are
+removed. The same three principals apply to `C:\JanuaPort\windows` before
+profile files are staged. Different existing files are rejected outside the
+verified 0.1.0 upgrade; `.env` and secrets are preserved. Initial
+installation adds `.env` to a verified B2 profile that does not yet have one.
+
+A random password is never displayed or saved to a password file. Repeated runs
+keep it; `-KennwortNeu` deliberately resets it and reconfigures autologon,
+including after an administrator reset. Master key, admin password and SMTP/Graph
+secrets live in profile files or volumes, never in Credential Manager or EFS;
+they do not depend on this account's DPAPI secrets. Sysinternals autologon uses
+an LSA secret readable by administrators. Its CLI briefly needs a plaintext
+process argument, visible to privileged process inspection; the script does
+not log it.
+
+The exact `Autologon64.exe` is downloaded only from
+`https://download.sysinternals.com/files/AutoLogon.zip`, checked against its
+SHA-256 in `SHA256SUMS`, then checked for a valid Microsoft Authenticode
+signature. A mismatch aborts without a fallback. The licensed binary is local
+only and excluded from the public repository. Changed upstream bytes require a
+reviewed pin update.
+
+“JanuaPort Sperren bei Anmeldung” locks at logon. A password-protected screen
+saver locks after 60 seconds. `powercfg` disables AC/battery standby and
+hibernation. The account's `.wslconfig` sets `[wsl2]` / `memory=4GB`; conflicting
+existing settings require manual reconciliation. The script does not restart
+Docker or WSL; the limit takes effect at the next WSL start.
+
+Docker Desktop settings are only checked: AutoStart on, TCP 2375 off, automatic
+downloads/updates off. The required keys are `autoStart=true`,
+`exposeDockerAPIOnTCP2375=false`, `autoDownloadUpdates=false`, `disableUpdate=true`
+and `silentModulesUpdate=false`, including component updates ([Docker reference](https://docs.docker.com/enterprise/security/hardened-desktop/settings-management/settings-reference/)).
+Missing, unknown or different values cause failure. On
+first setup this can happen after the account, lock and autologon are installed:
+the operator temporarily resets `jnpt-dienst` to a personally entered password
+as local administrator, signs in, configures Docker Desktop and accepts its
+license. After initial installation, the operator reruns setup as administrator
+with `-KennwortNeu` and reboots to restore the random password, matching autologon
+and lock. This is local commissioning before any production data. The operator performs initial commissioning and answers
+the image prompt there. The service provider never works in this session.
+“JanuaPort Anlage starten” is an on-demand task; “JanuaPort Sicherung” runs
+daily at 20:00. Both use the account's interactive token without a stored task
+password. The maintenance account only triggers tasks:
+
+```powershell
+schtasks /run /tn "JanuaPort Anlage starten"
+schtasks /run /tn "JanuaPort Sicherung"
+```
+
+**`docker-users` is not a security boundary:** members can bind-mount `C:\`
+into containers and are effectively administrators. “Standard user” is an
+organizational choice. Autologon console protection depends on locking at
+logon. [B4](PRUEFSTEIN-B4.md) requires a photo of the lock screen after reboot;
+acceptance remains open.
+
+[Docker's Windows installation documentation](https://docs.docker.com/desktop/setup/install/windows-install/)
+says containers and images cannot be shared across accounts with the WSL 2
+backend. That passage does not explicitly name volumes. The full “engine and
+volumes per Windows user” finding still needs B4 verification; it is not a
+blanket claim about other backends. Installation, future updates (B5) and
+backups all run in `jnpt-dienst`.
+
+Docker Desktop is free for businesses with **fewer than 250 employees AND less
+than USD 10 million annual revenue**. Other professional use generally needs a
+paid subscription, as do government entities; consult the [license terms](https://docs.docker.com/subscription/desktop-license/).
+Windows 10 regular support ended on 14 October 2025. Continued use requires a
+separate ESU assessment, which does not establish Docker Desktop support.
+Check the current support matrix; prefer a supported Windows 11 Pro version.
+
+## Backups (B3)
+
+v1 uses **USB**, preferably rotating drives. The operator creates the target
+folder (for example `E:\JanuaPort-Backup`) and `.jnpt-backup-ziel` marker on each
+drive, granting `jnpt-dienst` write access. The script creates neither target
+nor marker and never falls back to another target. Run in `jnpt-dienst` or
+trigger the task:
+
+```powershell
+powershell -NoProfile -File C:\JanuaPort\windows\jnpt-backup.ps1 -Target 'E:\JanuaPort-Backup'
+```
+
+The script runs `docker compose exec -T jnpt /jnpt backup --output
+/data/backups/<name>`, reads container size/SHA-256 and copies exactly this file
+with `docker compose cp`, without a bind mount. It writes `.teil`, renames it,
+and reads back size and `Get-FileHash` before and after renaming. Every error
+returns nonzero and removes its own incomplete destination; no fallback.
+After the destination hash matches, exactly this container copy is removed.
+A removal failure also fails the run and removes its destination file. v1 never
+automatically deletes older backups. Monitor free space and `LastTaskResult`.
+
+**Keep the master key separately from backups.** The script never copies the
+key file or all of `/data`. Without `JNPT_MASTER_KEY_FILE`, the key is beside
+the database in `/data`. Restoring on a separate test machine with a separately
+provided key is required in [B4](PRUEFSTEIN-B4.md).
+
+Optional SMB requires a dedicated backup account and share with write access
+only there. Credentials exist only under `jnpt-dienst`; the operator re-enters
+them after an administrator password reset. These scripts create no `cmdkey`
+entries. A destination writable by the ZBOX does not protect against an attacker
+on that ZBOX. A rotating, unplugged USB drive does. The operator chooses;
+TeamViewer and the maintenance account do not receive these credentials.
+
 ## Mail
 
 `einrichten.ps1` still prompts only for the image tag. Before starting Compose,
@@ -58,7 +212,7 @@ phase (Bauphase) and case token (Fall-Token) require deliverable mail.**
 Verify sending and actual receipt before using them.
 
 Configure mail manually afterwards in the installed profile directory (by default
-`%LOCALAPPDATA%\JanuaPort\windows`). Add these optional settings to `.env`;
+`C:\JanuaPort\windows`). Add these optional settings to `.env`;
 missing or empty values remain empty in the container:
 
 | Variable | Meaning |
@@ -149,7 +303,7 @@ a reliably resolvable computer name.
 the ten-year validity ends:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\JanuaPort\windows\einrichten.ps1" -NeuesZertifikat
+powershell -NoProfile -ExecutionPolicy Bypass -File "C:\JanuaPort\windows\einrichten.ps1" -NeuesZertifikat
 ```
 
 Add `-Directory <profile-directory>` for a custom installation. This explicit
@@ -224,14 +378,19 @@ prove package delivery or job completion.
 
 Repository checks: `python -B -m unittest discover -s windows/test -v`
 (Python standard library and Docker). See [test/README.md](test/README.md) for
-live checks and mutations. SHA256SUMS covers Compose, Caddyfile, the installer,
-`.gitignore`, both READMEs and the runbook. `.gitattributes` preserves the LF bytes covered by
+live checks and mutations. SHA256SUMS covers Compose, Caddyfile, all three scripts,
+`.gitignore`, both READMEs, the runbook, B4 checklist and the external autologon pin. `.gitattributes` preserves the LF bytes covered by
 SHA256SUMS in both Windows checkouts and raw downloads.
 
-Updates, backup and autologon are package B. Docker Desktop must already be
-running; unattended startup without a user session is unverified. Tailscale
-is outside package A.
+B2 configures local autologon and service tasks; B3 adds daily backups. The B5
+update script is a separate deliverable. Docker Desktop runs in the logged-in,
+locked `jnpt-dienst` session. Reboot acceptance is still open in the
+[B4 checklist](PRUEFSTEIN-B4.md). Tailscale is outside this package.
+
 
 ## Remote maintenance
 
-Through the customer's remote-support tool. The customer accepts every session.
+TeamViewer on acceptance under AVV Annex 3: a person at the operator accepts
+every session. No unattended remote access or fixed remote-support password.
+Local Windows autologon is separate. The service provider uses the maintenance
+account and only triggers tasks.

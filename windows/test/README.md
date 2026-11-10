@@ -1,4 +1,4 @@
-# Prüfungen für das Windows-Profil (Paket A und B1)
+# Prüfungen für das Windows-Profil (Paket A und B1–B3)
 
 Vom Repo-Root unter Windows: Python-Standardbibliothek, Windows PowerShell 5.1
 und Docker Desktop (Linux/amd64). Kein Python-Paket und kein PowerShell-Modul
@@ -9,7 +9,83 @@ dem echten `docker compose config` gelesen. Fehlendes Docker ist ein Fehler.
 python -B -m unittest discover -s windows/test -v
 python -B windows/test/live.py
 python -B windows/test/mutations.py
+python -B windows/test/dienst_mutations.py
 ```
+
+B2/B3 nur in einer **nicht erhöhten** Testsitzung ausführen. Für die neuen
+Skripte werden weder Konto, Autologon, Energieoptionen noch Aufgaben oder echte
+Docker-Desktop-Einstellungen geändert. `dienst_fakes.ps1` ersetzt die
+Systemadapter; `test_install.py` führt die echte PS-5.1-Steuerung aus. Ein
+Kanarienwert prüft stdout/stderr einschließlich eines echten `.cmd`-Kindprozesses,
+der seine Argumente ausgibt und mit Fehler endet. Der echte Windows-Token muss
+an der Admin-Sperre scheitern. Nur in einem temporären Testordner werden echte
+Datei-ACLs gesetzt und geprüft; die Registry-Adapter bleiben Fakes. Die echten
+JSON-Dateiadapter prüfen AutoStart, TCP 2375, `autoDownloadUpdates`,
+`disableUpdate` und `silentModulesUpdate` ohne Schreibzugriff.
+
+`test_backup.py` startet den echten PS-5.1-Einstieg `Start-JnptBackup` mit einem
+Docker-Shim auf `PATH`. Der Shim implementiert `exec`, `stat`, `sha256sum`, `cp`
+und `rm`. Backup-Dateien, `.teil`, Umbenennen und Hash-Rücklesen sind echte
+Dateioperationen im temporären Ordner. Fehlender Marker, falsches Konto,
+relatives Ziel mit vorhandenem Marker, unvollständiges Profil, jeder native
+Docker-Fehler, ungültige Metadaten, Größen-/Hashfehler, Fehler nach Umbenennung
+und Container-Aufräumfehler müssen Exit ungleich 0 und keine neue Zieldatei
+liefern. Alte Sicherungen bleiben erhalten. Bei Erfolg gibt es genau eine
+Sicherungsdatei und keine Key-Datei; die Container-Kopie ist entfernt.
+
+Nur die neuen Prüfungen ohne laufenden Docker-Daemon:
+
+```powershell
+$env:PYTHONPATH = 'windows/test'
+python -B -m unittest test_install test_backup -v
+python -B windows/test/dienst_mutations.py
+```
+
+`dienst_mutations.py` verwendet isolierte Profilkopien und verlangt echte
+Assertion-Fehler. Unter anderem werden Hash-Pin bei gültiger Signatur,
+Microsoft-Herausgeber, Admin-/Kontosperren, bestehende Dateien, Docker-Einstellungen,
+Kennwort-Ausgabesperre, cmdkey-Verbot, ACLs und Sperrbildschirmrichtlinien entfernt.
+Die B-4-Mutation kopiert zusätzlich ganz `/data`: der Shim legt dabei tatsächlich
+eine synthetische Key-Datei am Ziel ab, die Erfolgsprüfung muss rot werden.
+Weitere Mutationen entfernen Exit ungleich 0, Marker-, Größen- und Hashprüfung,
+Rücklesen nach Umbenennung und beide Aufräumwege. Originale werden bytegenau
+verglichen. Mutationen und Standardsuite nacheinander ausführen; die
+Originalprüfung darf keine parallel angelegten temporären Testdateien sehen.
+
+Die `Autologon64.exe`-Zeile in `SHA256SUMS` ist ein externer Pin, keine Datei im
+Repo oder Profil-Download. Die echte Binärprüfung lädt ausschließlich die feste
+Sysinternals-URL und prüft Hash vor Authenticode. Die Tests nutzen ein lokales
+ZIP-Fixture und eine gültige Fake-Signatur, führen niemals das echte Binary aus.
+Der externe Pin wird von Manifestprüfungen separat von den Profilbytes geprüft.
+Der Live-Rundlauf ersetzt ausschließlich die Kontoidentität; alle Container und
+Volumes darin bleiben wie bisher temporäre Testobjekte. Kein Dienstskript wird
+auf diesem Rechner mit echten Systemadaptern ausgeführt.
+
+`test_upgrade.py` liest die drei Originaldateien aus dem lokalen Git-Tag
+`windows-v0.1.0` (Git und dieses Tag sind Voraussetzung; das alte Skript wird
+nicht ausgeführt). Der echte PS-5.1-Installer aktualisiert den temporären Ordner
+mit und ohne alte Summenliste, erhält `.env` sowie alle Secret-Inhalte und lädt
+beim zweiten Lauf nichts nach. Download/HTTP und Docker sind Fakes; Datei- und
+Summenadapter sind echt. Download- und Hashfehler dürfen vor der ersten
+Ersetzung keine vorhandene Datei ändern. Geänderte/unvollständige Altprofile
+werden vor dem Download abgewiesen. Die lokale Bereitstellung über B2 wird
+ebenfalls geprüft. Ein Test hält `$ProfileRef` auf `windows-v0.2.0` fest.
+
+B-7 prüft den exakten `icacls`-Aufruf am festen Elternordner mit
+`/inheritance:r` und ausschließlich den SIDs von `jnpt-dienst`, Administratoren
+und SYSTEM. Im Fake wird an `C:\JanuaPort` nichts angelegt. Zusätzlich erhält
+ein echter temporärer Eltern-/Kindordner absichtlich breite Rechte für
+Authentifizierte Benutzer; der echte `icacls`-Adapter muss diese entfernen.
+Aufrufreihenfolge und native Fehler werden geprüft. Die Mutation ohne
+`/inheritance:r` muss sowohl die Argumentprüfung als auch den echten ACL-Test
+rot machen; weitere Mutationen entfernen die Elternordnersperre, das Entfernen
+alter expliziter Rechte, die Upgrade-Summenprüfung oder den Erhalt von `.env`
+und Secrets. Diese Proben sind in `dienst_mutations.py` enthalten.
+
+Die manuelle B4-Abnahme steht in [PRUEFSTEIN-B4.md](../PRUEFSTEIN-B4.md):
+DPAPI-unabhängige Wiederherstellung nach Kennwortreset, Sperrbildschirmfoto nach
+Neustart, Engine-/Volume-Vergleich je Benutzer und Rücksicherung mit getrenntem
+Master-Key. Das ist kein Ergebnis der Fakes und bleibt auf dem Testrechner offen.
 
 Die Mail-Tests lesen die SMTP-/Notify-Umgebung aus echtem `docker compose config`:
 gesetzte, fehlende und leere Werte, fester SMTP-Secret-Dateipfad und feste lokale

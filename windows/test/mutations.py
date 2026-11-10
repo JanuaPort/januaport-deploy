@@ -11,7 +11,7 @@ import sys
 import tempfile
 import urllib.request
 
-from test_profile import PROFILE_FILES, ROOT, run
+from test_profile import AUTOLOGON_SHA256, PROFILE_FILES, ROOT, run
 
 TESTS = ROOT / 'test'
 HTTPS = ['-m', 'unittest', 'test_profile.Profile.test_caddy_adapter_and_https_rejections', '-v']
@@ -37,7 +37,7 @@ def mutant(label, file=None, old=None, new=None, command=None, extra_env=None):
         # its own negative test, not an unrelated stale checksum.
         (target / 'SHA256SUMS').write_text(''.join(
             hashlib.sha256((target / name).read_bytes()).hexdigest() + '  ' + name + '\n'
-            for name in PROFILE_FILES), newline='\n')
+            for name in PROFILE_FILES) + AUTOLOGON_SHA256 + '  Autologon64.exe\n', newline='\n')
         env = dict(os.environ, JNPT_PROFILE_ROOT=str(target), PYTHONPATH=str(TESTS))
         env.update(extra_env or {})
         result = run(sys.executable, '-B', *(command or HTTPS), env=env, check=False)

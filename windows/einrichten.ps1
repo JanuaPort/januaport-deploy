@@ -1,7 +1,7 @@
 #requires -Version 5.1
 [CmdletBinding()]
 param(
-    [string]$Directory = (Join-Path $env:LOCALAPPDATA 'JanuaPort\windows'),
+    [string]$Directory = 'C:\JanuaPort\windows',
     [switch]$NeuesZertifikat
 )
 
@@ -9,11 +9,12 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 # Dieser Release-Tag muss vor dem veroeffentlichten Aufruf existieren und
 # unveraenderlich bleiben. Kein main/Branch als Downloadquelle.
-$ProfileRef = 'windows-v0.1.0'
+$ProfileRef = 'windows-v0.2.0'
 $ProfileBase = "https://raw.githubusercontent.com/JanuaPort/januaport-deploy/$ProfileRef/windows"
 $Repository = 'ghcr.io/januaport/januaport'
 $ProfileFiles = @('docker-compose.yml', 'Caddyfile', 'einrichten.ps1', '.gitignore',
-    'README.md', 'README.en.md', 'RUNBOOK.md')
+    'README.md', 'README.en.md', 'RUNBOOK.md', 'dienst-einrichten.ps1',
+    'jnpt-backup.ps1', 'PRUEFSTEIN-B4.md')
 
 function Invoke-Docker {
     param([string[]]$Arguments)
@@ -24,7 +25,9 @@ function Invoke-Docker {
 
 function Test-ProfileFiles {
     param([string]$Path)
-    $expected = $ProfileFiles
+    # External licensed binary: pinned here, downloaded/verified separately by
+    # dienst-einrichten.ps1. It is not part of the public profile distribution.
+    $expected = $ProfileFiles + @('Autologon64.exe')
     $seen = @{}
     foreach ($line in [IO.File]::ReadAllLines((Join-Path $Path 'SHA256SUMS'))) {
         if ($line -cnotmatch '^([a-f0-9]{64})  ([A-Za-z0-9.-]+)$') { throw 'Ungueltige SHA256SUMS-Zeile.' }
@@ -32,6 +35,7 @@ function Test-ProfileFiles {
         $name = $Matches[2]
         if ($expected -cnotcontains $name -or $seen.ContainsKey($name)) { throw 'Unerwarteter Summeneintrag.' }
         $seen[$name] = $true
+        if ($name -ceq 'Autologon64.exe') { continue }
         $file = [IO.File]::OpenRead((Join-Path $Path $name))
         $sha = [Security.Cryptography.SHA256]::Create()
         try {
@@ -119,16 +123,42 @@ function Initialize-MailSecret {
     }
 }
 
+function Test-LegacyProfile {
+    param([string]$Path)
+    # Exact published windows-v0.1.0 bytes, independent of an optional local
+    # SHA256SUMS. An altered installation is not an automatic upgrade source.
+    $legacy = @{
+        'docker-compose.yml' = '40f294bcc40fe7a3f431685ef7c913e17b33f0524402cefde24e348c1aa28da1'
+        'Caddyfile' = 'd73ab75fd9ade61067160a660828effcb37dc3176816ace9ce826ae77d96355d'
+        'einrichten.ps1' = '2a3671e5ccd5b9cc47ff0753594d712ea18119500b3c611fadd250587cbcbae3'
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $Path '.env') -PathType Leaf)) { return $false }
+    foreach ($name in $legacy.Keys) {
+        $file = Join-Path $Path $name
+        if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { return $false }
+        if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -cne $legacy[$name]) { return $false }
+    }
+    return $true
+}
+
 function Install-Profile {
+    Assert-DienstSession
     Get-Command docker -ErrorAction Stop | Out-Null
     Invoke-Docker @('compose', 'version') | Out-Host
-    if (Test-Path -LiteralPath $Directory) {
-        foreach ($name in (@('.env', 'SHA256SUMS') + $ProfileFiles)) {
+    $upgrade = Test-LegacyProfile $Directory
+    if ((Test-Path -LiteralPath $Directory) -and -not $upgrade) {
+        foreach ($name in (@('SHA256SUMS') + $ProfileFiles)) {
             if (-not (Test-Path -LiteralPath (Join-Path $Directory $name) -PathType Leaf)) {
                 throw 'Ziel existiert bereits und ist kein vollstaendiges Profil.'
             }
         }
         Test-ProfileFiles $Directory
+        # B2 stages a verified profile before the first interactive installation.
+        if (-not (Test-Path -LiteralPath (Join-Path $Directory '.env'))) {
+            $image = Resolve-CoreImage (Read-Host 'JanuaPort Image-Tag (z.B. 0.87.1) oder sha256:Digest')
+            $envText = "JANUAPORT_IMAGE=$($image[0])`nJANUAPORT_IMAGE_DIGEST=$($image[1])`n"
+            [IO.File]::WriteAllText((Join-Path $Directory '.env'), $envText, (New-Object Text.UTF8Encoding($false)))
+        }
     } else {
         [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
         $staging = Join-Path ([IO.Path]::GetTempPath()) ('jnpt-profile-' + [Guid]::NewGuid().ToString('N'))
@@ -138,13 +168,19 @@ function Install-Profile {
                 Invoke-WebRequest -UseBasicParsing -Uri "$ProfileBase/$name" -OutFile (Join-Path $staging $name)
             }
             Test-ProfileFiles $staging
-            $image = Resolve-CoreImage (Read-Host 'JanuaPort Image-Tag (z.B. 0.87.1) oder sha256:Digest')
-            New-Item -ItemType Directory -Path $Directory | Out-Null
+            if (-not $upgrade) {
+                $image = Resolve-CoreImage (Read-Host 'JanuaPort Image-Tag (z.B. 0.87.1) oder sha256:Digest')
+                New-Item -ItemType Directory -Path $Directory | Out-Null
+            }
+            # Only release-managed files. Preserve .env, secrets and Docker
+            # volumes; the complete download was verified before any replacement.
             foreach ($name in (@('SHA256SUMS') + $ProfileFiles)) {
                 Copy-Item -LiteralPath (Join-Path $staging $name) -Destination (Join-Path $Directory $name)
             }
-            $envText = "JANUAPORT_IMAGE=$($image[0])`nJANUAPORT_IMAGE_DIGEST=$($image[1])`n"
-            [IO.File]::WriteAllText((Join-Path $Directory '.env'), $envText, (New-Object Text.UTF8Encoding($false)))
+            if (-not $upgrade) {
+                $envText = "JANUAPORT_IMAGE=$($image[0])`nJANUAPORT_IMAGE_DIGEST=$($image[1])`n"
+                [IO.File]::WriteAllText((Join-Path $Directory '.env'), $envText, (New-Object Text.UTF8Encoding($false)))
+            }
         } finally {
             # Ausschliesslich der oben selbst angelegte temporaere Ordner.
             $resolvedStaging = [IO.Path]::GetFullPath($staging)
@@ -194,4 +230,12 @@ function Install-Profile {
 }
 
 # Dot-Sourcing erlaubt Adaptertests der Funktionen ohne Installation.
+function Get-CurrentAccount { [Security.Principal.WindowsIdentity]::GetCurrent().Name }
+
+function Assert-DienstSession {
+    if ((Get-CurrentAccount) -ine ($env:COMPUTERNAME + '\jnpt-dienst')) {
+        throw 'Installation nur in der Sitzung von jnpt-dienst starten.'
+    }
+}
+
 if ($MyInvocation.InvocationName -ne '.') { Install-Profile }

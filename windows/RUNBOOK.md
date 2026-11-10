@@ -11,7 +11,8 @@ einrichtet und wartet. „Betreiber“ meint in diesem Runbook und im Produkt im
 ## 1. Grundregeln
 
 - **Der Rechner ist nur für JanuaPort da.** Er ist kein Arbeitsplatz und hält keine Daten des Kunden.
-- **Fernzugang nur auf Annahme.** Der Kunde startet jede Fernsitzung selbst und nennt Kennung und
+- **Fernzugang nur auf Annahme.** TeamViewer auf Annahme gemäß AVV Anlage 3: Ein Mensch beim Kunden
+  nimmt jede Sitzung an, startet sie selbst und nennt Kennung und
   Einmal-Kennwort telefonisch. Es gibt kein festes Kennwort und keinen unbeaufsichtigten Zugriff.
   Ist eines davon eingerichtet, wird es abgeschaltet, nicht genutzt.
 - **Keine Zwischenablage, keine Dateiübertragung, keine Aufzeichnung** in der Fernsitzung. Alle Befehle
@@ -47,9 +48,9 @@ einrichtet und wartet. „Betreiber“ meint in diesem Runbook und im Produkt im
 |---|---|---|
 | Der Vertrag mit dem Kunden erlaubt diesen Termin. Bei Kunden mit Berufsgeheimnis heißt das in der Regel: Auftragsverarbeitung und Verpflichtung zur Geheimhaltung sind unterschrieben, oder es ist schriftlich vereinbart, was vorher erlaubt ist. | Dienstleister und Kunde | Ohne Grundlage kein Zugriff |
 | Der Kunde bestätigt in Textform, dass der Rechner keine Daten des Kunden hält: keine Netzlaufwerke, keine gespeicherten Zugangsdaten, keine Fachanwendung, keine Mitgliedschaft in der Domäne des Kunden. | Kunde | Nur so darf der Rechner vor der Anbindung von Fachsystemen bearbeitet werden |
-| Eine Person beim Kunden, die die Sitzung startet und nach einem Neustart am Rechner anmeldet. Am Rechner hängen Bildschirm und Tastatur. | Kunde | Ohne unbeaufsichtigten Zugriff bricht jede Sitzung beim Neustart ab |
+| Eine Person beim Kunden, die jede Fernsitzung annimmt und nach einem Neustart die lokal automatisch angemeldete, gesperrte Sitzung vor Ort verwaltet. Am Rechner hängen Bildschirm und Tastatur. | Kunde | Ohne unbeaufsichtigten Zugriff bricht jede Sitzung beim Neustart ab |
 | Ein Zeitfenster, in dem ein Neustart niemanden stört. | Kunde | Docker Desktop verlangt einen Neustart |
-| Ein Sicherungsziel außerhalb des Rechners (NAS oder USB-Laufwerk). | Kunde | Backup der Anlage |
+| Ein wechselnder USB-Datenträger als Sicherungsziel v1; optional eine eigene SMB-Freigabe mit eigenem Sicherungsbenutzer und Schreibrecht nur dort. | Kunde | Backup der Anlage |
 | Eine feste Adresse des Rechners im lokalen Netz (DHCP-Reservierung oder statische IP). Nötig erst, wenn Läufer auf anderen Arbeitsplätzen koppeln. | Kunde (IT-Dienstleister) | Die Läufer speichern die Adresse aus `pair`. Der Fingerprint prüft nur das Zertifikat, nicht die Adresse. Ändert sich die Adresse, erreichen die Läufer die Anlage nicht mehr. |
 | Freigabe für den Desktop-Läufer auf den Arbeitsplätzen, falls eine Richtlinie (etwa AppLocker) oder ein Virenscanner Programme aus dem Benutzerprofil sperrt. Die EXE des Läufers liegt an einem dauerhaften Ort im Benutzerprofil und ist von der JanuaPort GmbH signiert: Regel nach Herausgeber, nicht nach Pfad. Jeder Lauf startet zusätzlich `python.exe` aus `%LOCALAPPDATA%\JanuaPort\desktop-runner\envs\…`. Diese ist von der Python Software Foundation signiert und braucht eine eigene Regel nach Herausgeber für dieses Verzeichnis. Sind DLL-Regeln aktiv, gilt das auch für die Bibliotheken der Skripte. Mit AppLocker ist dieser Weg ungetestet. | Kunde (IT-Dienstleister) | Sonst startet der Läufer nicht, oder er startet und jeder Lauf scheitert |
 
@@ -66,28 +67,49 @@ Get-Tpm
 winver
 ```
 
-- `net use` zeigt keine Laufwerke des Kunden, `cmdkey /list` keine Zugangsdaten des Kunden, `PartOfDomain`
-  ist `False`. Sonst bricht der Dienstleister ab und klärt es mit dem Kunden.
+- `net use` zeigt keine Laufwerke des Kunden, außer dem eigenen Sicherungsziel unter `jnpt-dienst`.
+  `cmdkey /list` zeigt keine Zugangsdaten des Kunden, außer dem Sicherungsziel unter `jnpt-dienst`.
+  `PartOfDomain` ist `False`. Sonst bricht der Dienstleister ab und klärt es mit dem Kunden.
+  Der Betreiber prüft die Ausnahme selbst in `jnpt-dienst`; im Wartungskonto liegt kein Sicherungszugang.
+  Master-Key, Admin-Kennwort und SMTP-/Graph-Secret gehören nie in cmdkey/DPAPI/EFS.
+  SMB-Zugangsdaten werden nach einem Admin-Kennwortreset dort vom Betreiber neu eingegeben (B4).
 - `Get-Tpm` und `winver` werden notiert. Ohne TPM gibt es keine BitLocker-Verschlüsselung mit TPM.
   Das ist vor der Anbindung von Fachsystemen zu klären.
-- In der Fernwartungssoftware prüfen: kein unbeaufsichtigter Zugriff, kein festes Kennwort.
+- In TeamViewer prüfen: kein unbeaufsichtigter Zugriff, kein festes Kennwort. Gemeint ist
+  TeamViewer auf Annahme gemäß AVV Anlage 3; ein Mensch beim Kunden nimmt jede Sitzung an.
+  Das lokale Windows-Autologon ist kein unbeaufsichtigter Fernzugang.
 
 ### 3.2 Docker Desktop (ein Neustart)
 Schritte im [README](README.md#voraussetzungen), Abschnitt „Voraussetzungen“. Vor dem Neustart dem Kunden sagen, dass gleich
 eine neue Sitzung nötig ist.
 
 ### 3.3 Nach einem Neustart
-1. Die Sitzung bricht ab. Der Dienstleister ruft beim Kunden an.
-2. Die Person beim Kunden meldet sich am Rechner an, mit dem für die Wartung vereinbarten Konto.
-3. Sie startet die Fernwartung und nennt Kennung und neues Einmal-Kennwort.
-4. Docker Desktop braucht auf schwacher Hardware nach dem Start einige Minuten. Erst weiterarbeiten,
-   wenn `docker version` einen Server zeigt.
+1. Die Fernsitzung bricht ab. Der Dienstleister ruft beim Kunden an.
+2. `jnpt-dienst` meldet sich lokal automatisch an und wird durch die Aufgabe gesperrt.
+   Der Betreiber prüft den Sperrbildschirm (Foto im B4-Abnahmeprotokoll).
+3. Die Person beim Kunden startet/akzeptiert eine neue TeamViewer-Sitzung nach dem vereinbarten
+   Verfahren. Der Dienstleister verwendet ausschließlich das Wartungskonto und arbeitet nie als
+   `jnpt-dienst`. Das Wartungskonto stößt nur Aufgaben mit `schtasks /run` an.
+4. Docker Desktop startet in `jnpt-dienst`; einige Minuten bis zur Bereitschaft berücksichtigen.
+   Engine und Volumes nicht aus dem Wartungskonto beurteilen. Maßgeblich ist der Aufgabenstatus.
 
 ### 3.4 Anlage einrichten
-Schritte im [README](README.md#zwei-befehle), Abschnitt „Zwei Befehle“. Am Ende gibt `einrichten.ps1` den
+Zuerst die administrative [B2-Einrichtung](README.md#dienstbetrieb-b2) durchführen.
+B-7: `icacls C:\JanuaPort` und `icacls C:\JanuaPort\windows` zeigen ausschließlich
+`jnpt-dienst`, Administratoren und SYSTEM. Vererbung vom Laufwerksstamm ist aus.
+Bei einem Altprofil den [Upgrade-Weg 0.1.0 → 0.2.0](README.md#von-010-auf-020) und
+die zusätzliche Abnahme in B4 verwenden. Die
+Erstkonfiguration von Docker Desktop und die Schritte in [„Zwei Befehle“](README.md#zwei-befehle)
+führt der Betreiber in `jnpt-dienst` aus. Danach startet das Wartungskonto nur Aufgaben.
+Am Ende gibt `einrichten.ps1` den
 Zertifikats-Fingerprint aus. Ihn abschreiben und beim Dienstleister ablegen, nicht beim Kunden aushängen.
 
-Mail anschließend gemäß [README, Abschnitt „Mail“](README.md#mail) einrichten.
+Mail anschließend durch den Betreiber in `jnpt-dienst` gemäß [README, Abschnitt „Mail“](README.md#mail)
+einrichten. USB-Ziel und Marker vorbereiten, Aufgabe „JanuaPort Sicherung“ prüfen.
+Master-Key getrennt von Sicherungen verwahren. Ein vom Rechner beschreibbares Ziel schützt nicht
+gegen einen Angreifer auf dem Rechner; wechselndes, abgezogenes USB dagegen schon. Die Wahl
+trifft der Betreiber. Wiederherstellung nach Kennwortreset und getrennte Rücksicherung gemäß
+[Prüfstein B4](PRUEFSTEIN-B4.md) belegen.
 
 **Das Admin-Passwort setzt der Kunde selbst am Rechner, nicht der Dienstleister.** Wer das Admin-Passwort
 kennt, verwaltet die Anlage. Der Dienstleister beendet dafür die Fernsitzung. Der Kunde setzt das Passwort in
@@ -132,7 +154,7 @@ Daten des Kunden. Vor dem Start hakt die Person ab:
 ## 6. Typische Fehlerbilder
 | Bild | Ursache | Abhilfe |
 |---|---|---|
-| Nach dem Neustart keine Sitzung möglich | kein unbeaufsichtigter Zugriff (gewollt) | Kunde meldet sich an und startet eine neue Sitzung (3.3) |
+| Nach dem Neustart keine Sitzung möglich | kein unbeaufsichtigter Zugriff (gewollt) | Mensch beim Kunden nimmt TeamViewer erneut an (3.3); Wartung nur über Wartungskonto |
 | `docker version` zeigt keinen Server | Docker Desktop startet noch oder ist nicht angemeldet | einige Minuten warten; Docker Desktop startet nur in einer angemeldeten Sitzung |
 | `pair` scheitert ohne TLS-Fehler | Kopplung über HTTP an einen Container | immer über `https://` mit Fingerprint koppeln |
 | Läufer im Netz erreicht die Anlage nicht | Windows-Firewall oder falsche Adresse | Freigabe für 443 aus dem lokalen Netz prüfen |
