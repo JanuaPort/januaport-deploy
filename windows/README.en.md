@@ -131,11 +131,17 @@ On the intended deployment machine, use an administrative PowerShell in the
 `windows` directory of the complete, verified `windows-v0.2.0` release:
 `.\dienst-einrichten.ps1 -BackupTarget 'E:\JanuaPort-Backup'`. GATE publishes
 the tag after review. The script verifies `SHA256SUMS`, creates `jnpt-dienst`,
-adds it to `docker-users`. **B-7:** First it disables inheritance on the parent
-`C:\JanuaPort` with `icacls /inheritance:r` and grants inheritable full access
-only to `jnpt-dienst`, Administrators and SYSTEM. Previous explicit grants are
-removed. The same three principals apply to `C:\JanuaPort\windows` before
-profile files are staged. Different existing files are rejected outside the
+adds it to `docker-users`. **B-7/F5:** For both `C:\JanuaPort` and
+`C:\JanuaPort\windows`, setup prepares a complete protected DACL with exactly
+three explicit Allow rules: `jnpt-dienst`, Administrators and SYSTEM receive
+FullControl with ContainerInherit and ObjectInherit. One
+`Directory.SetAccessControl` call replaces only the Access section, without
+clearing it first. Additional grants and inheritance from the parent are
+removed together; owner, group and audit remain unchanged. An already matching
+protected DACL is not written again, preserving access to inherited files on
+repeat runs. Profile files are staged afterwards. For installations already
+affected by F5, see the [manual RUNBOOK repair](RUNBOOK.md#f5-reparatur-nach-entzogenen-dateirechten).
+Different existing files are rejected outside the
 verified 0.1.0 upgrade; `.env` and secrets are preserved. Initial
 installation adds `.env` to a verified B2 profile that does not yet have one.
 

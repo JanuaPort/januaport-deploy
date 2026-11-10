@@ -155,11 +155,18 @@ geprüften Release `windows-v0.2.0` bereitstellen, im enthaltenen Ordner `window
 `dienst-einrichten.ps1 -BackupTarget 'E:\JanuaPort-Backup'` ausführen. GATE
 veröffentlicht den Tag erst nach Prüfung; dieses Paket erzeugt keinen Tag.
 Das Skript prüft zuerst `SHA256SUMS`, legt `jnpt-dienst` an, nimmt ihn in
-`docker-users` auf. **B-7:** Es schaltet zuerst für den Elternordner
-`C:\JanuaPort` die Vererbung mit `icacls /inheritance:r` ab und gewährt
-ausschließlich `jnpt-dienst`, Administratoren und SYSTEM vererbbaren Vollzugriff.
-Vorherige explizite Freigaben werden entfernt. Dieselben drei Prinzipale gelten
-für `C:\JanuaPort\windows`; erst danach werden Profildateien bereitgestellt.
+`docker-users` auf. **B-7/F5:** Für den Elternordner `C:\JanuaPort` und
+`C:\JanuaPort\windows` wird jeweils eine vollständige geschützte DACL mit genau
+drei expliziten Allow-Regeln vorbereitet: `jnpt-dienst`, Administratoren und
+SYSTEM erhalten FullControl mit ContainerInherit und ObjectInherit.
+Ein einzelner `Directory.SetAccessControl`-Aufruf ersetzt nur den Access-Abschnitt,
+ohne vorheriges Leeren. Vorherige zusätzliche Freigaben und die Vererbung vom
+Elternordner entfallen zusammen; Besitzer, Gruppe und Audit bleiben erhalten.
+Stimmt die geschützte DACL bereits genau überein, schreibt der erneute Lauf
+nichts. Erbende Dateien bleiben dadurch auch beim Wiederholen zugänglich.
+Erst danach werden Profildateien bereitgestellt. Für bereits von F5 betroffene
+Installationen beschreibt das [RUNBOOK](RUNBOOK.md#f5-reparatur-nach-entzogenen-dateirechten)
+die manuelle Reparatur.
 Vorhandene abweichende Dateien werden außerhalb des geprüften 0.1.0-Upgrades
 abgewiesen; `.env` und Secrets bleiben erhalten. Ein von B2
 bereitgestelltes Profil ohne `.env` wird bei der ersten Installation ergänzt.

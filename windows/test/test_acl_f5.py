@@ -44,7 +44,8 @@ Protect-DienstRoot 'S-1-5-21-100-100-100-1001'
 $acl=[F5AclBoundary]::Current
 if ($env:PROBE_REPAIR -eq 'unprotected') { $acl.SetAccessRuleProtection($false,$false) }
 elseif ($env:PROBE_REPAIR -eq 'fourth') {
-    $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule('S-1-5-11','Read','ContainerInherit,ObjectInherit','None','Allow')))
+    $other=New-Object Security.Principal.SecurityIdentifier('S-1-5-11')
+    $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($other,'Read','ContainerInherit,ObjectInherit','None','Allow')))
 } elseif ($env:PROBE_REPAIR) {
     $rule=@($acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier]))[0]
     $acl.RemoveAccessRuleSpecific($rule)

@@ -113,6 +113,9 @@ Der Betreiber setzt dann lokal vorübergehend ein Kennwort, meldet sich als
 Autologon wird alle 500 ms bis höchstens 10 Sekunden nachgeprüft. Neustarten.
 B-7: `icacls C:\JanuaPort` und `icacls C:\JanuaPort\windows` zeigen ausschließlich
 `jnpt-dienst`, Administratoren und SYSTEM. Vererbung vom Laufwerksstamm ist aus.
+F5: Die Einrichtung ersetzt die vollständige DACL in einem einzigen
+Access-Schreibaufruf; bei bereits exakt passenden drei Regeln schreibt sie
+nichts. Besitzer und andere Sicherheitsabschnitte bleiben unverändert.
 Bei einem Altprofil den [Upgrade-Weg 0.1.0 → 0.2.0](README.md#von-010-auf-020) und
 die zusätzliche Abnahme in B4 verwenden. Die
 Erstkonfiguration von Docker Desktop und die Schritte in [„Zwei Befehle“](README.md#zwei-befehle)
@@ -142,6 +145,26 @@ der Admin-Oberfläche (`http://127.0.0.1:8484`), sichert den Master-Schlüssel u
 Sitzung. Hat doch der Dienstleister das Passwort gesetzt, setzt der Kunde es neu.
 
 Den Master-Schlüssel der Anlage auf Papier sichern. Das Papier bleibt beim Kunden, an einem verschlossenen Ort.
+
+#### F5-Reparatur nach entzogenen Dateirechten
+
+Falls `978b7eb` oder `6bb0d8f` bereits gelaufen ist und Dateien wegen leerer
+DACL unlesbar sind, im geprüften **F5-Releaseordner** als Administrator
+`takeown`, dann `icacls /reset` und unmittelbar die neue Diensteinrichtung
+ausführen; das Sicherungsziel anpassen. Die Reparatur ist ein manueller
+Wartungsschritt. Auf deutschem Windows ist `/d j` richtig (lokal mit
+`takeown /?` bestätigt), auf englischem Windows stattdessen `/d y` verwenden.
+Danach ist der angemeldete Administrator Besitzer; das ist in Ordnung.
+Die abschließende Diensteinrichtung setzt die B-7-DACL wieder auf genau die
+drei Prinzipale. Anschließend Lesbarkeit von `.env`, `secrets\` und
+`log\sperren.log`, Anlagenstart und Sicherung erneut prüfen.
+
+<!-- F5 -->
+```powershell
+takeown /f C:\JanuaPort /r /d j
+icacls C:\JanuaPort /reset /t
+.\dienst-einrichten.ps1 -BackupTarget 'E:\JanuaPort-Backup'
+```
 
 ### 3.5 LAN-Freigabe vor dem Koppeln (N5)
 

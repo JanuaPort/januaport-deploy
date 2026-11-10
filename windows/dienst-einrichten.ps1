@@ -52,24 +52,39 @@ namespace Jnpt {
     return $path.ToString()
 }
 
-function Clear-DienstExplicitAccess {
-    param([string]$Path)
-    $acl = [IO.Directory]::GetAccessControl($Path, [Security.AccessControl.AccessControlSections]::Access)
-    foreach ($existing in @($acl.Access)) {
-        if (-not $existing.IsInherited) { $acl.RemoveAccessRuleSpecific($existing) }
-    }
-    [IO.Directory]::SetAccessControl($Path, $acl)
-}
-
 function Protect-DienstDirectory {
     param([string]$Path, $SID)
-    # Remove previous explicit grants as well; /grant:r alone would keep grants
-    # to other accounts. Inherited C:\ grants are removed by icacls itself.
-    Clear-DienstExplicitAccess $Path
-    $grants = @(("*" + [string]$SID + ':(OI)(CI)F'),
-        '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-18:(OI)(CI)F')
-    & icacls.exe $Path '/inheritance:r' '/grant:r' @grants *> $null
-    if ($LASTEXITCODE -ne 0) { throw 'icacls fuer Dienstordner fehlgeschlagen.' }
+    $principals = @([string]$SID, 'S-1-5-32-544', 'S-1-5-18')
+    $inheritance = [Security.AccessControl.InheritanceFlags]::ContainerInherit -bor
+        [Security.AccessControl.InheritanceFlags]::ObjectInherit
+    $current = [IO.Directory]::GetAccessControl($Path, [Security.AccessControl.AccessControlSections]::Access)
+    $rules = @($current.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
+    $exact = $current.AreAccessRulesProtected -and $rules.Count -eq 3
+    foreach ($principal in $principals) {
+        $matching = @($rules | Where-Object {
+            $_.IdentityReference.Value -ceq $principal -and -not $_.IsInherited -and
+            $_.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and
+            $_.FileSystemRights -eq [Security.AccessControl.FileSystemRights]::FullControl -and
+            $_.InheritanceFlags -eq $inheritance -and
+            $_.PropagationFlags -eq [Security.AccessControl.PropagationFlags]::None
+        })
+        if ($matching.Count -ne 1) { $exact = $false }
+    }
+    if ($exact) { return }
+
+    # Build the complete Access section before a single native write. Never
+    # persist an empty DACL: children may be owned by the service account (F5).
+    # A fresh descriptor leaves Owner, Group and Audit sections unmodified.
+    $sec = New-Object Security.AccessControl.DirectorySecurity
+    $sec.SetAccessRuleProtection($true, $false)
+    foreach ($principal in $principals) {
+        $identity = New-Object Security.Principal.SecurityIdentifier($principal)
+        $rule = New-Object Security.AccessControl.FileSystemAccessRule($identity,
+            [Security.AccessControl.FileSystemRights]::FullControl, $inheritance,
+            [Security.AccessControl.PropagationFlags]::None, [Security.AccessControl.AccessControlType]::Allow)
+        $sec.AddAccessRule($rule)
+    }
+    [IO.Directory]::SetAccessControl($Path, $sec)
 }
 
 function Protect-DienstRoot {

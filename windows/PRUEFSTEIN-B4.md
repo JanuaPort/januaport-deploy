@@ -27,6 +27,15 @@ festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
    Authentifizierte Benutzer. Mit einem anderen Standardkonto den Lesezugriff
    auf `secrets/smtp_password` und den Schreibzugriff auf `docker-compose.yml`
    tatsächlich versuchen: beide müssen scheitern. Erst dann weiterarbeiten.
+   **F5/B-1:** `.env`, eine synthetische Datei unter `secrets\` und
+   `log\sperren.log` in der Sitzung von `jnpt-dienst` erzeugen und deren Besitzer
+   und geerbte ACEs festhalten. Die neue Diensteinrichtung als Administrator
+   erneut ausführen (auch mit `-KennwortNeu`). Danach sind alle drei Dateien
+   weiterhin lesbar, tragen die drei geerbten FullControl-ACEs und niemals
+   eine leere DACL wie `D:AI`; Anlagenstart und Sicherung müssen grün sein.
+   Bei bereits korrekter Ordner-DACL bleibt der SDDL beim zweiten Lauf gleich.
+   Der Fall eines anderen Dateibesitzers ist im lokalen NTFS-Test nicht
+   nachgestellt und bleibt ausdrücklich BOX-Abnahme.
 4. **W4/W5, B-3, Neustart:** `dienst-einrichten.ps1` auf dem Testrechner als
    Admin vorbereiten, Docker Desktop vor dem abschließenden Lauf einmal in
    `jnpt-dienst` starten und Einstellungen von Hand prüfen, mit `-KennwortNeu`

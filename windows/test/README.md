@@ -91,16 +91,36 @@ Ersetzung keine vorhandene Datei ändern. Geänderte/unvollständige Altprofile
 werden vor dem Download abgewiesen. Die lokale Bereitstellung über B2 wird
 ebenfalls geprüft. Ein Test hält `$ProfileRef` auf `windows-v0.2.0` fest.
 
-B-7 prüft den exakten `icacls`-Aufruf am festen Elternordner mit
-`/inheritance:r` und ausschließlich den SIDs von `jnpt-dienst`, Administratoren
-und SYSTEM. Im Fake wird an `C:\JanuaPort` nichts angelegt. Zusätzlich erhält
-ein echter temporärer Eltern-/Kindordner absichtlich breite Rechte für
-Authentifizierte Benutzer; der echte `icacls`-Adapter muss diese entfernen.
-Aufrufreihenfolge und native Fehler werden geprüft. Die Mutation ohne
-`/inheritance:r` muss sowohl die Argumentprüfung als auch den echten ACL-Test
-rot machen; weitere Mutationen entfernen die Elternordnersperre, das Entfernen
-alter expliziter Rechte, die Upgrade-Summenprüfung oder den Erhalt von `.env`
-und Secrets. Diese Proben sind in `dienst_mutations.py` enthalten.
+B-7/F5 prueft die vollstaendige geschuetzte DirectorySecurity mit genau drei
+expliziten FullControl-Regeln (ContainerInherit, ObjectInherit, Propagation None,
+Allow) fuer Dienst-SID, Administratoren und SYSTEM. Der Fake ersetzt nur die
+nativen Directory-Lese-/Schreibgrenzen; die echten Security-Descriptor-Klassen
+und der produktive Kontrollfluss bleiben erhalten. Der erste Lauf schreibt
+einmal, der identische zweite Lauf gar nicht. Fast passende DACLs mit vierter
+Regel, fehlendem Schutz, anderen Rechten, Vererbungs-/Propagationsflags oder
+Deny werden ersetzt. Native Schreibfehler muessen abbrechen.
+
+`test_acl_f5.py` enthaelt einen AST-Waechter gegen zwei Schreibschritte oder
+alte Clear-/icacls-Adapter. Auf echtem NTFS unter dem Testordner werden nach
+der ersten Absicherung erbende `.env`-, Secret- und Logdateien angelegt und
+dann Eltern-/Profilordner erneut geschuetzt: Inhalt bleibt lesbar, Besitzer
+und SDDL bleiben gleich, alle Dateien tragen die drei geerbten ACEs. Breite
+geerbte und explizite Fremdrechte werden in den bestehenden Temp-ACL-Tests
+weiterhin am echten Adapter entfernt. Der Fall eines anderen Dateibesitzers
+bleibt BOX vorbehalten; der Test aendert keinen Kontobesitz.
+
+```powershell
+$env:PYTHONPATH = 'windows/test'
+python -B -m unittest test_acl_f5 test_upgrade.ParentAcl -v
+python -B windows/test/f5_mutations.py
+```
+
+Die sechs F5-Mutationen entfernen den Schutz, ergaenzen eine vierte Regel,
+schreiben erst eine leere DACL und dann die Ziel-DACL, entfernen Idempotenz,
+erhalten alte explizite Freigaben oder ignorieren einen Schreibfehler. Sie
+sind auch in `dienst_mutations.py` integriert. Die manuelle Reparatur im
+RUNBOOK wird nur als Anleitung geprueft; takeown und icacls /reset werden
+im Test nicht ausgefuehrt.
 
 `test_b4.py` prüft den sofortigen Anmeldeauslöser ohne festen Delay und den
 festen Aufruf von `C:\JanuaPort\windows\jnpt-sperren.ps1`. Der echte PS-5.1-
