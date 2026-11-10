@@ -30,13 +30,19 @@ festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
 4. **W4/W5, B-3, Neustart:** `dienst-einrichten.ps1` auf dem Testrechner als
    Admin vorbereiten, Docker Desktop vor dem abschließenden Lauf einmal in
    `jnpt-dienst` starten und Einstellungen von Hand prüfen, mit `-KennwortNeu`
-   erneut prüfen lassen. `Delay=PT30S` und den festen B-7-geschützten Pfad
+   erneut prüfen lassen. Keinen festen Delay und den festen B-7-geschützten Pfad
    `C:\JanuaPort\windows\jnpt-sperren.ps1` in der Aufgabe kontrollieren.
-   Das Skript wartet auf Explorer derselben Sitzung (höchstens 120 Sekunden),
-   sperrt und prüft den WTS-Status; höchstens 12 Versuche alle 5 Sekunden.
-   Bei Fehler ist `LastTaskResult` ungleich 0, ohne Protokoll oder Ersatzaktion.
-   Neustarten. Nach 90 Sekunden Taste und Enter: Kennwortabfrage muss erscheinen.
-   Ein Bild allein belegt die Sperre nicht. Foto des erreichten Sperrbildschirms
+   Das Skript prüft Explorer derselben Sitzung und WTS-Sperrstatus jede Sekunde,
+   zusammen höchstens 120 Sekunden. Bei Fehler ist `LastTaskResult` ungleich 0,
+   ohne Abmelden oder Herunterfahren als Ersatz. Der B-7-geschützte Ordner
+   `C:\JanuaPort\windows\log` ist angelegt; `sperren.log` enthält pro Anmeldung
+   genau eine Zeile mit ISO-Startzeit, ISO-Sperrzeit oder `nicht_gesperrt`,
+   Versuchszahl und Exit-Code, ohne Benutzernamen, höchstens 100 Zeilen.
+   Neustarten. Ab dem ersten Bild alle 5 Sekunden eine Taste drücken und den
+   frühesten Zeitpunkt einer Kennwortabfrage notieren. Aufgabenresultat muss 0
+   sein. Diesen Zeitpunkt und den Zeitpunkt aus `sperren.log` in den Gate-Bericht
+   aufnehmen. Der Bildschirmschoner sperrt nach 60 Sekunden: eine spätere Probe
+   allein belegt die Skriptwirkung nicht. Foto des erreichten Sperrbildschirms
    aufnehmen (ohne personenbezogene Inhalte). Sperre bei Anmeldung und nach
    einer Minute Inaktivität einschließlich Kennwortpflicht tatsächlich testen.
    Prüfen, dass Docker Desktop und Anlage trotz gesperrter Sitzung laufen.

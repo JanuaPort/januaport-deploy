@@ -83,20 +83,21 @@ rot machen; weitere Mutationen entfernen die Elternordnersperre, das Entfernen
 alter expliziter Rechte, die Upgrade-SummenprÃ¼fung oder den Erhalt von `.env`
 und Secrets. Diese Proben sind in `dienst_mutations.py` enthalten.
 
-`test_b4.py` prÃ¼ft in PS 5.1 den AnmeldeauslÃ¶ser mit `Delay=PT30S` und den
-festen Aufruf von `C:\JanuaPort\windows\jnpt-sperren.ps1`. Das echte Skript
-lÃ¤uft Ã¼ber seinen `-File`-Einstieg mit verwaltetem Ersatz fÃ¼r user32/WTS:
-Explorer einer fremden Sitzung genÃ¼gt nicht; ohne eigenen Explorer endet das
-Warten nach 120 Sekunden. BestÃ¤tigte Sperre beim ersten oder dritten Versuch
-ist erfolgreich, zwÃ¶lf erfolglose Versuche liefern Exit ungleich 0. Ausgabe
-und Ersatz durch Abmelden/Herunterfahren sind mit Fehlerfallen abgesichert.
-Ein weiterer Test kompiliert den echten C#-Adapter mit ausschlieÃŸlich ersetzten
-P/Invoke-Deklarationen: aktuelle Sitzung, WTS-Klasse 26, `SessionFlags=0`,
-ungesperrte/unbekannte Flags, kurze/falsche Antworten und Speicherfreigabe.
-Dabei wird keine native Sperre oder WTS-Abfrage ausgefÃ¼hrt. Autologon verwendet
-einen lokalen `.cmd`-Ersatz und einen virtuellen Takt: Winlogon erscheint nach
-2 Sekunden oder bleibt Ã¼ber die gesamten 10 Sekunden aus. Fehlende
-Docker-Einstellungen werden mit dem echten Dateiadapter geprÃ¼ft.
+`test_b4.py` prüft den sofortigen Anmeldeauslöser ohne festen Delay und den
+festen Aufruf von `C:\JanuaPort\windows\jnpt-sperren.ps1`. Der echte PS-5.1-
+Einstieg läuft mit verwaltetem Ersatz für user32/WTS und virtuellem Sekundentakt.
+Nur Explorer derselben Sitzung zählt; Bereitschaft und Sperre teilen sich ein
+120-Sekunden-Limit. Erste/dritte bestätigte Sperre, nie gesperrte Sitzung und
+später Explorer werden geprüft. Das echte Dateiadapter-Protokoll enthält genau
+eine Zeile (ISO-Start, ISO-Sperre oder `nicht_gesperrt`, Versuche, Exit), ohne
+Benutzernamen; maximal 100 Zeilen. Ein Schreibfehler ergibt Exit ungleich 0.
+Die Einrichtung muss den B-7-geschützten Logordner vor der Aufgabe anlegen.
+Der C#-WTS-Decoder läuft mit ausschließlich ersetzten P/Invoke-Deklarationen:
+aktuelle Sitzung, Klasse 26, LOCK/UNLOCK/UNKNOWN, kurze/falsche/fehlgeschlagene
+Antwort und Speicherfreigabe. Keine echte native Sperre oder WTS-Abfrage.
+Autologon nutzt einen lokalen `.cmd`-Ersatz und virtuellen Takt (Bestätigung
+nach 2 Sekunden oder Fehler nach 10 Sekunden). Beide JSON-Dateivarianten und
+die feste Meldung bei fehlenden Docker-Einstellungen verwenden echte Dateien.
 
 ```powershell
 $env:PYTHONPATH = 'windows/test'
@@ -104,11 +105,19 @@ python -B -m unittest test_b4 -v
 python -B windows/test/b4_mutations.py
 ```
 
-Die zehn B4-Mutationen entfernen VerzÃ¶gerung, SperrbestÃ¤tigung, Nachfragen bei
-Autologon, feste Fehlermeldung, Sitzungsfilter und Fehler-Exit; weitere akzeptieren
-ein ungesperrtes WTS-Flag, geben Fehlerdetails aus oder versuchen tatsÃ¤chlich
-die Abmelde-/Herunterfahradapter (mit protokollierenden Fehlerfallen). Jede isolierte Kopie
-muss an einer Assertion scheitern; Originaldateien bleiben bytegenau erhalten.
+Die 15 SEC-Mutationen führen Delay, zu langsamen Takt, ersten Abbruch,
+fehlende/personenbezogene/unbegrenzte Protokollierung, fehlende Sperrprüfung,
+fremde Sitzung, falschen Erfolgs-Exit und unerlaubte Fehlerausgabe ein.
+Außerdem werden Autologon-Nachfragen und die feste N2-Meldung entfernt.
+Abmelden/Herunterfahren werden an protokollierenden Fehlerfallen tatsächlich
+versucht. Jede isolierte Kopie muss an einer Assertion scheitern; die
+Originalbytes bleiben erhalten.
+
+`test_operator_docs.py` führt die gepinnten N4-Hilfscontainer-Befehle aus den
+READMEs gegen ein eigenes zufälliges Test-Volume und synthetische Key-Dateien
+aus: bisherige DB/Key-Dateien bleiben beiseitegelegt erhalten, der neue Key
+ist als UID 65532 mit Modus 600 lesbar. `operator_mutations.py` muss Löschen
+statt Verschieben sowie falschen Eigentümer und Modus am echten Adapter erkennen.
 
 Die manuelle B4-Abnahme steht in [PRUEFSTEIN-B4.md](../PRUEFSTEIN-B4.md):
 DPAPI-unabhÃ¤ngige Wiederherstellung nach Kennwortreset, Sperrbildschirmfoto nach

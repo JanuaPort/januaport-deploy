@@ -195,7 +195,6 @@ function Register-DienstTasks {
     $principal = New-ScheduledTaskPrincipal -UserId $account -LogonType Interactive -RunLevel Limited
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew
     $logon = New-ScheduledTaskTrigger -AtLogOn -User $account
-    $logon.Delay = 'PT30S'
     $ps = $env:SystemRoot + '\System32\WindowsPowerShell\v1.0\powershell.exe'
     $lock = New-ScheduledTaskAction -Execute $ps -Argument '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "C:\JanuaPort\windows\jnpt-sperren.ps1"'
     Register-ScheduledTask -TaskName 'JanuaPort Sperren bei Anmeldung' -Action $lock -Trigger $logon -Principal $principal -Settings $settings -Force | Out-Null
@@ -246,6 +245,8 @@ function Initialize-Dienst {
         $upgrade = Test-LegacyProfile $DienstDirectory
         New-Item -ItemType Directory -Path $DienstDirectory -Force | Out-Null
         Protect-DienstDirectory $DienstDirectory $user.SID
+        # Inherits the private B-7 ACL; created before the logon task is installed.
+        New-Item -ItemType Directory -Path (Join-Path $DienstDirectory 'log') -Force | Out-Null
         foreach ($name in (@('SHA256SUMS') + $ProfileFiles)) {
             $destination = Join-Path $DienstDirectory $name
             $source = Join-Path $PSScriptRoot $name

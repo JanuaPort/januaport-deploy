@@ -137,15 +137,21 @@ only and excluded from the public repository. Changed upstream bytes require a
 reviewed pin update.
 
 “JanuaPort Sperren bei Anmeldung” starts the fixed
-`C:\JanuaPort\windows\jnpt-sperren.ps1` with hidden PowerShell 30 seconds after
-logon (`Delay=PT30S`). The B-7 ACL protects that path. The script waits up to
-120 seconds for `explorer.exe` in its own session, calls `LockWorkStation`, and
+`C:\JanuaPort\windows\jnpt-sperren.ps1` with hidden PowerShell immediately at
+logon, without a fixed delay. The B-7 ACL protects that path. The script checks
+once per second for `explorer.exe` in its own session, calls `LockWorkStation`, and
 verifies the lock through `WTSQuerySessionInformation` /
-`WTSSessionInfoEx.SessionFlags`. Without confirmation it retries every 5 seconds,
-up to 12 attempts. A readiness or lock failure returns a nonzero exit code
-visible in Task Scheduler. The script produces no log and does not log off or
-shut down as a fallback. The window before a confirmed lock remains and needs
-the B4 test-machine check. A password-protected screen saver also locks after
+`WTSSessionInfoEx.SessionFlags`. Without confirmation it retries every second.
+Readiness and locking share a 120-second deadline. Failure returns a nonzero
+exit code visible in Task Scheduler; there is no logoff or shutdown fallback.
+Exactly one line per logon in `C:\JanuaPort\windows\log\sperren.log` records the
+ISO start time, ISO confirmed-lock time or `nicht_gesperrt`, attempt count and
+exit code. It contains no usernames or window contents and retains the last
+100 lines. Setup creates the directory under the B-7 ACL. A log failure also
+returns a nonzero exit code.
+For a few seconds after reboot, until the desktop is ready, the `jnpt-dienst`
+session is unlocked. Protection during this interval depends on controlling
+access to the operator's room. A password-protected screen saver also locks after
 60 seconds. `powercfg` disables AC/battery standby and
 hibernation. The account's `.wslconfig` sets `[wsl2]` / `memory=4GB`; conflicting
 existing settings require manual reconciliation. The script does not restart
@@ -181,7 +187,9 @@ schtasks /run /tn "JanuaPort Sicherung"
 **`docker-users` is not a security boundary:** members can bind-mount `C:\`
 into containers and are effectively administrators. “Standard user” is an
 organizational choice. Autologon console protection depends on locking at
-logon. [B4](PRUEFSTEIN-B4.md) requires a photo of the lock screen after reboot;
+logon. [B4](PRUEFSTEIN-B4.md) requires a photo and the earliest password prompt
+while pressing a key every 5 seconds from the first image after reboot,
+together with task result and log time; a photo alone does not prove locking.
 acceptance remains open.
 
 [Docker's Windows installation documentation](https://docs.docker.com/desktop/setup/install/windows-install/)

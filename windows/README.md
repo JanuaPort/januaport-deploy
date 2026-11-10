@@ -161,17 +161,23 @@ Authenticode-Signatur verlangt. Hashabweichung bedeutet Abbruch, ohne
 Ausweichquelle. Das lizenzierte Binary liegt nur lokal, nicht im öffentlichen
 Repo. Ein neuer Upstream-Download erfordert ggf. einen überprüften neuen Pin.
 
-„JanuaPort Sperren bei Anmeldung“ startet 30 Sekunden nach der Anmeldung
-(`Delay=PT30S`) das feste `C:\JanuaPort\windows\jnpt-sperren.ps1` verborgen
+„JanuaPort Sperren bei Anmeldung“ startet sofort bei der Anmeldung das feste
+`C:\JanuaPort\windows\jnpt-sperren.ps1` verborgen
 mit PowerShell. Der Pfad ist durch die B-7-ACL geschützt. Das Skript wartet
-höchstens 120 Sekunden auf `explorer.exe` in seiner eigenen Sitzung, ruft
+im Sekundentakt auf `explorer.exe` in seiner eigenen Sitzung, ruft
 `LockWorkStation` auf und bestätigt die Sperre anhand von
 `WTSQuerySessionInformation` / `WTSSessionInfoEx.SessionFlags`.
-Ohne Bestätigung wiederholt es den Aufruf nach jeweils 5 Sekunden, höchstens
-12 Versuche. Scheitert die Sperre oder die Bereitschaftsprüfung, zeigt die
-Aufgabenplanung einen Exit-Code ungleich 0; es gibt keine Protokollausgabe und
-kein Abmelden oder Herunterfahren als Ersatz. Das Anmeldefenster vor der
-bestätigten Sperre bleibt bestehen und wird in B4 am Testrechner geprüft.
+Ohne Bestätigung wiederholt es den Aufruf nach jeweils einer Sekunde. Für
+Bereitschaft und Sperre gilt zusammen ein Limit von 120 Sekunden. Scheitert
+die Sperre, zeigt die Aufgabenplanung einen Exit-Code ungleich 0; es gibt
+kein Abmelden oder Herunterfahren als Ersatz. Genau eine Zeile je Anmeldung
+in `C:\JanuaPort\windows\log\sperren.log` enthält ISO-Startzeit, ISO-Zeit der
+belegten Sperre oder `nicht_gesperrt`, Versuchszahl und Exit-Code. Sie enthält
+keine Benutzernamen oder Fensterinhalte; erhalten bleiben die letzten 100 Zeilen.
+Die Einrichtung legt den Ordner unter der B-7-ACL an. Ein Protokollfehler
+liefert ebenfalls Exit ungleich 0.
+Für wenige Sekunden nach dem Neustart, bis der Desktop steht, ist die Sitzung
+von `jnpt-dienst` ungesperrt. Schutz in dieser Zeit ist der Zutritt zum Raum beim Betreiber.
 Zusätzlich sperrt ein kennwortgeschützter Bildschirmschoner nach 60 Sekunden.
 `powercfg` deaktiviert Standby an Netz
 und Akku sowie den Ruhezustand. Im Windows-Profil von `jnpt-dienst` wird
@@ -213,7 +219,9 @@ schtasks /run /tn "JanuaPort Sicherung"
 Bind-Mount auf `C:\` starten und sind damit praktisch Admin. „Standardbenutzer“
 beschreibt nur die Ordnung. Bei Autologon hängt der Konsolenschutz an der Sperre
 bei Anmeldung. Der [Prüfstein B4](PRUEFSTEIN-B4.md) verlangt ein Foto des
-Sperrbildschirms nach Neustart; dieser Nachweis steht noch aus.
+Sperrbildschirms nach Neustart und die früheste Kennwortabfrage bei Tastendruck
+alle 5 Sekunden ab dem ersten Bild. Aufgabenresultat und Protokollzeit gehören
+zum Nachweis; ein Foto allein genügt nicht. Dieser Nachweis steht noch aus.
 
 Für das WSL-2-Backend bestätigt die [Docker-Doku zur Windows-Installation](https://docs.docker.com/desktop/setup/install/windows-install/),
 dass Container und Images nicht zwischen Konten geteilt werden können. Volumes

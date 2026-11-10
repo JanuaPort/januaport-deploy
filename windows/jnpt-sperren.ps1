@@ -4,6 +4,7 @@ param()
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$SessionLockLogPath = 'C:\JanuaPort\windows\log\sperren.log'
 
 function Initialize-SessionLockNative {
     if ('Jnpt.SessionLock' -as [type]) { return }
@@ -48,28 +49,51 @@ namespace Jnpt {
 '@ | Out-Null
 }
 
+function Get-SessionLockElapsedSeconds {
+    param($Timer)
+    return $Timer.Elapsed.TotalSeconds
+}
+
 function Invoke-SessionLock {
+    param($Result)
+    $timer = [Diagnostics.Stopwatch]::StartNew()
     $sessionId = (Get-Process -Id $PID).SessionId
-    # Bounded readiness wait; an explorer in another session is insufficient.
-    for ($elapsed = 0; $elapsed -le 120; $elapsed++) {
+    # One deadline covers readiness and locking. No fixed logon delay.
+    while ((Get-SessionLockElapsedSeconds $timer) -lt 120) {
         $explorer = @(Get-Process -Name explorer -ErrorAction SilentlyContinue |
             Where-Object { $_.SessionId -eq $sessionId })
-        if ($explorer.Count -gt 0) { break }
-        if ($elapsed -eq 120) { return 1 }
-        Start-Sleep -Seconds 1
+        if ($explorer.Count -gt 0) {
+            Initialize-SessionLockNative
+            $Result.Attempts++
+            # Neither API return value nor a LogonUI process proves locking.
+            [Jnpt.SessionLock]::Lock() | Out-Null
+            if ([Jnpt.SessionLock]::IsLocked()) {
+                $Result.LockedAt = [DateTime]::UtcNow.ToString('o')
+                $Result.ExitCode = 0
+                return
+            }
+        }
+        Start-Sleep -Milliseconds 1000
     }
-    Initialize-SessionLockNative
-    for ($attempt = 1; $attempt -le 12; $attempt++) {
-        # Neither the API return value nor a LogonUI process proves locking.
-        # Verify WTS state even if LockWorkStation returns false.
-        [Jnpt.SessionLock]::Lock() | Out-Null
-        if ([Jnpt.SessionLock]::IsLocked()) { return 0 }
-        if ($attempt -lt 12) { Start-Sleep -Seconds 5 }
+    # Timeout leaves result failed.
+}
+
+function Write-SessionLockResult {
+    param([DateTime]$Started, $Result)
+    $line = "{0}`t{1}`tattempts={2}`texit={3}" -f $Started.ToString('o'), $Result.LockedAt, $Result.Attempts, $Result.ExitCode
+    $lines = @()
+    if (Test-Path -LiteralPath $SessionLockLogPath -PathType Leaf) {
+        $lines = @(Get-Content -LiteralPath $SessionLockLogPath -Tail 99)
     }
-    return 1
+    $lines += $line
+    [IO.File]::WriteAllLines($SessionLockLogPath, [string[]]$lines, (New-Object Text.UTF8Encoding($false)))
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
-    # No log, user data or alternative action: Task Scheduler sees the failure.
-    try { exit (Invoke-SessionLock) } catch { exit 1 }
+    $started = [DateTime]::UtcNow
+    $result = @{LockedAt='nicht_gesperrt'; Attempts=0; ExitCode=1}
+    try { Invoke-SessionLock $result } catch { }
+    # One bounded audit line, no identity or exception text. No alternative action.
+    try { Write-SessionLockResult $started $result } catch { exit 1 }
+    exit $result.ExitCode
 }

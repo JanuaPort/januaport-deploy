@@ -86,13 +86,16 @@ eine neue Sitzung nötig ist.
 ### 3.3 Nach einem Neustart
 1. Die Fernsitzung bricht ab. Der Dienstleister ruft beim Kunden an.
 2. `jnpt-dienst` meldet sich lokal automatisch an. „JanuaPort Sperren bei Anmeldung“
-   startet mit 30 Sekunden Verzögerung das B-7-geschützte
-   `C:\JanuaPort\windows\jnpt-sperren.ps1`. Es wartet höchstens 120 Sekunden auf
-   Explorer derselben Sitzung und bestätigt die Sperre per WTS-Sitzungsstatus,
-   mit höchstens 12 Versuchen im Abstand von 5 Sekunden. Fehler sind als
-   `LastTaskResult` ungleich 0 sichtbar; keine Logausgabe und kein Ersatz durch
-   Abmelden oder Herunterfahren. Der Betreiber prüft nach 90 Sekunden mit Taste
-   und Enter die Kennwortpflicht (zusätzlich Foto im B4-Abnahmeprotokoll).
+   startet sofort das B-7-geschützte `C:\JanuaPort\windows\jnpt-sperren.ps1`.
+   Es prüft Explorer derselben Sitzung und den WTS-Sperrstatus im Sekundentakt;
+   für beides zusammen gelten 120 Sekunden. Fehler sind als `LastTaskResult`
+   ungleich 0 sichtbar; kein Ersatz durch Abmelden oder Herunterfahren.
+   `log\sperren.log` enthält eine Zeile je Anmeldung (Startzeit, Sperrzeit oder
+   `nicht_gesperrt`, Versuche, Exit-Code), höchstens 100 Zeilen, ohne Benutzernamen.
+   Der Betreiber drückt ab dem ersten Bild alle 5 Sekunden eine Taste und
+   notiert die früheste Kennwortabfrage. Aufgabenresultat 0 und Protokollzeit
+   kommen zusammen mit dem Foto in den Gate-Bericht. Bis der Desktop steht,
+   schützt nur der kontrollierte Zutritt zum Raum die noch ungesperrte Sitzung.
 3. Die Person beim Kunden startet/akzeptiert eine neue TeamViewer-Sitzung nach dem vereinbarten
    Verfahren. Der Dienstleister verwendet ausschließlich das Wartungskonto und arbeitet nie als
    `jnpt-dienst`. Das Wartungskonto stößt nur Aufgaben mit `schtasks /run` an.
