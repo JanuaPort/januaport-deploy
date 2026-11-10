@@ -7,6 +7,7 @@ import tempfile
 import unittest
 import json
 import zipfile
+import base64
 
 from test_profile import PROFILE_FILES, ROOT, run
 
@@ -87,7 +88,7 @@ class Dienst(unittest.TestCase):
             (target / 'user').mkdir()
             source = ROOT / 'dienst-einrichten.ps1'
             command = ". '" + str(Path(__file__).with_name('dienst_fakes.ps1')) + "'; "
-            command += "$DienstDirectory='" + str(target / 'profile') + "'; $BackupTarget='" + backup_target + "'; "
+            command += "$DienstDirectory='" + str(target / 'profile') + "'; $BackupTarget='" + backup_target.replace("'", "''") + "'; "
             command += extra + '; Initialize-Dienst; '
             if repeat:
                 command += 'Initialize-Dienst; '
@@ -104,6 +105,7 @@ class Dienst(unittest.TestCase):
         events = json.loads(result.stdout.strip())
         self.assertEqual(events.count('new:jnpt-dienst'), 1)
         self.assertEqual(events.count('group:docker-users'), 1)
+        self.assertEqual(events.count('group:Users'), 1)
         self.assertEqual(events.count('autologon'), 1)
         self.assertEqual(len(tasks), 6)
         self.assertIn('memory=4GB', wsl)
@@ -115,7 +117,7 @@ class Dienst(unittest.TestCase):
             self.assertEqual(task['Principal']['LogonType'], 'Interactive')
             self.assertEqual(task['Principal']['RunLevel'], 'Limited')
             self.assertTrue(task['Principal']['UserId'].endswith('\\jnpt-dienst'))
-        actions = ' '.join(t['Action']['Argument'] or '' for t in tasks)
+        actions = ' '.join(self.task_command(t) for t in tasks)
         self.assertIn('LockWorkStation', actions)
         self.assertIn('jnpt-backup.ps1', actions)
         self.assertIn('einrichten.ps1', actions)
@@ -128,6 +130,21 @@ class Dienst(unittest.TestCase):
                 self.assertIsNone(task['Trigger'])
         # cmdkey.exe is a trap in the fake: every credential write would fail.
         self.assertNotIn('FORBIDDEN', result.stderr)
+
+    @staticmethod
+    def task_command(task):
+        argument = task['Action']['Argument'] or ''
+        if '-EncodedCommand ' in argument:
+            return base64.b64decode(argument.rsplit(' ', 1)[1]).decode('utf-16le')
+        return argument
+
+    def test_task_preserves_usb_root_apostrophe_and_dedicated_smb_target(self):
+        for target in ['E:\\', "E:\\Back'up", r'\\backup-host\dedicated-share']:
+            with self.subTest(target=target):
+                result, tasks, _ = self.fake_setup(backup_target=target, repeat=False)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                backup = next(t for t in tasks if t['TaskName'] == 'JanuaPort Sicherung')
+                self.assertTrue(self.task_command(backup).endswith("-Target '" + target.replace("'", "''") + "'"))
 
     def test_setup_failure_never_prints_password(self):
         for mode in ['admin', 'privileged', 'disabled', 'power', 'task']:

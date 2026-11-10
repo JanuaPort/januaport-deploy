@@ -1,2 +1,4 @@
 # Lokale Compose-Secrets: SMTP-Passwort und Graph-Client-Secret, anfangs leer.
 secrets/
+# Sysinternals-Lizenz: nur lokal nach SHA-256 und Authenticode verwenden.
+Autologon64.exe

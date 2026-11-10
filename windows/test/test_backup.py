@@ -145,6 +145,7 @@ function Move-Item { param($LiteralPath,$Destination)
     def test_previous_backups_are_retained(self):
         result, files, _ = self.invoke(existing=True)
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('old.jnpt-backup', files)
         self.assertEqual(files['old.jnpt-backup'], b'old synthetic backup')
         self.assertEqual(len(files), 3)
 

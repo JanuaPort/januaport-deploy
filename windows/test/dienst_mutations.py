@@ -3,10 +3,13 @@
 No account, autologon, power configuration, registry or scheduler changes.
 """
 from mutations import mutant
+TOTAL = 0
 
 
 def probe(label, file, old, new, test):
+    global TOTAL
     mutant(label, file, old, new, command=['-m', 'unittest', test, '-v'])
+    TOTAL += 1
 
 
 def main():
@@ -19,6 +22,9 @@ def main():
           'if ($false)', 'test_install.Dienst.test_wrong_hash_with_valid_signature_aborts_before_autologon')
     probe('B2 Authenticode signature', 'dienst-einrichten.ps1', "$signature.Status -ne 'Valid'", '$false',
           'test_install.Dienst.test_authenticode_and_publisher_are_second_gate')
+    probe('B2 missing or duplicate external pin', 'dienst-einrichten.ps1',
+          "if ($rows.Count -ne 1) { throw 'SHA-256-Pin fuer Autologon64.exe fehlt oder ist doppelt.' }", '$null=$null',
+          'test_install.Dienst.test_external_pin_missing_or_duplicate_aborts')
     probe('B2 Microsoft publisher', 'dienst-einrichten.ps1',
           "$signature.SignerCertificate.Subject -notmatch '(?:^|,\\s*)O=Microsoft Corporation(?:,|$)'", '$false',
           'test_install.Dienst.test_authenticode_and_publisher_are_second_gate')
@@ -52,6 +58,9 @@ def main():
           'test_install.Dienst.test_actual_autologon_adapter_suppresses_native_password_output_and_failure')
     probe('B-1 cmdkey write prohibited', 'dienst-einrichten.ps1',
           '    Assert-Administrator\n', '    Assert-Administrator\n    & cmdkey.exe /add:synthetic-master-key-probe\n', setup)
+    probe('B2 built-in Users membership', 'dienst-einrichten.ps1',
+          '                Add-LocalGroupMember -Group $group.Name -Member $user',
+          "                if ($group.Name -ne 'Users') { Add-LocalGroupMember -Group $group.Name -Member $user }", setup)
     probe('B2 private profile ACL', 'dienst-einrichten.ps1',
           '$acl.SetAccessRuleProtection($true, $false)', '$acl.SetAccessRuleProtection($false, $false)',
           'test_install.Dienst.test_real_filesystem_acl_is_limited_to_account_system_and_administrators')
@@ -79,13 +88,17 @@ def main():
           "if ((Get-CurrentAccount) -ine ($env:COMPUTERNAME + '\\jnpt-dienst'))", 'if ($false)',
           'test_backup.Backup.test_other_account_rejected_at_real_identity_adapter')
     probe('B3 absolute target gate', 'jnpt-backup.ps1',
-          "if ([string]::IsNullOrWhiteSpace($Target) -or -not [IO.Path]::IsPathRooted($Target))", 'if ($false)',
+          "if ($Target -notmatch '^(?:[A-Za-z]:[\\\\/]|\\\\\\\\[^\\\\]+\\\\[^\\\\]+(?:\\\\|$))')", 'if ($false)',
           'test_backup.Backup.test_relative_or_empty_target_is_rejected')
     probe('B3 profile completeness', 'jnpt-backup.ps1',
           "throw 'Profil unvollstaendig.'", '$null=$null',
           'test_backup.Backup.test_incomplete_profile_rejected_before_docker')
     probe('B3 Docker exit code', 'jnpt-backup.ps1',
           "if ($LASTEXITCODE -ne 0) { throw 'Docker-Sicherung fehlgeschlagen.' }", '$null=$null', backup_errors)
+    probe('B3 container size metadata', 'jnpt-backup.ps1',
+          "if ($sizeText -cnotmatch '^[1-9][0-9]*$' -or -not [long]::TryParse($sizeText, [ref]$size))", 'if ($false)', backup_errors)
+    probe('B3 container hash metadata', 'jnpt-backup.ps1',
+          "if ($hashText -cnotmatch ('^([a-f0-9]{64})  ' + [regex]::Escape($remote) + '$'))", 'if ($false)', backup_errors)
     probe('B3 size comparison', 'jnpt-backup.ps1',
           "if ((Get-Item -LiteralPath $Path).Length -ne $Size)", 'if ($false)', backup_errors)
     probe('B3 hash comparison', 'jnpt-backup.ps1',
@@ -97,9 +110,14 @@ def main():
     probe('B3 partial filename', 'jnpt-backup.ps1', "$partial = $final + '.teil'", "$partial = $final + '.tmp'", backup_ok)
     probe('B3 failed final file cleanup', 'jnpt-backup.ps1',
           '-not $success -and $ownsFinal', '$false -and $ownsFinal', backup_errors)
+    probe('B3 failed partial file cleanup', 'jnpt-backup.ps1',
+          'if ($ownsPartial -and (Test-Path -LiteralPath $partial))', 'if ($false)', backup_errors)
+    probe('B3 no automatic retention deletion', 'jnpt-backup.ps1',
+          '        $success = $true', "        Remove-Item -LiteralPath (Join-Path $Target 'old.jnpt-backup')\n        $success = $true",
+          'test_backup.Backup.test_previous_backups_are_retained')
     probe('B3 successful container cleanup', 'jnpt-backup.ps1',
           "        Invoke-BackupDocker @('exec', '-T', 'jnpt', 'rm', '--', $remote) | Out-Null\n", '', backup_ok)
-    print('B2/B3 mutations: all killed; original profile bytes unchanged.', flush=True)
+    print(f'B2/B3 mutations: {TOTAL} killed; original profile bytes unchanged.', flush=True)
 
 
 if __name__ == '__main__':

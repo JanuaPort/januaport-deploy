@@ -10,13 +10,14 @@ function New-DienstPassword { ConvertTo-SecureString 'KANARIE-NICHT-ECHT' -AsPla
 function New-LocalUser { param($Name,$Password,$Description,[switch]$PasswordNeverExpires,[switch]$AccountNeverExpires)
     $script:events.Add('new:'+$Name); $script:exists=$true; Get-LocalUser $Name }
 function Set-LocalUser { param($Name,$Password) $script:events.Add('reset') }
-function Get-LocalGroup { param($SID,$Name) [pscustomobject]@{Name=$(if ($SID) {'Administrators'} else {'docker-users'})} }
+function Get-LocalGroup { param($SID,$Name) [pscustomobject]@{Name=$(if ($SID -eq 'S-1-5-32-545') {'Users'} elseif ($SID) {'Administrators'} else {'docker-users'})} }
 function Get-LocalGroupMember { param($Group)
-    if (($Group -eq 'docker-users' -and $script:member) -or ($Group -eq 'Administrators' -and $env:PROBE_FAIL -eq 'privileged')) {
+    if (($Group -eq 'docker-users' -and $script:member) -or ($Group -eq 'Users' -and $script:usersMember) -or ($Group -eq 'Administrators' -and $env:PROBE_FAIL -eq 'privileged')) {
         [pscustomobject]@{SID='S-1-5-21-100-100-100-1001'}
     }
 }
-function Add-LocalGroupMember { param($Group,$Member) $script:events.Add('group:'+$Group); $script:member=$true }
+$script:usersMember = $false
+function Add-LocalGroupMember { param($Group,$Member) $script:events.Add('group:'+$Group); if ($Group -eq 'Users') {$script:usersMember=$true} else {$script:member=$true} }
 function Get-DienstProfilePath { param($User) Join-Path $env:PROBE_ROOT 'user' }
 function Protect-DienstDirectory { param($Path,$SID) $script:events.Add('acl') }
 function Set-DienstScreenLock { param($ProfilePath,$SID) $script:events.Add('screen:60') }

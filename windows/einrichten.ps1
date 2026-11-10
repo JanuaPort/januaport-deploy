@@ -1,7 +1,7 @@
 #requires -Version 5.1
 [CmdletBinding()]
 param(
-    [string]$Directory = (Join-Path $env:LOCALAPPDATA 'JanuaPort\windows'),
+    [string]$Directory = 'C:\JanuaPort\windows',
     [switch]$NeuesZertifikat
 )
 
@@ -9,11 +9,12 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 # Dieser Release-Tag muss vor dem veroeffentlichten Aufruf existieren und
 # unveraenderlich bleiben. Kein main/Branch als Downloadquelle.
-$ProfileRef = 'windows-v0.1.0'
+$ProfileRef = 'windows-v0.2.0'
 $ProfileBase = "https://raw.githubusercontent.com/JanuaPort/januaport-deploy/$ProfileRef/windows"
 $Repository = 'ghcr.io/januaport/januaport'
 $ProfileFiles = @('docker-compose.yml', 'Caddyfile', 'einrichten.ps1', '.gitignore',
-    'README.md', 'README.en.md', 'RUNBOOK.md')
+    'README.md', 'README.en.md', 'RUNBOOK.md', 'dienst-einrichten.ps1',
+    'jnpt-backup.ps1', 'PRUEFSTEIN-B4.md')
 
 function Invoke-Docker {
     param([string[]]$Arguments)
@@ -24,7 +25,9 @@ function Invoke-Docker {
 
 function Test-ProfileFiles {
     param([string]$Path)
-    $expected = $ProfileFiles
+    # External licensed binary: pinned here, downloaded/verified separately by
+    # dienst-einrichten.ps1. It is not part of the public profile distribution.
+    $expected = $ProfileFiles + @('Autologon64.exe')
     $seen = @{}
     foreach ($line in [IO.File]::ReadAllLines((Join-Path $Path 'SHA256SUMS'))) {
         if ($line -cnotmatch '^([a-f0-9]{64})  ([A-Za-z0-9.-]+)$') { throw 'Ungueltige SHA256SUMS-Zeile.' }
@@ -32,6 +35,7 @@ function Test-ProfileFiles {
         $name = $Matches[2]
         if ($expected -cnotcontains $name -or $seen.ContainsKey($name)) { throw 'Unerwarteter Summeneintrag.' }
         $seen[$name] = $true
+        if ($name -ceq 'Autologon64.exe') { continue }
         $file = [IO.File]::OpenRead((Join-Path $Path $name))
         $sha = [Security.Cryptography.SHA256]::Create()
         try {
@@ -120,15 +124,22 @@ function Initialize-MailSecret {
 }
 
 function Install-Profile {
+    Assert-DienstSession
     Get-Command docker -ErrorAction Stop | Out-Null
     Invoke-Docker @('compose', 'version') | Out-Host
     if (Test-Path -LiteralPath $Directory) {
-        foreach ($name in (@('.env', 'SHA256SUMS') + $ProfileFiles)) {
+        foreach ($name in (@('SHA256SUMS') + $ProfileFiles)) {
             if (-not (Test-Path -LiteralPath (Join-Path $Directory $name) -PathType Leaf)) {
                 throw 'Ziel existiert bereits und ist kein vollstaendiges Profil.'
             }
         }
         Test-ProfileFiles $Directory
+        # B2 stages a verified profile before the first interactive installation.
+        if (-not (Test-Path -LiteralPath (Join-Path $Directory '.env'))) {
+            $image = Resolve-CoreImage (Read-Host 'JanuaPort Image-Tag (z.B. 0.87.1) oder sha256:Digest')
+            $envText = "JANUAPORT_IMAGE=$($image[0])`nJANUAPORT_IMAGE_DIGEST=$($image[1])`n"
+            [IO.File]::WriteAllText((Join-Path $Directory '.env'), $envText, (New-Object Text.UTF8Encoding($false)))
+        }
     } else {
         [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
         $staging = Join-Path ([IO.Path]::GetTempPath()) ('jnpt-profile-' + [Guid]::NewGuid().ToString('N'))
@@ -194,4 +205,12 @@ function Install-Profile {
 }
 
 # Dot-Sourcing erlaubt Adaptertests der Funktionen ohne Installation.
+function Get-CurrentAccount { [Security.Principal.WindowsIdentity]::GetCurrent().Name }
+
+function Assert-DienstSession {
+    if ((Get-CurrentAccount) -ine ($env:COMPUTERNAME + '\jnpt-dienst')) {
+        throw 'Installation nur in der Sitzung von jnpt-dienst starten.'
+    }
+}
+
 if ($MyInvocation.InvocationName -ne '.') { Install-Profile }
