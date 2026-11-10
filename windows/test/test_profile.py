@@ -33,7 +33,9 @@ MAIL_VALUES = {
     'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_EXPIRES': '2030-01-01T00:00:00Z',
 }
 PROFILE_FILES = ('docker-compose.yml', 'Caddyfile', 'einrichten.ps1', '.gitignore',
-                 'README.md', 'README.en.md', 'RUNBOOK.md')
+                 'README.md', 'README.en.md', 'RUNBOOK.md', 'dienst-einrichten.ps1',
+                 'jnpt-backup.ps1', 'PRUEFSTEIN-B4.md')
+AUTOLOGON_SHA256 = '5d96bbc4e5b726d87c7cf547f5fe98f8f05434ec2130bd60cbf5671fd3a7381b'
 
 
 def run(*args, input=None, check=True, env=None):
@@ -54,13 +56,17 @@ def config(directory=ROOT, extra_env=None, check=True, env_file=None):
 
 def verify_sums(directory):
     rows = (directory / "SHA256SUMS").read_text().splitlines()
-    expected = set(PROFILE_FILES)
+    expected = set(PROFILE_FILES) | {'Autologon64.exe'}
     found = set()
     for row in rows:
         digest, name = row.split("  ")
         if name not in expected or name in found:
             raise ValueError("unexpected checksum entry")
         found.add(name)
+        if name == 'Autologon64.exe':
+            if digest != AUTOLOGON_SHA256:
+                raise ValueError('checksum mismatch: Autologon pin')
+            continue
         if hashlib.sha256((directory / name).read_bytes()).hexdigest() != digest:
             raise ValueError("checksum mismatch: " + name)
     if found != expected:

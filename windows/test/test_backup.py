@@ -23,7 +23,8 @@ if a[:4]==['exec','-T','jnpt','/jnpt']:
     if mode=='backup': sys.exit(11)
 elif a[:4]==['exec','-T','jnpt','stat']:
     if mode=='stat': sys.exit(12)
-    print('invalid' if mode=='stat-format' else len(data)+(1 if mode=='size' else 0))
+    print('9'*80 if mode=='stat-overflow' else '0' if mode=='stat-zero' else
+          'invalid' if mode=='stat-format' else len(data)+(1 if mode=='size' else 0))
 elif a[:4]==['exec','-T','jnpt','sha256sum']:
     if mode=='sha': sys.exit(13)
     print('invalid' if mode=='sha-format' else (('0'*64 if mode=='hash' else hashlib.sha256(data).hexdigest())+'  '+a[4]))
@@ -44,23 +45,32 @@ else: sys.exit(92)
 
 
 class Backup(unittest.TestCase):
-    def invoke(self, mode='', marker=True, identity=True, extra=''):
+    def invoke(self, mode='', marker=True, identity=True, extra='', existing=False, target_value=None, profile_complete=True):
         with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
             root = Path(tmp)
             target = root / 'usb'
             target.mkdir()
             if marker:
                 (target / '.jnpt-backup-ziel').write_text('JanuaPort backup v1\n')
+            if existing:
+                (target / 'old.jnpt-backup').write_bytes(b'old synthetic backup')
             profile = root / 'profile'
             profile.mkdir()
             (profile / 'docker-compose.yml').write_text('synthetic profile')
-            (profile / '.env').write_text('synthetic env')
+            if profile_complete:
+                (profile / '.env').write_text('synthetic env')
             (root / 'docker_shim.py').write_text(SHIM)
             (root / 'docker.cmd').write_text('@echo off\n"' + sys.executable + '" "' +
                                             str(root / 'docker_shim.py') + '" %*\n')
             driver = root / 'driver.ps1'
+            if target_value == '__relative_existing__':
+                target_value = os.path.relpath(target, Path.cwd())
+            elif target_value == '__root_relative_existing__':
+                target_value = str(target)[2:]
+            elif target_value == '__drive_relative_existing__':
+                target_value = target.drive + os.path.relpath(target, Path.cwd())
             driver.write_text("$ErrorActionPreference='Stop'\n. '" + str(ROOT / 'jnpt-backup.ps1') +
-                              "' -ProfileDirectory '" + str(profile) + "' -Target '" + str(target) + "'\n" +
+                              "' -ProfileDirectory '" + str(profile) + "' -Target '" + (str(target) if target_value is None else target_value) + "'\n" +
                               ("function Get-CurrentAccount { $env:COMPUTERNAME + '\\jnpt-dienst' }\n" if identity else '') +
                               extra + '\nStart-JnptBackup\n')
             env = {k: v for k, v in os.environ.items() if k.lower() != 'psmodulepath'}
@@ -84,12 +94,18 @@ class Backup(unittest.TestCase):
         self.assertNotIn('master.key', files)
 
     def test_every_docker_and_verification_error_is_nonzero_without_target_file(self):
-        for mode in ['backup', 'stat', 'stat-format', 'sha', 'sha-format', 'size',
+        for mode in ['backup', 'stat', 'stat-format', 'stat-overflow', 'stat-zero', 'sha', 'sha-format', 'size',
                      'hash', 'cp', 'empty', 'cleanup']:
             with self.subTest(mode=mode):
                 result, files, calls = self.invoke(mode)
                 self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertEqual(set(files), {'.jnpt-backup-ziel'}, (mode, files))
+                required = {'backup': '/jnpt', 'stat': 'stat', 'stat-format': 'stat',
+                            'stat-overflow': 'stat', 'stat-zero': 'stat',
+                            'sha': 'sha256sum', 'sha-format': 'sha256sum', 'size': 'cp',
+                            'hash': 'cp', 'cp': 'cp', 'empty': 'cp', 'cleanup': 'rm'}[mode]
+                self.assertTrue(any(required in a for a in calls), (mode, calls))
+                self.assertIn(required, calls[-1], (mode, calls))
                 if mode != 'cleanup':
                     self.assertFalse(any(a[1:5] == ['exec','-T','jnpt','rm'] for a in calls))
 
@@ -113,6 +129,38 @@ class Backup(unittest.TestCase):
                 result, files, _ = self.invoke(extra=extra)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(set(files), {'.jnpt-backup-ziel'})
+
+    def test_readback_detects_corruption_after_real_rename(self):
+        extra = r'''
+function Move-Item { param($LiteralPath,$Destination)
+    Microsoft.PowerShell.Management\Move-Item -LiteralPath $LiteralPath -Destination $Destination
+    [IO.File]::WriteAllText($Destination, 'corrupted synthetic backup')
+}
+'''
+        result, files, calls = self.invoke(extra=extra)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(set(files), {'.jnpt-backup-ziel'})
+        self.assertFalse(any('rm' in a for a in calls))
+
+    def test_previous_backups_are_retained(self):
+        result, files, _ = self.invoke(existing=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(files['old.jnpt-backup'], b'old synthetic backup')
+        self.assertEqual(len(files), 3)
+
+    def test_relative_or_empty_target_is_rejected(self):
+        for target in ['', '__relative_existing__', '__root_relative_existing__', '__drive_relative_existing__']:
+            with self.subTest(target=target):
+                result, files, calls = self.invoke(target_value=target)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(set(files), {'.jnpt-backup-ziel'})
+                self.assertEqual(calls, [])
+
+    def test_incomplete_profile_rejected_before_docker(self):
+        result, files, calls = self.invoke(profile_complete=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(set(files), {'.jnpt-backup-ziel'})
+        self.assertEqual(calls, [])
 
 
 if __name__ == '__main__':

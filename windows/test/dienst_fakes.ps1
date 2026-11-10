@@ -5,7 +5,7 @@ $script:exists = $false
 $script:member = $false
 $script:autologon = $false
 function Assert-Administrator { if ($env:PROBE_FAIL -eq 'admin') { throw 'admin' } }
-function Get-LocalUser { param($Name) if ($script:exists) { [pscustomobject]@{Name=$Name; SID='S-1-5-21-100-100-100-1001'; Enabled=$true} } }
+function Get-LocalUser { param($Name) if ($script:exists) { [pscustomobject]@{Name=$Name; SID='S-1-5-21-100-100-100-1001'; Enabled=($env:PROBE_FAIL -ne 'disabled')} } }
 function New-DienstPassword { ConvertTo-SecureString 'KANARIE-NICHT-ECHT' -AsPlainText -Force }
 function New-LocalUser { param($Name,$Password,$Description,[switch]$PasswordNeverExpires,[switch]$AccountNeverExpires)
     $script:events.Add('new:'+$Name); $script:exists=$true; Get-LocalUser $Name }

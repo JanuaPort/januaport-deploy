@@ -30,8 +30,11 @@ class Live(unittest.TestCase):
         install_env = {key: value for key, value in os.environ.items() if key.lower() != 'psmodulepath'}
         install_env['COMPOSE_PROJECT_NAME'] = name
         def install(rotate=False):
-            return run('powershell', '-NoProfile', '-File', str(target / 'einrichten.ps1'),
-                       '-Directory', str(target), *(['-NeuesZertifikat'] if rotate else []),
+            # Fake only the account identity, never switch the real host account.
+            command = (". '" + str(target / 'einrichten.ps1') + "' -Directory '" + str(target) +
+                       "'" + (' -NeuesZertifikat' if rotate else '') +
+                       "; function Get-CurrentAccount {$env:COMPUTERNAME+'\\jnpt-dienst'}; Install-Profile")
+            return run('powershell.exe', '-NoProfile', '-Command', command,
                        env=install_env, check=False)
         def request(path, tls=False, method='GET', body=None, headers=None):
             if tls:
