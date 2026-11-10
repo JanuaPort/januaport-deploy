@@ -28,8 +28,15 @@ festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
    auf `secrets/smtp_password` und den Schreibzugriff auf `docker-compose.yml`
    tatsächlich versuchen: beide müssen scheitern. Erst dann weiterarbeiten.
 4. **W4/W5, B-3, Neustart:** `dienst-einrichten.ps1` auf dem Testrechner als
-   Admin einrichten, Docker-Einstellungen in `jnpt-dienst` von Hand prüfen,
-   erneut prüfen lassen. Neustarten. Foto des erreichten Sperrbildschirms
+   Admin vorbereiten, Docker Desktop vor dem abschließenden Lauf einmal in
+   `jnpt-dienst` starten und Einstellungen von Hand prüfen, mit `-KennwortNeu`
+   erneut prüfen lassen. `Delay=PT30S` und den festen B-7-geschützten Pfad
+   `C:\JanuaPort\windows\jnpt-sperren.ps1` in der Aufgabe kontrollieren.
+   Das Skript wartet auf Explorer derselben Sitzung (höchstens 120 Sekunden),
+   sperrt und prüft den WTS-Status; höchstens 12 Versuche alle 5 Sekunden.
+   Bei Fehler ist `LastTaskResult` ungleich 0, ohne Protokoll oder Ersatzaktion.
+   Neustarten. Nach 90 Sekunden Taste und Enter: Kennwortabfrage muss erscheinen.
+   Ein Bild allein belegt die Sperre nicht. Foto des erreichten Sperrbildschirms
    aufnehmen (ohne personenbezogene Inhalte). Sperre bei Anmeldung und nach
    einer Minute Inaktivität einschließlich Kennwortpflicht tatsächlich testen.
    Prüfen, dass Docker Desktop und Anlage trotz gesperrter Sitzung laufen.
@@ -53,7 +60,8 @@ festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
    Bei optionalem SMB die ausschließlich dafür bestimmten Zugangsdaten durch
    den Betreiber erneut unter `jnpt-dienst` eingeben und Sicherung prüfen.
 7. **B-4, getrennte Rücksicherung:** Sicherungsdatei auf einen separaten
-   Testrechner übertragen, den getrennt verwahrten Master-Key separat zuführen.
+   Testrechner übertragen, den getrennt verwahrten Master-Key separat nach
+   [README, Sicherung/Rücksicherung](README.md#sicherung-b3) zuführen.
    Nach der Wiederherstellungsanleitung der eingesetzten Kern-Version
    zurücksichern. Synthetische Daten, Admin-Anmeldung und erneute Sicherung
    prüfen. Nachweisen, dass am Sicherungsziel nur die Sicherungsdatei liegt und
@@ -65,7 +73,7 @@ festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
    Betreiber vor Ort. Wartungskonto startet nur Aufgaben. B5-Update-Aufgabe
    bleibt bis zu deren eigenem Paket offen. Docker-Desktop-Lizenz und
    unterstütztes Windows/ESU separat bestätigen.
-2a. **Kontowechsel der Daten:** Eine 0.1.0-Anlage, die unter einem persönlichen Konto lief, per `jnpt backup` sichern, unter `jnpt-dienst` neu einrichten und mit dem getrennt verwahrten Master-Key zurückspielen. Danach Anmeldung und ein Lesewerkzeug grün. Dann im alten Konto `docker compose down -v`; `docker volume ls` im alten Konto zeigt kein `jnpt-windows_*`-Volume mehr (SEC E1).
+2a. **Kontowechsel der Daten:** Eine 0.1.0-Anlage, die unter einem persönlichen Konto lief, per `jnpt backup` sichern, unter `jnpt-dienst` neu einrichten und mit dem getrennt verwahrten Master-Key gemäß README zurückspielen. Das TLS-Zertifikat hängt am Volume `tls-leaf` der alten Engine; unter `jnpt-dienst` entsteht ein neues mit neuem Fingerprint. Alle gekoppelten Desktop-Läufer nach 2a mit neuem Code und neuem, lokal vertrauenswürdig übermitteltem Fingerprint erneut koppeln und prüfen. Danach Anmeldung und ein Lesewerkzeug grün. Dann im alten Konto `docker compose down -v`; `docker volume ls` im alten Konto zeigt kein `jnpt-windows_*`-Volume mehr (SEC E1).
 
 Abnahmestatus: **offen**. Auf dem Entwicklungsrechner wird keiner dieser
 Systemeingriffe ausgeführt.

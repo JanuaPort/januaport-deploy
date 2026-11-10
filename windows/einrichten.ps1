@@ -14,7 +14,7 @@ $ProfileBase = "https://raw.githubusercontent.com/JanuaPort/januaport-deploy/$Pr
 $Repository = 'ghcr.io/januaport/januaport'
 $ProfileFiles = @('docker-compose.yml', 'Caddyfile', 'einrichten.ps1', '.gitignore',
     'README.md', 'README.en.md', 'RUNBOOK.md', 'dienst-einrichten.ps1',
-    'jnpt-backup.ps1', 'PRUEFSTEIN-B4.md')
+    'jnpt-backup.ps1', 'jnpt-sperren.ps1', 'PRUEFSTEIN-B4.md')
 
 function Invoke-Docker {
     param([string[]]$Arguments)

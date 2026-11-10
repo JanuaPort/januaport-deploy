@@ -82,7 +82,8 @@ Das Skript erkennt die drei unveränderten Originaldateien aus `windows-v0.1.0`
 Es lädt sämtliche Dateien und die Summenliste ausschließlich von `windows-v0.2.0`
 in einen temporären Ordner und prüft sie vollständig, bevor es im Ziel schreibt.
 Danach ersetzt es die releaseverwalteten Dateien und ergänzt die bisher fehlenden
-READMEs, `.gitignore`, das Runbook sowie B2/B3-Skripte und Prüfstein. Änderungen
+READMEs, `.gitignore`, das Runbook sowie B2/B3-Skripte einschließlich
+`jnpt-sperren.ps1` und Prüfstein. Änderungen
 an den drei alten Originaldateien erfordern eine manuelle Abstimmung und führen
 zum Abbruch vor dem Download. Bei Download- oder Prüfsummenfehlern bleiben die
 vorhandenen Dateien unverändert. Nach einem erfolgreichen Upgrade lädt der
@@ -119,6 +120,12 @@ Anlage mit Tresor und Master-Key, und Docker Desktop startet sie beim Anmelden
 vielleicht wieder. Danach zeigt `docker volume ls` im alten Konto kein
 `jnpt-windows_*`-Volume mehr. Dieser Weg ist ein Schritt im Prüfstein B4.
 
+Das TLS-Zertifikat liegt im Volume `tls-leaf` der alten Engine. Beim
+Kontowechsel entsteht unter `jnpt-dienst` ein neues Zertifikat mit neuem
+Fingerprint. Nach B4-Schritt 2a müssen alle gekoppelten Desktop-Läufer mit
+neuem Kopplungscode und dem neuen, lokal vertrauenswürdig übermittelten
+Fingerprint erneut koppeln.
+
 ## Dienstbetrieb (B2)
 
 Admin-PowerShell, nur auf dem vorgesehenen Betriebsrechner: den vollständigen,
@@ -138,6 +145,8 @@ bereitgestelltes Profil ohne `.env` wird bei der ersten Installation ergänzt.
 Das Konto erhält ein Zufallskennwort, das nicht angezeigt oder in Dateien
 abgelegt wird. Bei Wiederholung bleibt es erhalten. `-KennwortNeu` erzeugt
 bewusst ein neues und richtet Autologon neu ein (auch nach einem Admin-Reset).
+Nach dem Aufruf von Autologon64 prüft das Skript die Winlogon-Werte alle
+500 ms für höchstens 10 Sekunden; erst dann meldet es eine fehlende Bestätigung.
 Master-Key, Admin-Kennwort und SMTP-/Graph-Secret liegen in Dateien im
 Profilordner bzw. im Volume, nie in der Anmeldeinformationsverwaltung und nicht
 EFS-verschlüsselt. Diese Geheimnisse hängen nicht an DPAPI von `jnpt-dienst`.
@@ -152,8 +161,19 @@ Authenticode-Signatur verlangt. Hashabweichung bedeutet Abbruch, ohne
 Ausweichquelle. Das lizenzierte Binary liegt nur lokal, nicht im öffentlichen
 Repo. Ein neuer Upstream-Download erfordert ggf. einen überprüften neuen Pin.
 
-Das Skript richtet „JanuaPort Sperren bei Anmeldung“ und einen kennwortgeschützten
-Bildschirmschoner nach 60 Sekunden ein. `powercfg` deaktiviert Standby an Netz
+„JanuaPort Sperren bei Anmeldung“ startet 30 Sekunden nach der Anmeldung
+(`Delay=PT30S`) das feste `C:\JanuaPort\windows\jnpt-sperren.ps1` verborgen
+mit PowerShell. Der Pfad ist durch die B-7-ACL geschützt. Das Skript wartet
+höchstens 120 Sekunden auf `explorer.exe` in seiner eigenen Sitzung, ruft
+`LockWorkStation` auf und bestätigt die Sperre anhand von
+`WTSQuerySessionInformation` / `WTSSessionInfoEx.SessionFlags`.
+Ohne Bestätigung wiederholt es den Aufruf nach jeweils 5 Sekunden, höchstens
+12 Versuche. Scheitert die Sperre oder die Bereitschaftsprüfung, zeigt die
+Aufgabenplanung einen Exit-Code ungleich 0; es gibt keine Protokollausgabe und
+kein Abmelden oder Herunterfahren als Ersatz. Das Anmeldefenster vor der
+bestätigten Sperre bleibt bestehen und wird in B4 am Testrechner geprüft.
+Zusätzlich sperrt ein kennwortgeschützter Bildschirmschoner nach 60 Sekunden.
+`powercfg` deaktiviert Standby an Netz
 und Akku sowie den Ruhezustand. Im Windows-Profil von `jnpt-dienst` wird
 `.wslconfig` mit `[wsl2]` und `memory=4GB` angelegt; abweichende vorhandene
 Konfiguration erfordert eine manuelle Abstimmung. Kein Docker-/WSL-Neustart
@@ -164,11 +184,17 @@ Auto-Download/Auto-Update **aus** werden nur gelesen und geprüft. Fehlende,
 unbekannte oder abweichende Einstellungen führen zum Fehler. Geprüft werden
 `autoStart=true`, `exposeDockerAPIOnTCP2375=false`, `autoDownloadUpdates=false`,
 `disableUpdate=true` und `silentModulesUpdate=false`; auch Komponentenupdates
-müssen aus sein ([Docker-Referenz](https://docs.docker.com/enterprise/security/hardened-desktop/settings-management/settings-reference/)). Bei der ersten
-Einrichtung kann dies nach Konto-, Sperr- und Autologon-Einrichtung geschehen:
-der Betreiber setzt als lokaler Admin vorübergehend ein eigenes Kennwort für
+müssen aus sein ([Docker-Referenz](https://docs.docker.com/enterprise/security/hardened-desktop/settings-management/settings-reference/)).
+**Vor `dienst-einrichten.ps1` Docker Desktop einmal als `jnpt-dienst` starten,**
+die Lizenz annehmen und diese Einstellungen setzen. Geprüft wird
+`%APPDATA%\Docker\settings-store.json`, alternativ `settings.json` dieses Kontos.
+Fehlen beide, endet das Skript mit Fehler und der festen Meldung:
+„Docker Desktop einmal in jnpt-dienst starten und die Einstellungen pruefen (AutoStart an, 2375 aus, Auto-Update aus)“.
+Falls das Konto noch fehlt, legt ein erster Vorbereitungslauf Konto, Sperre und
+Autologon an und endet bei dieser Meldung. Der Betreiber setzt dann als lokaler
+Admin vorübergehend ein eigenes Kennwort für
 `jnpt-dienst` (sichere Eingabe), meldet sich damit an, konfiguriert Docker Desktop
-und stimmt der Lizenz zu. Nach der Erstinstallation führt er als Admin das
+und stimmt der Lizenz zu. Anschließend führt er als Admin das
 Skript mit `-KennwortNeu` erneut aus und startet neu. Damit sind Zufallskennwort,
 Autologon und Sperre wieder gemeinsam eingerichtet. Dies gehört zur lokalen
 Erstinbetriebnahme vor produktiven Daten. Die Ersteinrichtung und
@@ -432,7 +458,8 @@ Desktop-Paketabruf noch einen erfolgreichen Auftrag.
 Repository-Prüfungen (Python-Standardbibliothek, Docker erforderlich):
 `python -B -m unittest discover -s windows/test -v`.
 Zusätzlicher Rundlauf und Mutationen sind in [test/README.md](test/README.md)
-beschrieben. SHA256SUMS enthält Compose, Caddyfile, alle drei Skripte, `.gitignore`,
+beschrieben. SHA256SUMS enthält Compose, Caddyfile, alle vier Skripte
+(`einrichten.ps1`, `dienst-einrichten.ps1`, `jnpt-sperren.ps1`, `jnpt-backup.ps1`), `.gitignore`,
 beide READMEs, Runbook und B4-Prüfstein sowie den externen Autologon-Pin; `.gitattributes`
 hält dafür auch im Windows-Checkout dieselben LF-Bytes wie im Download fest.
 

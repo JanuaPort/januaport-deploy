@@ -29,7 +29,11 @@ def main():
     probe('F2 errors disclose data', 'jnpt-sperren.ps1',
           'catch { exit 1 }', 'catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }',
           'test_native_failure_is_silent_and_nonzero')
-    print('B4: 8 mutations killed; original bytes unchanged.', flush=True)
+    for command in ['logoff.exe', 'shutdown.exe /s']:
+        probe('F2 forbidden fallback ' + command, 'jnpt-sperren.ps1',
+              '    return 1\n', '    ' + command + '\n    return 1\n',
+              'test_unlocked_after_all_attempts_is_failure')
+    print('B4: 10 mutations killed; original bytes unchanged.', flush=True)
 
 
 if __name__ == '__main__':

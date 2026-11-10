@@ -85,8 +85,14 @@ eine neue Sitzung nötig ist.
 
 ### 3.3 Nach einem Neustart
 1. Die Fernsitzung bricht ab. Der Dienstleister ruft beim Kunden an.
-2. `jnpt-dienst` meldet sich lokal automatisch an und wird durch die Aufgabe gesperrt.
-   Der Betreiber prüft den Sperrbildschirm (Foto im B4-Abnahmeprotokoll).
+2. `jnpt-dienst` meldet sich lokal automatisch an. „JanuaPort Sperren bei Anmeldung“
+   startet mit 30 Sekunden Verzögerung das B-7-geschützte
+   `C:\JanuaPort\windows\jnpt-sperren.ps1`. Es wartet höchstens 120 Sekunden auf
+   Explorer derselben Sitzung und bestätigt die Sperre per WTS-Sitzungsstatus,
+   mit höchstens 12 Versuchen im Abstand von 5 Sekunden. Fehler sind als
+   `LastTaskResult` ungleich 0 sichtbar; keine Logausgabe und kein Ersatz durch
+   Abmelden oder Herunterfahren. Der Betreiber prüft nach 90 Sekunden mit Taste
+   und Enter die Kennwortpflicht (zusätzlich Foto im B4-Abnahmeprotokoll).
 3. Die Person beim Kunden startet/akzeptiert eine neue TeamViewer-Sitzung nach dem vereinbarten
    Verfahren. Der Dienstleister verwendet ausschließlich das Wartungskonto und arbeitet nie als
    `jnpt-dienst`. Das Wartungskonto stößt nur Aufgaben mit `schtasks /run` an.
@@ -94,7 +100,14 @@ eine neue Sitzung nötig ist.
    Engine und Volumes nicht aus dem Wartungskonto beurteilen. Maßgeblich ist der Aufgabenstatus.
 
 ### 3.4 Anlage einrichten
-Zuerst die administrative [B2-Einrichtung](README.md#dienstbetrieb-b2) durchführen.
+Vor `dienst-einrichten.ps1` Docker Desktop einmal als `jnpt-dienst` starten,
+Lizenz annehmen und AutoStart an, TCP 2375 aus sowie automatische Updates aus
+setzen. Fehlt das Konto noch, legt ein erster B2-Vorbereitungslauf es an und
+endet mit „Docker Desktop einmal in jnpt-dienst starten und die Einstellungen pruefen (AutoStart an, 2375 aus, Auto-Update aus)“.
+Der Betreiber setzt dann lokal vorübergehend ein Kennwort, meldet sich als
+`jnpt-dienst` an und startet Docker Desktop. Danach die administrative
+[B2-Einrichtung](README.md#dienstbetrieb-b2) mit `-KennwortNeu` erneut ausführen;
+Autologon wird alle 500 ms bis höchstens 10 Sekunden nachgeprüft. Neustarten.
 B-7: `icacls C:\JanuaPort` und `icacls C:\JanuaPort\windows` zeigen ausschließlich
 `jnpt-dienst`, Administratoren und SYSTEM. Vererbung vom Laufwerksstamm ist aus.
 Bei einem Altprofil den [Upgrade-Weg 0.1.0 → 0.2.0](README.md#von-010-auf-020) und
@@ -103,6 +116,8 @@ Erstkonfiguration von Docker Desktop und die Schritte in [„Zwei Befehle“](RE
 führt der Betreiber in `jnpt-dienst` aus. Danach startet das Wartungskonto nur Aufgaben.
 Am Ende gibt `einrichten.ps1` den
 Zertifikats-Fingerprint aus. Ihn abschreiben und beim Dienstleister ablegen, nicht beim Kunden aushängen.
+Beim Kontowechsel verbleibt `tls-leaf` in der alten Engine. Nach B4-Schritt 2a
+alle Desktop-Läufer mit neuem Code und dem neuen Fingerprint erneut koppeln.
 
 Mail anschließend durch den Betreiber in `jnpt-dienst` gemäß [README, Abschnitt „Mail“](README.md#mail)
 einrichten. USB-Ziel und Marker vorbereiten, Aufgabe „JanuaPort Sicherung“ prüfen.

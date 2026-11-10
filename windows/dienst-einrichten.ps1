@@ -109,6 +109,9 @@ function Test-DockerDesktopSettings {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         $path = Join-Path $ProfilePath 'AppData\Roaming\Docker\settings.json'
     }
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw 'Docker Desktop einmal in jnpt-dienst starten und die Einstellungen pruefen (AutoStart an, 2375 aus, Auto-Update aus)'
+    }
     $settings = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
     foreach ($requirement in @(@('autoStart',$true), @('exposeDockerAPIOnTCP2375',$false),
             @('autoDownloadUpdates',$false), @('disableUpdate',$true), @('silentModulesUpdate',$false))) {
@@ -179,7 +182,12 @@ function Enable-DienstAutologon {
         $plain = $null
         [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
     }
-    if (-not (Test-DienstAutologon)) { throw 'Autologon konnte nicht bestaetigt werden.' }
+    # Autologon64 may return before Winlogon exposes all updated values.
+    for ($attempt = 0; $attempt -le 20; $attempt++) {
+        if (Test-DienstAutologon) { return }
+        if ($attempt -eq 20) { throw 'Autologon konnte nicht bestaetigt werden.' }
+        Start-Sleep -Milliseconds 500
+    }
 }
 
 function Register-DienstTasks {
@@ -187,9 +195,10 @@ function Register-DienstTasks {
     $principal = New-ScheduledTaskPrincipal -UserId $account -LogonType Interactive -RunLevel Limited
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew
     $logon = New-ScheduledTaskTrigger -AtLogOn -User $account
-    $lock = New-ScheduledTaskAction -Execute ($env:SystemRoot + '\System32\rundll32.exe') -Argument 'user32.dll,LockWorkStation'
-    Register-ScheduledTask -TaskName 'JanuaPort Sperren bei Anmeldung' -Action $lock -Trigger $logon -Principal $principal -Settings $settings -Force | Out-Null
+    $logon.Delay = 'PT30S'
     $ps = $env:SystemRoot + '\System32\WindowsPowerShell\v1.0\powershell.exe'
+    $lock = New-ScheduledTaskAction -Execute $ps -Argument '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "C:\JanuaPort\windows\jnpt-sperren.ps1"'
+    Register-ScheduledTask -TaskName 'JanuaPort Sperren bei Anmeldung' -Action $lock -Trigger $logon -Principal $principal -Settings $settings -Force | Out-Null
     $install = New-ScheduledTaskAction -Execute $ps -WorkingDirectory $DienstDirectory -Argument ('-NoProfile -ExecutionPolicy Bypass -File "' + $DienstDirectory + '\einrichten.ps1"')
     # On demand only: the operator supplies the image tag in the initial
     # interactive commissioning session. Later runs reuse the existing .env.

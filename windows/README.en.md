@@ -67,7 +67,7 @@ The script recognizes the three unchanged original `windows-v0.1.0` files
 complete profile and manifest only from `windows-v0.2.0` into a temporary directory
 and verifies everything before writing to the target. It then replaces the
 release-managed files and adds the missing READMEs, `.gitignore`, runbook, B2/B3
-scripts and acceptance checklist. Locally changed legacy files require manual
+scripts including `jnpt-sperren.ps1` and the acceptance checklist. Locally changed legacy files require manual
 reconciliation and abort before downloading. Download or checksum failure leaves
 existing files unchanged. A second successful run downloads nothing.
 
@@ -99,6 +99,11 @@ with vault and master key stays there, and Docker Desktop may start it again at
 sign-in. Afterwards `docker volume ls` in the old account shows no
 `jnpt-windows_*` volume. This path is a step of the B4 checkpoint.
 
+The TLS certificate belongs to the old engine's `tls-leaf` volume. Switching
+accounts creates a new certificate with a new fingerprint under `jnpt-dienst`.
+After B4 step 2a, pair every previously paired desktop runner again with a new
+pairing code and the new fingerprint transferred through a trusted local channel.
+
 ## Service operation (B2)
 
 On the intended deployment machine, use an administrative PowerShell in the
@@ -115,7 +120,9 @@ installation adds `.env` to a verified B2 profile that does not yet have one.
 
 A random password is never displayed or saved to a password file. Repeated runs
 keep it; `-KennwortNeu` deliberately resets it and reconfigures autologon,
-including after an administrator reset. Master key, admin password and SMTP/Graph
+including after an administrator reset. After invoking Autologon64, setup checks
+the Winlogon values every 500 ms for up to 10 seconds before reporting a missing
+confirmation. Master key, admin password and SMTP/Graph
 secrets live in profile files or volumes, never in Credential Manager or EFS;
 they do not depend on this account's DPAPI secrets. Sysinternals autologon uses
 an LSA secret readable by administrators. Its CLI briefly needs a plaintext
@@ -129,8 +136,17 @@ signature. A mismatch aborts without a fallback. The licensed binary is local
 only and excluded from the public repository. Changed upstream bytes require a
 reviewed pin update.
 
-“JanuaPort Sperren bei Anmeldung” locks at logon. A password-protected screen
-saver locks after 60 seconds. `powercfg` disables AC/battery standby and
+“JanuaPort Sperren bei Anmeldung” starts the fixed
+`C:\JanuaPort\windows\jnpt-sperren.ps1` with hidden PowerShell 30 seconds after
+logon (`Delay=PT30S`). The B-7 ACL protects that path. The script waits up to
+120 seconds for `explorer.exe` in its own session, calls `LockWorkStation`, and
+verifies the lock through `WTSQuerySessionInformation` /
+`WTSSessionInfoEx.SessionFlags`. Without confirmation it retries every 5 seconds,
+up to 12 attempts. A readiness or lock failure returns a nonzero exit code
+visible in Task Scheduler. The script produces no log and does not log off or
+shut down as a fallback. The window before a confirmed lock remains and needs
+the B4 test-machine check. A password-protected screen saver also locks after
+60 seconds. `powercfg` disables AC/battery standby and
 hibernation. The account's `.wslconfig` sets `[wsl2]` / `memory=4GB`; conflicting
 existing settings require manual reconciliation. The script does not restart
 Docker or WSL; the limit takes effect at the next WSL start.
@@ -139,11 +155,17 @@ Docker Desktop settings are only checked: AutoStart on, TCP 2375 off, automatic
 downloads/updates off. The required keys are `autoStart=true`,
 `exposeDockerAPIOnTCP2375=false`, `autoDownloadUpdates=false`, `disableUpdate=true`
 and `silentModulesUpdate=false`, including component updates ([Docker reference](https://docs.docker.com/enterprise/security/hardened-desktop/settings-management/settings-reference/)).
-Missing, unknown or different values cause failure. On
-first setup this can happen after the account, lock and autologon are installed:
-the operator temporarily resets `jnpt-dienst` to a personally entered password
+Missing, unknown or different values cause failure.
+**Start Docker Desktop once as `jnpt-dienst` before `dienst-einrichten.ps1`,**
+accept its license and set these options. Setup reads that account's
+`%APPDATA%\Docker\settings-store.json`, falling back to `settings.json`.
+If both are absent, it fails with the fixed message:
+“Docker Desktop einmal in jnpt-dienst starten und die Einstellungen pruefen (AutoStart an, 2375 aus, Auto-Update aus)”.
+If the account does not yet exist, an initial preparation run creates the
+account, lock and autologon and stops at this message. The operator then
+temporarily resets `jnpt-dienst` to a personally entered password
 as local administrator, signs in, configures Docker Desktop and accepts its
-license. After initial installation, the operator reruns setup as administrator
+license. Afterwards, the operator reruns setup as administrator
 with `-KennwortNeu` and reboots to restore the random password, matching autologon
 and lock. This is local commissioning before any production data. The operator performs initial commissioning and answers
 the image prompt there. The service provider never works in this session.
@@ -386,7 +408,8 @@ prove package delivery or job completion.
 
 Repository checks: `python -B -m unittest discover -s windows/test -v`
 (Python standard library and Docker). See [test/README.md](test/README.md) for
-live checks and mutations. SHA256SUMS covers Compose, Caddyfile, all three scripts,
+live checks and mutations. SHA256SUMS covers Compose, Caddyfile, all four scripts
+(`einrichten.ps1`, `dienst-einrichten.ps1`, `jnpt-sperren.ps1`, `jnpt-backup.ps1`),
 `.gitignore`, both READMEs, the runbook, B4 checklist and the external autologon pin. `.gitattributes` preserves the LF bytes covered by
 SHA256SUMS in both Windows checkouts and raw downloads.
 

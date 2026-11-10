@@ -65,10 +65,10 @@ function Get-Process { param($Id,$Name,$ErrorAction)
     [pscustomobject]@{SessionId=8}
     if ($script:elapsed -ge [int]$env:PROBE_EXPLORER_AFTER) { [pscustomobject]@{SessionId=7} }
 }
-function Stop-Computer { throw 'FORBIDDEN shutdown' }
-function Restart-Computer { throw 'FORBIDDEN restart' }
-function shutdown.exe { throw 'FORBIDDEN shutdown' }
-function logoff.exe { throw 'FORBIDDEN logoff' }
+function Stop-Computer { Add-Content $env:PROBE_TRACE 'FORBIDDEN shutdown'; throw 'FORBIDDEN shutdown' }
+function Restart-Computer { Add-Content $env:PROBE_TRACE 'FORBIDDEN restart'; throw 'FORBIDDEN restart' }
+function shutdown.exe { Add-Content $env:PROBE_TRACE 'FORBIDDEN shutdown'; throw 'FORBIDDEN shutdown' }
+function logoff.exe { Add-Content $env:PROBE_TRACE 'FORBIDDEN logoff'; throw 'FORBIDDEN logoff' }
 '''
             # Actual -File entry and exit handler; inject boundary fakes only.
             text = source.read_text(encoding='utf-8-sig')
@@ -82,6 +82,7 @@ function logoff.exe { throw 'FORBIDDEN logoff' }
             result = run('powershell', '-NoProfile', '-File', str(script), env=env, check=False)
             trace = (root / 'trace').read_text().splitlines()
             self.assertEqual(result.stdout + result.stderr, '', 'exit code is the only output')
+            self.assertFalse(any(s.startswith('FORBIDDEN') for s in trace), trace)
             return result, trace
 
     def test_lock_own_explorer_then_first_verified_success(self):
@@ -202,6 +203,20 @@ try {
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(result.stderr.strip(), MESSAGE)
             self.assertEqual(list(Path(tmp).iterdir()), [])
+
+    def test_settings_store_and_legacy_settings_remain_readable(self):
+        good = dict(autoStart=True, exposeDockerAPIOnTCP2375=False, autoDownloadUpdates=False,
+                    disableUpdate=True, silentModulesUpdate=False)
+        for name in ['settings-store.json', 'settings.json']:
+            with self.subTest(name=name), tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+                folder = Path(tmp) / 'AppData' / 'Roaming' / 'Docker'
+                folder.mkdir(parents=True)
+                file = folder / name
+                file.write_text(json.dumps(good))
+                before = file.read_bytes()
+                result = ps("Test-DockerDesktopSettings '" + tmp + "'", ROOT / 'dienst-einrichten.ps1')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(file.read_bytes(), before)
 
 if __name__ == '__main__':
     unittest.main()

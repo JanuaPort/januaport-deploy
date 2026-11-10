@@ -1,4 +1,4 @@
-# Prüfungen für das Windows-Profil (Paket A und B1–B3)
+# Prüfungen für das Windows-Profil (Paket A und B1–B4)
 
 Vom Repo-Root unter Windows: Python-Standardbibliothek, Windows PowerShell 5.1
 und Docker Desktop (Linux/amd64). Kein Python-Paket und kein PowerShell-Modul
@@ -10,6 +10,7 @@ python -B -m unittest discover -s windows/test -v
 python -B windows/test/live.py
 python -B windows/test/mutations.py
 python -B windows/test/dienst_mutations.py
+python -B windows/test/b4_mutations.py
 ```
 
 B2/B3 nur in einer **nicht erhöhten** Testsitzung ausführen. Für die neuen
@@ -81,6 +82,33 @@ Aufrufreihenfolge und native Fehler werden geprüft. Die Mutation ohne
 rot machen; weitere Mutationen entfernen die Elternordnersperre, das Entfernen
 alter expliziter Rechte, die Upgrade-Summenprüfung oder den Erhalt von `.env`
 und Secrets. Diese Proben sind in `dienst_mutations.py` enthalten.
+
+`test_b4.py` prüft in PS 5.1 den Anmeldeauslöser mit `Delay=PT30S` und den
+festen Aufruf von `C:\JanuaPort\windows\jnpt-sperren.ps1`. Das echte Skript
+läuft über seinen `-File`-Einstieg mit verwaltetem Ersatz für user32/WTS:
+Explorer einer fremden Sitzung genügt nicht; ohne eigenen Explorer endet das
+Warten nach 120 Sekunden. Bestätigte Sperre beim ersten oder dritten Versuch
+ist erfolgreich, zwölf erfolglose Versuche liefern Exit ungleich 0. Ausgabe
+und Ersatz durch Abmelden/Herunterfahren sind mit Fehlerfallen abgesichert.
+Ein weiterer Test kompiliert den echten C#-Adapter mit ausschließlich ersetzten
+P/Invoke-Deklarationen: aktuelle Sitzung, WTS-Klasse 26, `SessionFlags=0`,
+ungesperrte/unbekannte Flags, kurze/falsche Antworten und Speicherfreigabe.
+Dabei wird keine native Sperre oder WTS-Abfrage ausgeführt. Autologon verwendet
+einen lokalen `.cmd`-Ersatz und einen virtuellen Takt: Winlogon erscheint nach
+2 Sekunden oder bleibt über die gesamten 10 Sekunden aus. Fehlende
+Docker-Einstellungen werden mit dem echten Dateiadapter geprüft.
+
+```powershell
+$env:PYTHONPATH = 'windows/test'
+python -B -m unittest test_b4 -v
+python -B windows/test/b4_mutations.py
+```
+
+Die zehn B4-Mutationen entfernen Verzögerung, Sperrbestätigung, Nachfragen bei
+Autologon, feste Fehlermeldung, Sitzungsfilter und Fehler-Exit; weitere akzeptieren
+ein ungesperrtes WTS-Flag, geben Fehlerdetails aus oder versuchen tatsächlich
+die Abmelde-/Herunterfahradapter (mit protokollierenden Fehlerfallen). Jede isolierte Kopie
+muss an einer Assertion scheitern; Originaldateien bleiben bytegenau erhalten.
 
 Die manuelle B4-Abnahme steht in [PRUEFSTEIN-B4.md](../PRUEFSTEIN-B4.md):
 DPAPI-unabhängige Wiederherstellung nach Kennwortreset, Sperrbildschirmfoto nach
