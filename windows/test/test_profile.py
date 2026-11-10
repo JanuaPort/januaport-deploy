@@ -27,6 +27,10 @@ MAIL_VALUES = {
     'JNPT_SMTP_USERNAME': 'sender@example.org',
     'JNPT_NOTIFY_STATE': '/data/notify-state.json',
     'JNPT_NOTIFY_TRANSPORT': 'smtp',
+    'JNPT_NOTIFY_GRAPH_TENANT_ID': 'example-tenant',
+    'JNPT_NOTIFY_GRAPH_CLIENT_ID': 'example-client',
+    'JNPT_NOTIFY_GRAPH_SENDER': 'sender@example.org',
+    'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_EXPIRES': '2030-01-01T00:00:00Z',
 }
 PROFILE_FILES = ('docker-compose.yml', 'Caddyfile', 'einrichten.ps1', '.gitignore',
                  'README.md', 'README.en.md', 'RUNBOOK.md')
@@ -87,7 +91,50 @@ class Profile(unittest.TestCase):
                     with self.subTest(source=source, variable=name):
                         self.assertEqual(environment.get(name), value)
                 self.assertEqual(set(environment), set(MAIL_VALUES) |
-                                 {'JNPT_SMTP_PASSWORD_FILE', 'JNPT_ADMIN_URL'})
+                                 {'JNPT_SMTP_PASSWORD_FILE', 'JNPT_ADMIN_URL',
+                                  'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE'})
+
+    def test_graph_client_secret_is_file_only(self):
+        attempted = {'JNPT_NOTIFY_GRAPH_CLIENT_SECRET': 'synthetic graph probe',
+                     'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE': '/tmp/incorrect-graph-file'}
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            dotenv = Path(tmp) / '.env'
+            dotenv.write_text(''.join(name + '=' + value + '\n'
+                                      for name, value in attempted.items()))
+            for source in ['process', 'dotenv']:
+                with self.subTest(source=source):
+                    cfg = json.loads(config(
+                        extra_env=attempted if source == 'process' else None,
+                        env_file=dotenv if source == 'dotenv' else None).stdout)
+                    for name, service in cfg['services'].items():
+                        self.assertNotIn('JNPT_NOTIFY_GRAPH_CLIENT_SECRET',
+                                         service.get('environment', {}), name)
+                    service = cfg['services']['jnpt']
+                    self.assertEqual(service['environment'].get('JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE'),
+                                     '/run/secrets/graph_client_secret')
+                    mounts = [item for item in service.get('secrets', [])
+                              if item['source'] == 'graph_client_secret']
+                    self.assertEqual(len(mounts), 1)
+                    self.assertEqual(str(PurePosixPath('/run/secrets') / mounts[0]['target']),
+                                     '/run/secrets/graph_client_secret')
+                    self.assertEqual(Path(cfg['secrets']['graph_client_secret']['file']),
+                                     ROOT.resolve() / 'secrets' / 'graph_client_secret')
+
+    def test_graph_certificates_not_forwarded(self):
+        attempted = {'JNPT_NOTIFY_GRAPH_CERT_FILE': '/tmp/incorrect-graph-cert',
+                     'JNPT_NOTIFY_GRAPH_KEY_FILE': '/tmp/incorrect-graph-key'}
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            dotenv = Path(tmp) / '.env'
+            dotenv.write_text(''.join(name + '=' + value + '\n'
+                                      for name, value in attempted.items()))
+            for source in ['process', 'dotenv']:
+                with self.subTest(source=source):
+                    cfg = json.loads(config(
+                        extra_env=attempted if source == 'process' else None,
+                        env_file=dotenv if source == 'dotenv' else None).stdout)
+                    for name, service in cfg['services'].items():
+                        for variable in attempted:
+                            self.assertNotIn(variable, service.get('environment', {}), name)
 
     def test_mail_password_is_file_only(self):
         # Try both actual Compose input adapters, including an explicitly supplied
@@ -141,6 +188,12 @@ class Profile(unittest.TestCase):
                     self.assertEqual(environment.get(name), '', name)
 
     def test_mail_secret_initialization_preserves_operator_files(self):
+        self.assert_secret_initialization('smtp_password', b'synthetic mail probe')
+
+    def test_graph_secret_initialization_preserves_operator_files(self):
+        self.assert_secret_initialization('graph_client_secret', b'synthetic graph probe')
+
+    def assert_secret_initialization(self, name, contents):
         from test_install import ps
         with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
             target = Path(tmp)
@@ -150,16 +203,16 @@ class Profile(unittest.TestCase):
             command = "Initialize-MailSecret '" + str(target) + "'"
             result = ps(command)
             self.assertEqual(result.returncode, 0, result.stderr)
-            secret = target / 'secrets' / 'smtp_password'
+            secret = target / 'secrets' / name
             self.assertTrue(secret.is_file())
             self.assertEqual(secret.read_bytes(), b'')
-            secret.write_bytes(b'synthetic mail probe')
+            secret.write_bytes(contents)
             result = ps(command)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(secret.read_bytes(), b'synthetic mail probe')
+            self.assertEqual(secret.read_bytes(), contents)
             self.assertEqual(dotenv.read_bytes(), original_env)
         ignored = run('git', '-C', str(ROOT), 'check-ignore', '--no-index',
-                      'secrets/smtp_password', check=False)
+                      'secrets/' + name, check=False)
         self.assertEqual(ignored.returncode, 0, ignored.stderr)
 
     def test_mail_empty_secret_compose_adapter(self):
@@ -171,19 +224,23 @@ class Profile(unittest.TestCase):
             self.assertEqual(initialized.returncode, 0, initialized.stderr)
             # Use the profile's actual secret declaration with its source rebased
             # to the disposable installation, and its existing Python sidecar image.
-            declaration = dict(cfg['secrets']['smtp_password'])
-            declaration['file'] = str(target / 'secrets' / 'smtp_password')
+            declarations = {}
+            for name in ['smtp_password', 'graph_client_secret']:
+                self.assertIn(name, cfg['secrets'])
+                declarations[name] = dict(cfg['secrets'][name],
+                                          file=str(target / 'secrets' / name))
             probe = {
                 'services': {'probe': {
                     'image': cfg['services']['script-runner']['image'],
                     'network_mode': 'none',
                     'entrypoint': ['python3', '-I', '-c'],
                     'command': ["from pathlib import Path; "
-                                "p=Path('/run/secrets/smtp_password'); "
-                                "assert p.is_file(); assert p.read_bytes() == b''"],
+                                "paths=[Path('/run/secrets')/name for name in "
+                                "('smtp_password', 'graph_client_secret')]; "
+                                "assert all(p.is_file() and p.read_bytes() == b'' for p in paths)"],
                     'secrets': cfg['services']['jnpt']['secrets'],
                 }},
-                'secrets': {'smtp_password': declaration},
+                'secrets': declarations,
             }
             manifest = target / 'probe.json'
             manifest.write_text(json.dumps(probe))
