@@ -153,7 +153,7 @@ class Dienst(unittest.TestCase):
                 result, _, _ = self.fake_setup(mode, repeat=False, extra=extra)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn({'admin': 'admin', 'privileged': 'Standardbenutzer',
-                               'disabled': 'deaktiviert', 'root-acl': 'icacls', 'power': 'powercfg', 'task': 'task'}[mode], result.stderr)
+                               'disabled': 'deaktiviert', 'root-acl': 'DACL', 'power': 'powercfg', 'task': 'task'}[mode], result.stderr)
                 self.assertNotIn('KANARIE-NICHT-ECHT', result.stdout + result.stderr)
 
     def test_b7_root_is_protected_before_profile_files_and_tasks(self):
@@ -227,7 +227,7 @@ Set-DienstScreenLock 'unused' 'S-1-5-21-100-100-100-1001'
     def test_real_filesystem_acl_is_limited_to_account_system_and_administrators(self):
         with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
             # TemporaryDirectory itself may already have a protected DACL.
-            # Exercise an inheriting child so dropping /inheritance:r is visible.
+            # Exercise an inheriting child so dropping access-rule protection is visible.
             target = Path(tmp) / 'inherited'
             target.mkdir()
             result = ps("$sid=[Security.Principal.WindowsIdentity]::GetCurrent().User; " +

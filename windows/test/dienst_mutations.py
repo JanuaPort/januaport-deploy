@@ -3,6 +3,7 @@
 No account, autologon, power configuration, registry or scheduler changes.
 """
 from mutations import mutant
+from f5_mutations import CASES as F5_CASES
 TOTAL = 0
 
 
@@ -61,22 +62,11 @@ def main():
     probe('B2 built-in Users membership', 'dienst-einrichten.ps1',
           '                Add-LocalGroupMember -Group $group.Name -Member $user',
           "                if ($group.Name -ne 'Users') { Add-LocalGroupMember -Group $group.Name -Member $user }", setup)
-    probe('B2 private profile ACL', 'dienst-einrichten.ps1',
-          "'/inheritance:r' ", '',
-          'test_install.Dienst.test_real_filesystem_acl_is_limited_to_account_system_and_administrators')
-    probe('B-7 parent inheritance removed, fake and real adapter', 'dienst-einrichten.ps1',
-          "'/inheritance:r' ", '', 'test_upgrade.ParentAcl')
+    for label, old, new, selected in F5_CASES:
+        probe(label, 'dienst-einrichten.ps1', old, new, selected)
     probe('B-7 parent protected in setup', 'dienst-einrichten.ps1',
           '        Protect-DienstRoot $user.SID\n', '',
           'test_install.Dienst.test_b7_root_is_protected_before_profile_files_and_tasks')
-    probe('B-7 previous explicit grants removed', 'dienst-einrichten.ps1',
-          '    Clear-DienstExplicitAccess $Path\n', '',
-          'test_upgrade.ParentAcl.test_b7_real_temp_parent_removes_inherited_and_explicit_other_principals')
-    probe('B-7 foreign principal forbidden', 'dienst-einrichten.ps1',
-          "'*S-1-5-18:(OI)(CI)F'", "'*S-1-5-11:(OI)(CI)F'", 'test_upgrade.ParentAcl')
-    probe('B-7 icacls failure rejected', 'dienst-einrichten.ps1',
-          "if ($LASTEXITCODE -ne 0) { throw 'icacls fuer Dienstordner fehlgeschlagen.' }", '$null=$null',
-          'test_upgrade.ParentAcl.test_b7_native_icacls_error_aborts')
     probe('0.2.0 release reference pinned', 'einrichten.ps1',
           "$ProfileRef = 'windows-v0.2.0'", "$ProfileRef = 'windows-v0.1.0'",
           'test_upgrade.Upgrade.test_release_ref_is_windows_v020')
