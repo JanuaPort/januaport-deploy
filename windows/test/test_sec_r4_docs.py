@@ -27,7 +27,14 @@ class SecDocs(unittest.TestCase):
         for name in ['README.md','README.en.md']:
             with self.subTest(file=name):
                 text = ' '.join((ROOT / name).read_text(encoding='utf-8').split())
-                self.assertEqual(text.count('<SEKUNDEN>'), 1)
+                # Gemessen in B4 (BOX c-6775695532): Sperre 12,6 s nach Start, Desktop höchstens rund 7 s sichtbar.
+                self.assertNotIn('<SEKUNDEN>', text)
+                if name == 'README.md':
+                    self.assert_contains('höchstens rund 7 Sekunden', text)
+                    self.assert_contains('12,6 Sekunden nach dem Start', text)
+                else:
+                    self.assert_contains('at most about 7 seconds', text)
+                    self.assert_contains('12.6 seconds after start', text)
                 if name == 'README.md':
                     self.assert_contains('`docker-users` ist praktisch Admin des Rechners. Schutz der Konsole sind Sperre und Raumzutritt beim Betreiber.', text)
                     self.assertNotIn('Für wenige Sekunden', text)
@@ -63,16 +70,22 @@ function Get-NetFirewallRule {param($Enabled,$Direction,$Action)
         @('foreign-any','Other all ports','Any','Any','Any'),
         @('foreign-range','Other port range','Any','400-500','Any'),
         @('foreign-list','Other port list','Any','80,443,8443','Any'),
-        @('irrelevant','Other unrelated port','Any','445','Any')
+        @('irrelevant','Other unrelated port','Any','445','Any'),
+        # N8 (B4): Diese Regeln öffnen 443 nicht für den Docker-Listener und sollen nicht erscheinen.
+        @('foreign-program','Teams all ports','C:\Teams\teams.exe','Any','Any'),
+        @('app-package','Store app all ports','Any','Any','Any','S-1-15-2-1'),
+        @('udp-any','UDP all ports','Any','Any','Any','','UDP')
     )) {
-        [pscustomobject]@{Name=$row[0];DisplayName=$row[1];Profile='Private';Program=$row[2];LocalPort=$row[3];RemoteAddress=$row[4]}
+        $package = if ($row.Count -gt 5) { $row[5] } else { '' }
+        $protocol = if ($row.Count -gt 6) { $row[6] } else { 'TCP' }
+        [pscustomobject]@{Name=$row[0];DisplayName=$row[1];Profile='Private';Program=$row[2];LocalPort=$row[3];RemoteAddress=$row[4];Package=$package;Protocol=$protocol}
     }
 }
 function Get-NetFirewallApplicationFilter {param([Parameter(ValueFromPipeline=$true)]$InputObject)
-    process {[pscustomobject]@{Program=$InputObject.Program}}
+    process {[pscustomobject]@{Program=$InputObject.Program;Package=$InputObject.Package}}
 }
 function Get-NetFirewallPortFilter {param([Parameter(ValueFromPipeline=$true)]$InputObject)
-    process {[pscustomobject]@{Protocol='TCP';LocalPort=$InputObject.LocalPort}}
+    process {[pscustomobject]@{Protocol=$InputObject.Protocol;LocalPort=$InputObject.LocalPort}}
 }
 function Get-NetFirewallAddressFilter {param([Parameter(ValueFromPipeline=$true)]$InputObject)
     process {[pscustomobject]@{RemoteAddress=$InputObject.RemoteAddress}}
