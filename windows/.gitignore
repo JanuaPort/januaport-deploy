@@ -1,2 +1,2 @@
-# Lokale Compose-Secret-Dateien, auch die anfangs leere SMTP-Passwortdatei.
+# Lokale Compose-Secrets: SMTP-Passwort und Graph-Client-Secret, anfangs leer.
 secrets/

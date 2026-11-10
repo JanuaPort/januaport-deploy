@@ -77,10 +77,32 @@ def main():
            command=['-m', 'unittest',
                     'test_profile.Profile.test_mail_secret_initialization_preserves_operator_files', '-v'])
     mutant('SMTP empty password file created', 'einrichten.ps1',
-           '    $file = [IO.File]::Open((Join-Path $secretDirectory',
-           '    return\n    $file = [IO.File]::Open((Join-Path $secretDirectory',
+           '        $file = [IO.File]::Open((Join-Path $secretDirectory',
+           '        return\n        $file = [IO.File]::Open((Join-Path $secretDirectory',
            command=['-m', 'unittest',
                     'test_profile.Profile.test_mail_secret_initialization_preserves_operator_files', '-v'])
+    mutant('Graph client secret excluded from container environment', 'docker-compose.yml',
+           '      JNPT_NOTIFY_GRAPH_TENANT_ID:',
+           '      JNPT_NOTIFY_GRAPH_CLIENT_SECRET: ${JNPT_NOTIFY_GRAPH_CLIENT_SECRET:-}\n'
+           '      JNPT_NOTIFY_GRAPH_TENANT_ID:',
+           command=['-m', 'unittest', 'test_profile.Profile.test_graph_client_secret_is_file_only', '-v'])
+    mutant('Graph client secret file path fixed', 'docker-compose.yml',
+           'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE: /run/secrets/graph_client_secret',
+           'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE: ${JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE:-/run/secrets/graph_client_secret}',
+           command=['-m', 'unittest', 'test_profile.Profile.test_graph_client_secret_is_file_only', '-v'])
+    graph_files = ['-m', 'unittest',
+                   'test_profile.Profile.test_graph_secret_initialization_preserves_operator_files', '-v']
+    mutant('Graph client secret file retained', 'einrichten.ps1', '[IO.FileMode]::OpenOrCreate',
+           '[IO.FileMode]::Create', command=graph_files)
+    mutant('Graph client secret gitignored', '.gitignore', 'secrets/', '!secrets/', command=graph_files)
+    mutant('Graph empty client secret file created', 'einrichten.ps1',
+           "@('smtp_password', 'graph_client_secret')", "@('smtp_password')", command=graph_files)
+    for name in ['CERT_FILE', 'KEY_FILE']:
+        variable = 'JNPT_NOTIFY_GRAPH_' + name
+        mutant('Graph ' + name + ' excluded from container environment', 'docker-compose.yml',
+               '      JNPT_NOTIFY_GRAPH_TENANT_ID:',
+               '      ' + variable + ': ${' + variable + ':-}\n      JNPT_NOTIFY_GRAPH_TENANT_ID:',
+               command=['-m', 'unittest', 'test_profile.Profile.test_graph_certificates_not_forwarded', '-v'])
     mutant('W8 LAN route allowlist', 'Caddyfile', '@device path /api/device/v1/* /healthz', '@device path /*')
     mutant('Caddy admin socket off', 'Caddyfile', '\tadmin off\n', '')
     mutant('K1 no plaintext listener', 'Caddyfile', '\tadmin off\n}\n',

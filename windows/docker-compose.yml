@@ -25,10 +25,17 @@ services:
       JNPT_SMTP_PASSWORD_FILE: /run/secrets/smtp_password
       JNPT_NOTIFY_STATE: ${JNPT_NOTIFY_STATE:-}
       JNPT_NOTIFY_TRANSPORT: ${JNPT_NOTIFY_TRANSPORT:-}
+      JNPT_NOTIFY_GRAPH_TENANT_ID: ${JNPT_NOTIFY_GRAPH_TENANT_ID:-}
+      JNPT_NOTIFY_GRAPH_CLIENT_ID: ${JNPT_NOTIFY_GRAPH_CLIENT_ID:-}
+      JNPT_NOTIFY_GRAPH_SENDER: ${JNPT_NOTIFY_GRAPH_SENDER:-}
+      JNPT_NOTIFY_GRAPH_CLIENT_SECRET_EXPIRES: ${JNPT_NOTIFY_GRAPH_CLIENT_SECRET_EXPIRES:-}
+      # Graph v1: Client-Secret nur als Datei; keine Zertifikat-Konfiguration.
+      JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE: /run/secrets/graph_client_secret
       # SEC W8: Admin-GUI nur am lokalen Rechner.
       JNPT_ADMIN_URL: http://127.0.0.1:8484
     secrets:
       - smtp_password
+      - graph_client_secret
     ports:
       - "443:443"
       - "127.0.0.1:8484:8484"
@@ -188,6 +195,8 @@ services:
 secrets:
   smtp_password:
     file: ./secrets/smtp_password
+  graph_client_secret:
+    file: ./secrets/graph_client_secret
 
 volumes:
   jnpt-data:

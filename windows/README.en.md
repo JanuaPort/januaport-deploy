@@ -50,8 +50,9 @@ create the first admin token.
 ## Mail
 
 `einrichten.ps1` still prompts only for the image tag. Before starting Compose,
-it creates an empty `secrets/smtp_password` in the profile directory, preserving
-an existing password file. The profile starts as before without mail settings.
+it creates empty `secrets/smtp_password` and `secrets/graph_client_secret` files
+in the profile directory, preserving existing contents. The profile starts as
+before without mail settings.
 **The operator attribute (Betreiber-Merkmal), network gate (Netztür), construction
 phase (Bauphase) and case token (Fall-Token) require deliverable mail.**
 Verify sending and actual receipt before using them.
@@ -70,21 +71,36 @@ missing or empty values remain empty in the container:
 | `JNPT_SMTP_USERNAME` | SMTP username |
 | `JNPT_NOTIFY_STATE` | Optional notification state path inside the container |
 | `JNPT_NOTIFY_TRANSPORT` | Mail transport as defined by the core configuration |
+| `JNPT_NOTIFY_GRAPH_TENANT_ID` | Graph tenant ID |
+| `JNPT_NOTIFY_GRAPH_CLIENT_ID` | Client ID of the Graph application |
+| `JNPT_NOTIFY_GRAPH_SENDER` | Graph sender, e.g. `sender@example.org` |
+| `JNPT_NOTIFY_GRAPH_CLIENT_SECRET_EXPIRES` | Client-secret expiry as defined by the core configuration |
 
 **The SMTP password must never appear in `.env` or the container environment.**
 Store it only as the contents of the local `secrets/smtp_password` file (UTF-8
-without BOM). The `secrets/` directory is gitignored; the password file is neither
+without BOM). The `secrets/` directory is gitignored; secret files are neither
 distributed nor included in `SHA256SUMS`. Restrict local file access to the
 responsible users and Docker Desktop. Compose mounts it as a secret at
 `/run/secrets/smtp_password`. `JNPT_SMTP_PASSWORD_FILE` is fixed to this container
 path; `JNPT_SMTP_PASSWORD` is not forwarded. Neither variable belongs in `.env`.
+
+For Graph, set `JNPT_NOTIFY_TRANSPORT=graph` and the Graph settings in `.env`.
+**The Graph client secret must also never appear in `.env` or the container
+environment.** Store it only in `secrets/graph_client_secret` (UTF-8 without BOM).
+Compose mounts it at `/run/secrets/graph_client_secret`;
+`JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE` is fixed to this path.
+`JNPT_NOTIFY_GRAPH_CLIENT_SECRET` is not forwarded. Neither variable belongs in
+`.env`. **Graph v1 supports client-secret authentication only.**
+`JNPT_NOTIFY_GRAPH_CERT_FILE` and `JNPT_NOTIFY_GRAPH_KEY_FILE` are not forwarded;
+certificate authentication will follow if needed.
+
 `JNPT_ADMIN_URL` is fixed to `http://127.0.0.1:8484` (SEC W8): admin links are
 accessible only on the machine running the installation.
 
-Keep the empty password file even without SMTP. `docker compose config` does
-not check whether it exists. With a missing file, Compose may fail at startup
+Keep both secret files even without mail settings. `docker compose config` does
+not check whether they exist. With a missing file, Compose may fail at startup
 or mount a directory instead of a readable file. Before starting manually,
-prepare the profile with `einrichten.ps1`. After changing `.env` or the password
+prepare the profile with `einrichten.ps1`. After changing `.env` or a secret
 file, run these commands in the profile directory:
 
 ```powershell

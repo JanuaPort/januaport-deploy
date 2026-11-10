@@ -66,8 +66,9 @@ sichern, Admin-Passwort setzen, ersten Admin-Token erzeugen.
 ## Mail
 
 `einrichten.ps1` fragt weiterhin nur nach dem Image-Tag. Es legt vor dem Start
-die leere Datei `secrets/smtp_password` im Profilordner an und erhält eine
-vorhandene Passwortdatei. Ohne Mail-Konfiguration startet das Profil wie bisher.
+die leeren Dateien `secrets/smtp_password` und `secrets/graph_client_secret` im
+Profilordner an und erhält vorhandene Inhalte. Ohne Mail-Konfiguration startet
+das Profil wie bisher.
 **Betreiber-Merkmal, Netztür, Bauphase und Fall-Token benötigen zustellbare Mail.**
 Vor ihrer Nutzung den Versand und den tatsächlichen Empfang prüfen.
 
@@ -85,23 +86,39 @@ Werte in `.env` ergänzen; fehlende oder leere Werte bleiben im Container leer:
 | `JNPT_SMTP_USERNAME` | SMTP-Benutzername |
 | `JNPT_NOTIFY_STATE` | Optionaler Pfad des Benachrichtigungszustands im Container |
 | `JNPT_NOTIFY_TRANSPORT` | Mail-Transport gemäß der Kern-Konfiguration |
+| `JNPT_NOTIFY_GRAPH_TENANT_ID` | Tenant-ID für Graph |
+| `JNPT_NOTIFY_GRAPH_CLIENT_ID` | Client-ID der Graph-Anwendung |
+| `JNPT_NOTIFY_GRAPH_SENDER` | Graph-Absender, z. B. `sender@example.org` |
+| `JNPT_NOTIFY_GRAPH_CLIENT_SECRET_EXPIRES` | Ablaufzeitpunkt des Client-Secrets gemäß der Kern-Konfiguration |
 
 **Das SMTP-Passwort steht nie in `.env` und nie in der Container-Umgebung.**
 Es ausschließlich als Inhalt der lokalen Datei `secrets/smtp_password` speichern
-(UTF-8 ohne BOM). Der Ordner `secrets/` ist gitignored; die Passwortdatei wird
+(UTF-8 ohne BOM). Der Ordner `secrets/` ist gitignored; die Secret-Dateien werden
 weder ausgeliefert noch in `SHA256SUMS` aufgenommen. Den Dateizugriff auf dem
 Rechner auf die zuständigen Benutzer und Docker Desktop beschränken.
 Compose bindet sie als Secret unter `/run/secrets/smtp_password` ein.
 `JNPT_SMTP_PASSWORD_FILE` ist fest auf diesen Containerpfad gesetzt;
 `JNPT_SMTP_PASSWORD` wird nicht durchgereicht. Beide Variablen gehören nicht
-in `.env`. `JNPT_ADMIN_URL` ist fest `http://127.0.0.1:8484` (SEC W8):
+in `.env`.
+
+Für Graph `JNPT_NOTIFY_TRANSPORT=graph` und die Graph-Werte in `.env` setzen.
+**Das Graph-Client-Secret steht ebenfalls nie in `.env` oder im Container-Env.**
+Es ausschließlich in `secrets/graph_client_secret` speichern (UTF-8 ohne BOM).
+Compose bindet die Datei unter `/run/secrets/graph_client_secret` ein;
+`JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE` ist fest auf diesen Pfad gesetzt.
+`JNPT_NOTIFY_GRAPH_CLIENT_SECRET` wird nicht durchgereicht. Beide Variablen
+gehören nicht in `.env`. **Graph unterstützt in v1 ausschließlich Client-Secret.**
+`JNPT_NOTIFY_GRAPH_CERT_FILE` und `JNPT_NOTIFY_GRAPH_KEY_FILE` werden nicht
+durchgereicht; Zertifikatsauthentifizierung folgt bei Bedarf.
+
+`JNPT_ADMIN_URL` ist fest `http://127.0.0.1:8484` (SEC W8):
 Admin-Links sind ausschließlich am Rechner der Anlage erreichbar.
 
-Die leere Passwortdatei auch ohne SMTP erhalten. `docker compose config`
+Beide Secret-Dateien auch ohne Mail-Konfiguration erhalten. `docker compose config`
 prüft ihre Existenz nicht. Bei fehlender Datei kann Compose beim Start
 scheitern oder einen Verzeichnispfad statt einer lesbaren Datei einbinden.
 Für einen manuellen Start das Profil deshalb zuerst mit `einrichten.ps1`
-vorbereiten. Nach Änderungen an `.env` oder der Passwortdatei im Profilordner
+vorbereiten. Nach Änderungen an `.env` oder einer Secret-Datei im Profilordner
 ausführen:
 
 ```powershell

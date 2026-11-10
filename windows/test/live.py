@@ -49,9 +49,11 @@ class Live(unittest.TestCase):
             result = install()
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn('Admin-GUI: http://127.0.0.1:8484', result.stdout)
-            secret = target / 'secrets' / 'smtp_password'
-            self.assertTrue(secret.is_file())
-            self.assertEqual(secret.read_bytes(), b'')
+            secrets = [target / 'secrets' / name for name in
+                       ('smtp_password', 'graph_client_secret')]
+            for secret in secrets:
+                self.assertTrue(secret.is_file())
+                self.assertEqual(secret.read_bytes(), b'')
             for attempt in range(60):
                 try:
                     if request('/healthz', tls=True)[0] == 200:
@@ -104,12 +106,14 @@ class Live(unittest.TestCase):
             for san in sans.stdout.strip().split(','):
                 self.assertIn(san.replace('IP:', 'IP Address:'), cert)
             # Execute the entire setup script again, preserving operator values and leaf.
-            secret.write_bytes(b'synthetic mail probe')
+            for secret in secrets:
+                secret.write_bytes(b'synthetic mail probe')
             again = install()
             self.assertEqual(again.returncode, 0, again.stderr)
             self.assertIn(expected, again.stdout)
             self.assertEqual((target / '.env').read_bytes(), env_bytes)
-            self.assertEqual(secret.read_bytes(), b'synthetic mail probe')
+            for secret in secrets:
+                self.assertEqual(secret.read_bytes(), b'synthetic mail probe')
             run(*compose, 'restart', 'caddy')
             for attempt in range(30):
                 try:

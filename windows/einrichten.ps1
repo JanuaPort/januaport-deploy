@@ -111,10 +111,12 @@ function Initialize-MailSecret {
     param([string]$Path)
     $secretDirectory = Join-Path $Path 'secrets'
     New-Item -ItemType Directory -Path $secretDirectory -Force | Out-Null
-    # OpenOrCreate legt nur bei Bedarf an und kuerzt vorhandene Passwoerter nicht.
-    $file = [IO.File]::Open((Join-Path $secretDirectory 'smtp_password'),
-        [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::Write, [IO.FileShare]::None)
-    $file.Dispose()
+    # OpenOrCreate legt nur bei Bedarf an und kuerzt vorhandene Secrets nicht.
+    foreach ($name in @('smtp_password', 'graph_client_secret')) {
+        $file = [IO.File]::Open((Join-Path $secretDirectory $name),
+            [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        $file.Dispose()
+    }
 }
 
 function Install-Profile {

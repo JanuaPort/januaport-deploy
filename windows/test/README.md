@@ -14,11 +14,13 @@ python -B windows/test/mutations.py
 Die Mail-Tests lesen die SMTP-/Notify-Umgebung aus echtem `docker compose config`:
 gesetzte, fehlende und leere Werte, fester Secret-Dateipfad und feste lokale
 Admin-URL. Prozessumgebung und eine echte temporäre `.env` versuchen ausdrücklich,
-ein Klartext-SMTP-Passwort sowie andere Passwort-/Admin-Pfade einzuschleusen.
-Die Werte werden nicht übernommen. PowerShell 5.1 legt die leere Passwortdatei
-an und erhält vorhandenen Inhalt sowie `.env`. Ein isolierter Compose-Aufruf
-mit dem vorhandenen Python-Beisteller prüft die leere Datei am tatsächlichen
-Secret-Mount; dafür ist kein SMTP-Server erforderlich. Die Zustellung selbst
+ein Klartext-SMTP-Passwort, ein Graph-Client-Secret sowie andere Secret-/Admin-Pfade
+einzuschleusen. Auch Graph-Zertifikat- und Schlüsselpfade werden angeboten und
+nicht übernommen: v1 unterstützt ausschließlich Client-Secret. PowerShell 5.1
+legt beide leeren Secret-Dateien an und erhält vorhandene Inhalte sowie `.env`.
+Ein isolierter Compose-Aufruf mit dem vorhandenen Python-Beisteller prüft beide
+leeren Dateien an den tatsächlichen Secret-Mounts; dafür ist kein SMTP-Server
+oder Graph-Zugang erforderlich. Die Zustellung selbst
 ist eine zusätzliche Betreiberprüfung gemäß [Mail](../README.md#mail).
 
 Die Standardtests prüfen Summen samt beschädigter Dateien, echte
@@ -47,7 +49,7 @@ Netz-Namensraumteilung, Docker-Portbindungen, die Unerreichbarkeit des
 Admin-Ports über die eigene LAN-Schnittstelle und den Fingerprint aus dem
 Zertifikats-Volume gegen das tatsächlich empfangene DER-Zertifikat. Das gesamte
 Einrichtungsskript läuft zweimal gegen ein vorbereitetes, geprüftes Profil:
-`.env` und Fingerprint bleiben gleich. Danach muss ein Caddy-Neustart ebenfalls
+`.env`, beide gefüllten Secret-Dateien und Fingerprint bleiben gleich. Danach muss ein Caddy-Neustart ebenfalls
 denselben Pin liefern; nur `-NeuesZertifikat` muss ihn ändern. Die Host-SANs
 werden mit dem erzeugten Zertifikat verglichen. In `finally` folgt immer
 `docker compose down -v --remove-orphans` nur für das eigene Zufallsprojekt.
@@ -62,8 +64,10 @@ werden LAN-Pfadfilter, Caddy-Admin-Socket, statisches Leaf, Zertifikatserhalt,
 Admin-Portbindung, Netz-Namensraum, Pflicht-Image und -Digest, Beisteller-Digest,
 Download-Summen, Summenformat/Dateinamen/Duplikate/Vollständigkeit,
 Image-Eingaben, vorhandenes Ziel und W6. Dazu kommen B1-Mutationen für ein
-Klartext-SMTP-Passwort im Container-Env, überschreibbare Passwortdatei/Admin-URL,
-überschriebene oder fehlende Passwortdatei und aufgehobenen Git-Ausschluss.
+Klartext-SMTP-Passwort und Graph-Client-Secret im Container-Env, überschreibbare
+Secret-Pfade/Admin-URL, überschriebene oder fehlende Secret-Dateien und aufgehobenen
+Git-Ausschluss. Je eine Mutation reicht den Graph-Zertifikat- bzw. Schlüsselpfad
+durch und muss die zugehörige Negativprüfung rot machen.
 
 Die W6-Mutation startet absichtlich einen echten Guard im Testcontainer-Verbund
 mit dem originalen Seccomp-Profil von `script-runner-v0.3.1`. Es wird über HTTPS
