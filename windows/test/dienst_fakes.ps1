@@ -28,7 +28,7 @@ function Get-AutologonBinary { $script:events.Add('binary-verified'); 'unused-te
 function Test-DienstAutologon { $script:autologon }
 function Enable-DienstAutologon { param($Binary,$Password) $script:events.Add('autologon'); $script:autologon=$true }
 function New-ScheduledTaskAction { param($Execute,$Argument,$WorkingDirectory) [pscustomobject]@{Execute=$Execute;Argument=$Argument;WorkingDirectory=$WorkingDirectory} }
-function New-ScheduledTaskTrigger { param([switch]$AtLogOn,$User,[switch]$Daily,$At) [pscustomobject]@{Logon=[bool]$AtLogOn;User=$User;Daily=[bool]$Daily} }
+function New-ScheduledTaskTrigger { param([switch]$AtLogOn,$User,[switch]$Daily,$At) [pscustomobject]@{Logon=[bool]$AtLogOn;User=$User;Daily=[bool]$Daily;Delay=$null} }
 function New-ScheduledTaskPrincipal { param($UserId,$LogonType,$RunLevel) [pscustomobject]@{UserId=$UserId;LogonType=$LogonType;RunLevel=$RunLevel} }
 function New-ScheduledTaskSettingsSet { param([switch]$StartWhenAvailable,$MultipleInstances) 'settings' }
 function Register-ScheduledTask { param($TaskName,$Action,$Trigger,$Principal,$Settings,[switch]$Force)

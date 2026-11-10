@@ -118,7 +118,7 @@ class Dienst(unittest.TestCase):
             self.assertEqual(task['Principal']['RunLevel'], 'Limited')
             self.assertTrue(task['Principal']['UserId'].endswith('\\jnpt-dienst'))
         actions = ' '.join(self.task_command(t) for t in tasks)
-        self.assertIn('LockWorkStation', actions)
+        self.assertIn('jnpt-sperren.ps1', actions)
         self.assertIn('jnpt-backup.ps1', actions)
         self.assertIn('einrichten.ps1', actions)
         for task in tasks:
