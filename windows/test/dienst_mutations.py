@@ -62,8 +62,41 @@ def main():
           '                Add-LocalGroupMember -Group $group.Name -Member $user',
           "                if ($group.Name -ne 'Users') { Add-LocalGroupMember -Group $group.Name -Member $user }", setup)
     probe('B2 private profile ACL', 'dienst-einrichten.ps1',
-          '$acl.SetAccessRuleProtection($true, $false)', '$acl.SetAccessRuleProtection($false, $false)',
+          "'/inheritance:r' ", '',
           'test_install.Dienst.test_real_filesystem_acl_is_limited_to_account_system_and_administrators')
+    probe('B-7 parent inheritance removed, fake and real adapter', 'dienst-einrichten.ps1',
+          "'/inheritance:r' ", '', 'test_upgrade.ParentAcl')
+    probe('B-7 parent protected in setup', 'dienst-einrichten.ps1',
+          '        Protect-DienstRoot $user.SID\n', '',
+          'test_install.Dienst.test_b7_root_is_protected_before_profile_files_and_tasks')
+    probe('B-7 previous explicit grants removed', 'dienst-einrichten.ps1',
+          '    Clear-DienstExplicitAccess $Path\n', '',
+          'test_upgrade.ParentAcl.test_b7_real_temp_parent_removes_inherited_and_explicit_other_principals')
+    probe('B-7 foreign principal forbidden', 'dienst-einrichten.ps1',
+          "'*S-1-5-18:(OI)(CI)F'", "'*S-1-5-11:(OI)(CI)F'", 'test_upgrade.ParentAcl')
+    probe('B-7 icacls failure rejected', 'dienst-einrichten.ps1',
+          "if ($LASTEXITCODE -ne 0) { throw 'icacls fuer Dienstordner fehlgeschlagen.' }", '$null=$null',
+          'test_upgrade.ParentAcl.test_b7_native_icacls_error_aborts')
+    probe('0.2.0 release reference pinned', 'einrichten.ps1',
+          "$ProfileRef = 'windows-v0.2.0'", "$ProfileRef = 'windows-v0.1.0'",
+          'test_upgrade.Upgrade.test_release_ref_is_windows_v020')
+    probe('legacy managed-file changes rejected', 'einrichten.ps1',
+          'if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -cne $legacy[$name])',
+          'if ($false)', 'test_upgrade.Upgrade.test_modified_or_missing_legacy_file_is_rejected_before_download')
+    probe('upgrade verifies download before replacing any file', 'einrichten.ps1',
+          '            Test-ProfileFiles $staging\n', '',
+          'test_upgrade.Upgrade.test_download_or_hash_failure_cannot_replace_existing_files')
+    probe('upgrade preserves existing environment', 'einrichten.ps1',
+          '            if (-not $upgrade) {\n                $envText',
+          '            if ($true) {\n                $image=@("synthetic-image", ("1"*64))\n                $envText',
+          'test_upgrade.Upgrade.test_legacy_three_files_upgrade_and_second_run_preserve_env_and_secrets')
+    probe('upgrade preserves existing secret contents', 'einrichten.ps1',
+          '    Initialize-MailSecret $Directory\n',
+          '    [IO.File]::WriteAllText((Join-Path $Directory "secrets\\smtp_password"), "synthetic overwritten contents")\n    Initialize-MailSecret $Directory\n',
+          'test_upgrade.Upgrade.test_legacy_three_files_upgrade_and_second_run_preserve_env_and_secrets')
+    probe('local service staging supports legacy upgrade', 'dienst-einrichten.ps1',
+          '        $upgrade = Test-LegacyProfile $DienstDirectory\n', '        $upgrade = $false\n',
+          'test_upgrade.Upgrade.test_local_dienst_staging_also_upgrades_legacy_files')
     for old, new in [("@('ScreenSaveActive','1')", "@('ScreenSaveActive','0')"),
                      ("@('ScreenSaveTimeOut','60')", "@('ScreenSaveTimeOut','120')"),
                      ("@('ScreenSaverIsSecure','1')", "@('ScreenSaverIsSecure','0')")]:

@@ -226,8 +226,14 @@ Set-DienstScreenLock 'unused' 'S-1-5-21-100-100-100-1001'
 
     def test_real_filesystem_acl_is_limited_to_account_system_and_administrators(self):
         with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
-            result = ps("$sid=[Security.Principal.WindowsIdentity]::GetCurrent().User; Protect-DienstDirectory '" + tmp +
-                        "' $sid; $acl=Get-Acl -LiteralPath '" + tmp + "'; " +
+            # TemporaryDirectory itself may already have a protected DACL.
+            # Exercise an inheriting child so dropping /inheritance:r is visible.
+            target = Path(tmp) / 'inherited'
+            target.mkdir()
+            result = ps("$sid=[Security.Principal.WindowsIdentity]::GetCurrent().User; " +
+                        "if ((Get-Acl -LiteralPath '" + str(target) + "').AreAccessRulesProtected) {throw 'fixture must inherit'}; " +
+                        "Protect-DienstDirectory '" + str(target) +
+                        "' $sid; $acl=Get-Acl -LiteralPath '" + str(target) + "'; " +
                         "[pscustomobject]@{Protected=$acl.AreAccessRulesProtected; Entries=@($acl.Access | ForEach-Object {$_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value}); User=$sid.Value} | ConvertTo-Json -Compress", ROOT / 'dienst-einrichten.ps1')
             self.assertEqual(result.returncode, 0, result.stderr)
             acl = json.loads(result.stdout)

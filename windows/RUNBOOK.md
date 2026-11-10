@@ -94,7 +94,11 @@ eine neue Sitzung nötig ist.
    Engine und Volumes nicht aus dem Wartungskonto beurteilen. Maßgeblich ist der Aufgabenstatus.
 
 ### 3.4 Anlage einrichten
-Zuerst die administrative [B2-Einrichtung](README.md#dienstbetrieb-b2) durchführen. Die
+Zuerst die administrative [B2-Einrichtung](README.md#dienstbetrieb-b2) durchführen.
+B-7: `icacls C:\JanuaPort` und `icacls C:\JanuaPort\windows` zeigen ausschließlich
+`jnpt-dienst`, Administratoren und SYSTEM. Vererbung vom Laufwerksstamm ist aus.
+Bei einem Altprofil den [Upgrade-Weg 0.1.0 → 0.2.0](README.md#von-010-auf-020) und
+die zusätzliche Abnahme in B4 verwenden. Die
 Erstkonfiguration von Docker Desktop und die Schritte in [„Zwei Befehle“](README.md#zwei-befehle)
 führt der Betreiber in `jnpt-dienst` aus. Danach startet das Wartungskonto nur Aufgaben.
 Am Ende gibt `einrichten.ps1` den

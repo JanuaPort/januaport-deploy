@@ -52,18 +52,31 @@ namespace Jnpt {
     return $path.ToString()
 }
 
-function Protect-DienstDirectory {
-    param([string]$Path, $SID)
+function Clear-DienstExplicitAccess {
+    param([string]$Path)
     $acl = [IO.Directory]::GetAccessControl($Path, [Security.AccessControl.AccessControlSections]::Access)
-    $acl.SetAccessRuleProtection($true, $false)
-    foreach ($existing in @($acl.Access)) { $acl.RemoveAccessRuleSpecific($existing) }
-    foreach ($identity in @('S-1-5-18', 'S-1-5-32-544', [string]$SID)) {
-        $sidObject = New-Object Security.Principal.SecurityIdentifier($identity)
-        $rule = New-Object Security.AccessControl.FileSystemAccessRule($sidObject, 'FullControl',
-            'ContainerInherit,ObjectInherit', 'None', 'Allow')
-        $acl.AddAccessRule($rule)
+    foreach ($existing in @($acl.Access)) {
+        if (-not $existing.IsInherited) { $acl.RemoveAccessRuleSpecific($existing) }
     }
     [IO.Directory]::SetAccessControl($Path, $acl)
+}
+
+function Protect-DienstDirectory {
+    param([string]$Path, $SID)
+    # Remove previous explicit grants as well; /grant:r alone would keep grants
+    # to other accounts. Inherited C:\ grants are removed by icacls itself.
+    Clear-DienstExplicitAccess $Path
+    $grants = @(("*" + [string]$SID + ':(OI)(CI)F'),
+        '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-18:(OI)(CI)F')
+    & icacls.exe $Path '/inheritance:r' '/grant:r' @grants *> $null
+    if ($LASTEXITCODE -ne 0) { throw 'icacls fuer Dienstordner fehlgeschlagen.' }
+}
+
+function Protect-DienstRoot {
+    param($SID)
+    $root = Split-Path -Path $DienstDirectory -Parent
+    New-Item -ItemType Directory -Path $root -Force | Out-Null
+    Protect-DienstDirectory $root $SID
 }
 
 function Set-DienstScreenLock {
@@ -220,16 +233,18 @@ function Initialize-Dienst {
             }
         }
         $profilePath = Get-DienstProfilePath $user
+        Protect-DienstRoot $user.SID
+        $upgrade = Test-LegacyProfile $DienstDirectory
         New-Item -ItemType Directory -Path $DienstDirectory -Force | Out-Null
         Protect-DienstDirectory $DienstDirectory $user.SID
         foreach ($name in (@('SHA256SUMS') + $ProfileFiles)) {
             $destination = Join-Path $DienstDirectory $name
             $source = Join-Path $PSScriptRoot $name
-            if ((Test-Path -LiteralPath $destination) -and
+            if (-not $upgrade -and (Test-Path -LiteralPath $destination) -and
                 (Get-FileHash -LiteralPath $destination).Hash -cne (Get-FileHash -LiteralPath $source).Hash) {
                 throw 'Vorhandenes Profil weicht ab; geprueftes Update erforderlich.'
             }
-            if (-not (Test-Path -LiteralPath $destination)) { Copy-Item -LiteralPath $source -Destination $destination }
+            if ($upgrade -or -not (Test-Path -LiteralPath $destination)) { Copy-Item -LiteralPath $source -Destination $destination }
         }
         Set-DienstScreenLock $profilePath $user.SID
         $wsl = Join-Path $profilePath '.wslconfig'

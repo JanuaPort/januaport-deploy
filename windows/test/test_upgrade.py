@@ -67,6 +67,25 @@ Install-Profile
                 verify_sums(target)
             return result, before, after, downloads, docker
 
+    def test_local_dienst_staging_also_upgrades_legacy_files(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            root = Path(tmp)
+            target = root / 'profile'
+            target.mkdir()
+            (root / 'user').mkdir()
+            for name in LEGACY_FILES:
+                (target / name).write_bytes(subprocess.check_output(['git', 'show', 'windows-v0.1.0:windows/' + name]))
+            (target / '.env').write_bytes(b'synthetic environment\r\n')
+            (target / 'secrets').mkdir()
+            (target / 'secrets' / 'smtp_password').write_bytes(b'synthetic retained mail contents')
+            command = ". '" + str(Path(__file__).with_name('dienst_fakes.ps1')) + "'; "
+            command += "$DienstDirectory=Join-Path $env:PROBE_ROOT 'profile'; $BackupTarget='E:\\Backup'; Initialize-Dienst; Test-ProfileFiles $DienstDirectory"
+            result = ps(command, ROOT / 'dienst-einrichten.ps1', dict(PROBE_ROOT=tmp, PROBE_FAIL=''))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            verify_sums(target)
+            self.assertEqual((target / '.env').read_bytes(), b'synthetic environment\r\n')
+            self.assertEqual((target / 'secrets' / 'smtp_password').read_bytes(), b'synthetic retained mail contents')
+
     def test_release_ref_is_windows_v020(self):
         result = ps('Write-Output $ProfileRef; Write-Output $ProfileBase')
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -142,17 +161,26 @@ ConvertTo-Json -InputObject $script:calls -Compress
     def test_b7_real_temp_parent_removes_inherited_and_explicit_other_principals(self):
         with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
             command = r'''
-$parent=Join-Path $env:PROBE_ROOT 'JanuaPort'
+$broadSource=Join-Path $env:PROBE_ROOT 'broad-source'
+$parent=Join-Path $broadSource 'JanuaPort'
 $DienstDirectory=Join-Path $parent 'windows'
 $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
-New-Item -ItemType Directory $parent | Out-Null
-$acl=[IO.Directory]::GetAccessControl($parent,[Security.AccessControl.AccessControlSections]::Access)
+New-Item -ItemType Directory $broadSource | Out-Null
+$acl=[IO.Directory]::GetAccessControl($broadSource,[Security.AccessControl.AccessControlSections]::Access)
 $other=New-Object Security.Principal.SecurityIdentifier('S-1-5-11')
 $rule=New-Object Security.AccessControl.FileSystemAccessRule($other,'Modify','ContainerInherit,ObjectInherit','None','Allow')
 $acl.AddAccessRule($rule)
+[IO.Directory]::SetAccessControl($broadSource,$acl)
+New-Item -ItemType Directory $parent | Out-Null
+$acl=[IO.Directory]::GetAccessControl($parent,[Security.AccessControl.AccessControlSections]::Access)
+$everyone=New-Object Security.Principal.SecurityIdentifier('S-1-1-0')
+$explicit=New-Object Security.AccessControl.FileSystemAccessRule($everyone,'Read','ContainerInherit,ObjectInherit','None','Allow')
+$acl.AddAccessRule($explicit)
 [IO.Directory]::SetAccessControl($parent,$acl)
 New-Item -ItemType Directory $DienstDirectory | Out-Null
-if (-not ((Get-Acl $DienstDirectory).Access | Where-Object {$_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -eq 'S-1-5-11'})) {throw 'fixture has no broad inherited access'}
+foreach ($path in @($parent,$DienstDirectory)) {
+    if (-not ((Get-Acl $path).Access | Where-Object {$_.IsInherited -and $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -eq 'S-1-5-11'})) {throw 'fixture has no broad inherited access'}
+}
 Protect-DienstRoot $sid
 Protect-DienstDirectory $DienstDirectory $sid
 $results=@()

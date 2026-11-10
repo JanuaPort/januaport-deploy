@@ -123,11 +123,30 @@ function Initialize-MailSecret {
     }
 }
 
+function Test-LegacyProfile {
+    param([string]$Path)
+    # Exact published windows-v0.1.0 bytes, independent of an optional local
+    # SHA256SUMS. An altered installation is not an automatic upgrade source.
+    $legacy = @{
+        'docker-compose.yml' = '40f294bcc40fe7a3f431685ef7c913e17b33f0524402cefde24e348c1aa28da1'
+        'Caddyfile' = 'd73ab75fd9ade61067160a660828effcb37dc3176816ace9ce826ae77d96355d'
+        'einrichten.ps1' = '2a3671e5ccd5b9cc47ff0753594d712ea18119500b3c611fadd250587cbcbae3'
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $Path '.env') -PathType Leaf)) { return $false }
+    foreach ($name in $legacy.Keys) {
+        $file = Join-Path $Path $name
+        if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { return $false }
+        if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -cne $legacy[$name]) { return $false }
+    }
+    return $true
+}
+
 function Install-Profile {
     Assert-DienstSession
     Get-Command docker -ErrorAction Stop | Out-Null
     Invoke-Docker @('compose', 'version') | Out-Host
-    if (Test-Path -LiteralPath $Directory) {
+    $upgrade = Test-LegacyProfile $Directory
+    if ((Test-Path -LiteralPath $Directory) -and -not $upgrade) {
         foreach ($name in (@('SHA256SUMS') + $ProfileFiles)) {
             if (-not (Test-Path -LiteralPath (Join-Path $Directory $name) -PathType Leaf)) {
                 throw 'Ziel existiert bereits und ist kein vollstaendiges Profil.'
@@ -149,13 +168,19 @@ function Install-Profile {
                 Invoke-WebRequest -UseBasicParsing -Uri "$ProfileBase/$name" -OutFile (Join-Path $staging $name)
             }
             Test-ProfileFiles $staging
-            $image = Resolve-CoreImage (Read-Host 'JanuaPort Image-Tag (z.B. 0.87.1) oder sha256:Digest')
-            New-Item -ItemType Directory -Path $Directory | Out-Null
+            if (-not $upgrade) {
+                $image = Resolve-CoreImage (Read-Host 'JanuaPort Image-Tag (z.B. 0.87.1) oder sha256:Digest')
+                New-Item -ItemType Directory -Path $Directory | Out-Null
+            }
+            # Only release-managed files. Preserve .env, secrets and Docker
+            # volumes; the complete download was verified before any replacement.
             foreach ($name in (@('SHA256SUMS') + $ProfileFiles)) {
                 Copy-Item -LiteralPath (Join-Path $staging $name) -Destination (Join-Path $Directory $name)
             }
-            $envText = "JANUAPORT_IMAGE=$($image[0])`nJANUAPORT_IMAGE_DIGEST=$($image[1])`n"
-            [IO.File]::WriteAllText((Join-Path $Directory '.env'), $envText, (New-Object Text.UTF8Encoding($false)))
+            if (-not $upgrade) {
+                $envText = "JANUAPORT_IMAGE=$($image[0])`nJANUAPORT_IMAGE_DIGEST=$($image[1])`n"
+                [IO.File]::WriteAllText((Join-Path $Directory '.env'), $envText, (New-Object Text.UTF8Encoding($false)))
+            }
         } finally {
             # Ausschliesslich der oben selbst angelegte temporaere Ordner.
             $resolvedStaging = [IO.Path]::GetFullPath($staging)

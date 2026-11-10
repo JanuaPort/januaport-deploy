@@ -46,8 +46,9 @@ und der zwingende `JANUAPORT_IMAGE_DIGEST`; Compose kombiniert beide zu einer
 Digest-Referenz. Caddy und Skript-Läufer sind bereits per Digest festgelegt.
 Ein vollständiges vorhandenes Profil wird erneut geprüft und gestartet; seine
 Dateien, `.env`, Zertifikat und Schlüssel bleiben erhalten. Dabei gibt es
-keinen Download und keine erneute Image-Abfrage. Andere vorhandene oder
-unvollständige Zielordner werden abgewiesen. Für ein anderes Ziel gibt es
+keinen Download und keine erneute Image-Abfrage. Für unveränderte Profile aus
+0.1.0 gilt der [Upgrade-Weg](#von-010-auf-020); andere unvollständige Zielordner
+werden weiterhin abgewiesen. Für ein anderes Ziel gibt es
 `-Directory <Profilordner>`; der Dienstbetrieb und seine Aufgaben verwenden immer
 `C:\JanuaPort\windows`.
 
@@ -66,6 +67,42 @@ Die GUI-Ausgabe lautet wörtlich `Admin-GUI: http://127.0.0.1:8484`. Weiter mit
 `docs/inbetriebnahme.md` im Produkt-Repo `JanuaPort/januaport`: Master-Schlüssel
 sichern, Admin-Passwort setzen, ersten Admin-Token erzeugen.
 
+## Von 0.1.0 auf 0.2.0
+
+Nach Veröffentlichung des Tags durch GATE das **neue** `einrichten.ps1` laden
+(siehe „Zwei Befehle“) und in `jnpt-dienst` mit dem bisherigen Profilordner starten:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\e.ps1 -Directory '<bisheriger Profilordner>'
+```
+
+Das Skript erkennt die drei unveränderten Originaldateien aus `windows-v0.1.0`
+(`docker-compose.yml`, `Caddyfile`, `einrichten.ps1`) an ihren festen SHA-256-Werten.
+`.env` muss vorhanden sein; eine alte `SHA256SUMS` darf vorhanden sein oder fehlen.
+Es lädt sämtliche Dateien und die Summenliste ausschließlich von `windows-v0.2.0`
+in einen temporären Ordner und prüft sie vollständig, bevor es im Ziel schreibt.
+Danach ersetzt es die releaseverwalteten Dateien und ergänzt die bisher fehlenden
+READMEs, `.gitignore`, das Runbook sowie B2/B3-Skripte und Prüfstein. Änderungen
+an den drei alten Originaldateien erfordern eine manuelle Abstimmung und führen
+zum Abbruch vor dem Download. Bei Download- oder Prüfsummenfehlern bleiben die
+vorhandenen Dateien unverändert. Nach einem erfolgreichen Upgrade lädt der
+zweite Lauf nichts mehr nach.
+
+**`.env` und alle vorhandenen Inhalte unter `secrets/` bleiben bytegenau erhalten.**
+Die beiden fehlenden Mail-Secret-Dateien werden wie bisher nur bei Bedarf leer
+angelegt. Es gibt keine Image-Abfrage und keinen Wechsel des gespeicherten
+Kern-Images. Ohne `-NeuesZertifikat` bleiben Zertifikat und Schlüssel erhalten.
+Die lokale Bereitstellung durch `dienst-einrichten.ps1` erkennt dieselben
+0.1.0-Dateien und verwendet dafür den bereits geprüften Release-Ordner.
+
+Diese Dateimigration verschiebt weder den Profilordner noch Engine oder Volumes
+zwischen Windows-Konten. Für den Dienstbetrieb bleibt das Ziel
+`C:\JanuaPort\windows`; eine frühere Ablage unter `%LOCALAPPDATA%\JanuaPort\windows`
+ist ein Altpfad, kein neuer Standard. Vor dem Übergang die vorhandene Engine und
+Daten dem richtigen Konto zuordnen und den Ablauf auf dem Testrechner gemäß
+[Prüfstein B4](PRUEFSTEIN-B4.md) gehen. Das Skript migriert keine Daten eines
+anderen Windows-Kontos automatisch.
+
 ## Dienstbetrieb (B2)
 
 Admin-PowerShell, nur auf dem vorgesehenen Betriebsrechner: den vollständigen,
@@ -73,9 +110,13 @@ geprüften Release `windows-v0.2.0` bereitstellen, im enthaltenen Ordner `window
 `dienst-einrichten.ps1 -BackupTarget 'E:\JanuaPort-Backup'` ausführen. GATE
 veröffentlicht den Tag erst nach Prüfung; dieses Paket erzeugt keinen Tag.
 Das Skript prüft zuerst `SHA256SUMS`, legt `jnpt-dienst` an, nimmt ihn in
-`docker-users` auf und richtet `C:\JanuaPort\windows` mit Zugriff für dieses
-Konto, SYSTEM und lokale Administratoren ein. Vorhandene Profil-Dateien werden
-bei Abweichungen abgewiesen; `.env` und Secrets bleiben erhalten. Ein von B2
+`docker-users` auf. **B-7:** Es schaltet zuerst für den Elternordner
+`C:\JanuaPort` die Vererbung mit `icacls /inheritance:r` ab und gewährt
+ausschließlich `jnpt-dienst`, Administratoren und SYSTEM vererbbaren Vollzugriff.
+Vorherige explizite Freigaben werden entfernt. Dieselben drei Prinzipale gelten
+für `C:\JanuaPort\windows`; erst danach werden Profildateien bereitgestellt.
+Vorhandene abweichende Dateien werden außerhalb des geprüften 0.1.0-Upgrades
+abgewiesen; `.env` und Secrets bleiben erhalten. Ein von B2
 bereitgestelltes Profil ohne `.env` wird bei der ersten Installation ergänzt.
 
 Das Konto erhält ein Zufallskennwort, das nicht angezeigt oder in Dateien

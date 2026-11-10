@@ -33,7 +33,8 @@ and mandatory `JANUAPORT_IMAGE_DIGEST`; Compose combines them into a digest
 reference. Caddy, OpenSSL and script-runner images are already pinned. A complete
 existing profile is verified and started again, preserving its files, `.env`,
 certificate and key, without downloading files or prompting for an image again.
-Other existing or incomplete target directories are rejected. Use
+Unmodified 0.1.0 profiles use the [upgrade path](#from-010-to-020); other
+incomplete target directories are still rejected. Use
 `-Directory <profile-directory>` for another directory; service tasks always
 use `C:\JanuaPort\windows`.
 
@@ -51,15 +52,50 @@ The GUI output is exactly `Admin-GUI: http://127.0.0.1:8484`. Follow the product
 `docs/inbetriebnahme.md`: secure the master key, set the admin password and
 create the first admin token.
 
+## From 0.1.0 to 0.2.0
+
+After GATE publishes the tag, download the **new** `einrichten.ps1` (see “Two
+commands”) and run it in `jnpt-dienst` with the existing profile directory:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\e.ps1 -Directory '<existing profile directory>'
+```
+
+The script recognizes the three unchanged original `windows-v0.1.0` files
+(`docker-compose.yml`, `Caddyfile`, `einrichten.ps1`) by their fixed SHA-256 hashes.
+`.env` must exist; the old `SHA256SUMS` may be present or absent. It downloads the
+complete profile and manifest only from `windows-v0.2.0` into a temporary directory
+and verifies everything before writing to the target. It then replaces the
+release-managed files and adds the missing READMEs, `.gitignore`, runbook, B2/B3
+scripts and acceptance checklist. Locally changed legacy files require manual
+reconciliation and abort before downloading. Download or checksum failure leaves
+existing files unchanged. A second successful run downloads nothing.
+
+**`.env` and all existing contents under `secrets/` are preserved byte for byte.**
+Missing mail secret files are created empty as before. There is no image prompt
+or change to the saved core image. Without `-NeuesZertifikat`, the certificate
+and key remain unchanged. Local staging by `dienst-einrichten.ps1` recognizes
+the same legacy files and uses its already verified release directory.
+
+This file upgrade moves neither the profile directory nor engines or volumes
+between Windows accounts. Service operation still uses `C:\JanuaPort\windows`;
+`%LOCALAPPDATA%\JanuaPort\windows` is a legacy location, not the new default.
+Identify the account holding the existing engine/data before changing deployment
+and exercise the upgrade on the test machine under [B4](PRUEFSTEIN-B4.md).
+The script does not automatically migrate another Windows account's data.
+
 ## Service operation (B2)
 
 On the intended deployment machine, use an administrative PowerShell in the
 `windows` directory of the complete, verified `windows-v0.2.0` release:
 `.\dienst-einrichten.ps1 -BackupTarget 'E:\JanuaPort-Backup'`. GATE publishes
 the tag after review. The script verifies `SHA256SUMS`, creates `jnpt-dienst`,
-adds it to `docker-users`, and stages the fixed `C:\JanuaPort\windows` profile
-with access for this account, SYSTEM and local administrators. Different
-existing profile files are rejected; `.env` and secrets are preserved. Initial
+adds it to `docker-users`. **B-7:** First it disables inheritance on the parent
+`C:\JanuaPort` with `icacls /inheritance:r` and grants inheritable full access
+only to `jnpt-dienst`, Administrators and SYSTEM. Previous explicit grants are
+removed. The same three principals apply to `C:\JanuaPort\windows` before
+profile files are staged. Different existing files are rejected outside the
+verified 0.1.0 upgrade; `.env` and secrets are preserved. Initial
 installation adds `.env` to a verified B2 profile that does not yet have one.
 
 A random password is never displayed or saved to a password file. Repeated runs

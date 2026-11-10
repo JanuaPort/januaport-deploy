@@ -61,6 +61,27 @@ Der Live-Rundlauf ersetzt ausschließlich die Kontoidentität; alle Container un
 Volumes darin bleiben wie bisher temporäre Testobjekte. Kein Dienstskript wird
 auf diesem Rechner mit echten Systemadaptern ausgeführt.
 
+`test_upgrade.py` liest die drei Originaldateien aus dem lokalen Git-Tag
+`windows-v0.1.0` (Git und dieses Tag sind Voraussetzung; das alte Skript wird
+nicht ausgeführt). Der echte PS-5.1-Installer aktualisiert den temporären Ordner
+mit und ohne alte Summenliste, erhält `.env` sowie alle Secret-Inhalte und lädt
+beim zweiten Lauf nichts nach. Download/HTTP und Docker sind Fakes; Datei- und
+Summenadapter sind echt. Download- und Hashfehler dürfen vor der ersten
+Ersetzung keine vorhandene Datei ändern. Geänderte/unvollständige Altprofile
+werden vor dem Download abgewiesen. Die lokale Bereitstellung über B2 wird
+ebenfalls geprüft. Ein Test hält `$ProfileRef` auf `windows-v0.2.0` fest.
+
+B-7 prüft den exakten `icacls`-Aufruf am festen Elternordner mit
+`/inheritance:r` und ausschließlich den SIDs von `jnpt-dienst`, Administratoren
+und SYSTEM. Im Fake wird an `C:\JanuaPort` nichts angelegt. Zusätzlich erhält
+ein echter temporärer Eltern-/Kindordner absichtlich breite Rechte für
+Authentifizierte Benutzer; der echte `icacls`-Adapter muss diese entfernen.
+Aufrufreihenfolge und native Fehler werden geprüft. Die Mutation ohne
+`/inheritance:r` muss sowohl die Argumentprüfung als auch den echten ACL-Test
+rot machen; weitere Mutationen entfernen die Elternordnersperre, das Entfernen
+alter expliziter Rechte, die Upgrade-Summenprüfung oder den Erhalt von `.env`
+und Secrets. Diese Proben sind in `dienst_mutations.py` enthalten.
+
 Die manuelle B4-Abnahme steht in [PRUEFSTEIN-B4.md](../PRUEFSTEIN-B4.md):
 DPAPI-unabhängige Wiederherstellung nach Kennwortreset, Sperrbildschirmfoto nach
 Neustart, Engine-/Volume-Vergleich je Benutzer und Rücksicherung mit getrenntem
