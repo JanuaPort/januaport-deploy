@@ -66,7 +66,12 @@ festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
    zurücksichern. Synthetische Daten, Admin-Anmeldung und erneute Sicherung
    prüfen. Nachweisen, dass am Sicherungsziel nur die Sicherungsdatei liegt und
    die Key-Datei nicht mitkopiert wurde. Ohne `JNPT_MASTER_KEY_FILE` liegt der
-   Key neben der DB in `/data`; deshalb wird niemals ganz `/data` kopiert.
+   Key neben der DB unter `/data/jnpt.key`; deshalb wird niemals ganz `/data`
+   kopiert. Bei frischem Volume sowie nach Erststart das Beiseitelege- und
+   Key-Einlege-Muster aus N4 prüfen. Der Kern läuft als UID/GID 65532:
+   Key mit Eigentümer 65532:65532 und Modus 600 muss lesbar sein, Restore muss
+   bei leerer Ziel-DB erfolgreich sein. Health 200 und Admin-Anmeldung belegen.
+   USB anschließend abziehen bzw. lokale Key-Kopie entfernen.
 8. **Wartung und Fernzugang:** TeamViewer auf Annahme gemäß AVV Anlage 3:
    ein Mensch beim Betreiber nimmt jede Sitzung an. Kein unbeaufsichtigter
    Fernzugriff, kein festes Fernwartungskennwort. Sperrbildschirm entsperrt der

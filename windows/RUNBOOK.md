@@ -125,6 +125,9 @@ Master-Key getrennt von Sicherungen verwahren. Ein vom Rechner beschreibbares Zi
 gegen einen Angreifer auf dem Rechner; wechselndes, abgezogenes USB dagegen schon. Die Wahl
 trifft der Betreiber. Wiederherstellung nach Kennwortreset und getrennte Rücksicherung gemäß
 [Prüfstein B4](PRUEFSTEIN-B4.md) belegen.
+Für eine frische Installation den getrennten Key vor dem ersten Start einlegen;
+nach Erststart DB und erzeugten Key bei gestoppter Anlage beiseitelegen.
+Die festen Befehle stehen unter [Rücksicherung (N4)](README.md#rücksicherung-in-eine-frische-installation-n4).
 
 **Das Admin-Passwort setzt der Kunde selbst am Rechner, nicht der Dienstleister.** Wer das Admin-Passwort
 kennt, verwaltet die Anlage. Der Dienstleister beendet dafür die Fernsitzung. Der Kunde setzt das Passwort in

@@ -28,7 +28,12 @@ class RecoveryDocs(unittest.TestCase):
         self.assertIn('jnpt restore "/in/$BackupFile"', code)
         self.assertLess(code.index('docker compose down'), code.index('cp /in/jnpt.key'))
         self.assertLess(code.index('jnpt restore'), code.index('docker compose up -d'))
-        self.assertNotRegex(code, r'\brm\b|down -v|JNPT_MASTER_KEY=')
+        self.assertNotRegex(code, r'(?<![\w-])rm\b|down -v|JNPT_MASTER_KEY=')
+        helper = re.search(r"\$HelperImage = '(busybox@sha256:[a-f0-9]{64})'", code)
+        self.assertIsNotNone(helper)
+
+    def test_n4_helper_preserves_files_and_nonroot_key(self):
+        code = recipe('README.md', 'N4')
         helper = re.search(r"\$HelperImage = '(busybox@sha256:[a-f0-9]{64})'", code)
         self.assertIsNotNone(helper)
         scripts = re.findall(r"sh -ec '([^']+)'", code)
@@ -43,6 +48,7 @@ class RecoveryDocs(unittest.TestCase):
                 run(*args, 'sh', '-ec', scripts[0])
                 preserved = run(*args, 'sh', '-ec', 'find /data/beiseite-* -type f').stdout.splitlines()
                 self.assertEqual(len(preserved), 4)
+                self.assertEqual(run(*args, 'sh', '-ec', 'find /data -maxdepth 1 -type f').stdout, '')
                 run(*args, 'sh', '-ec', scripts[1])
                 self.assertEqual(run(*args, 'cat', '/data/jnpt.key').stdout, key.read_text())
                 self.assertEqual(run(*args, 'stat', '-c', '%u:%g:%a', '/data/jnpt.key').stdout.strip(), '65532:65532:600')

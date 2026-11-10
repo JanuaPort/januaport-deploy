@@ -221,7 +221,7 @@ automatically deletes older backups. Monitor free space and `LastTaskResult`.
 
 **Keep the master key separately from backups.** The script never copies the
 key file or all of `/data`. Without `JNPT_MASTER_KEY_FILE`, the key is beside
-the database in `/data`. Restoring on a separate test machine with a separately
+the database at `/data/jnpt.key`. Restoring on a separate test machine with a separately
 provided key is required in [B4](PRUEFSTEIN-B4.md).
 
 Optional SMB requires a dedicated backup account and share with write access
@@ -230,6 +230,50 @@ them after an administrator password reset. These scripts create no `cmdkey`
 entries. A destination writable by the ZBOX does not protect against an attacker
 on that ZBOX. A rotating, unplugged USB drive does. The operator chooses;
 TeamViewer and the maintenance account do not receive these credentials.
+
+
+### Restore into a fresh installation (N4)
+
+Prepare the verified profile including `.env` and secret files. Supply the
+separately stored key before the first `docker compose up`. `einrichten.ps1`
+already starts the installation; if it has run, use `down` and move its generated
+database and key aside as below. Keep the gateway stopped until restore finishes.
+The target database must be empty: restore does not overwrite a database.
+Use the same master key as the backup.
+
+Compose sets neither `JNPT_DB_PATH` nor `JNPT_MASTER_KEY_FILE`. The image defaults
+to `/data/jnpt.db` and its adjacent key `/data/jnpt.key`. Project name
+`jnpt-windows` gives volume `jnpt-windows_jnpt-data`. For a deliberately different
+configuration, place the key where `JNPT_MASTER_KEY_FILE` expects it before the
+first start. The commands below apply to the shipped profile and use a pinned
+one-time helper. They also assign a fresh volume to UID/GID 65532. Key mode is
+600; BOX must confirm nonroot core readability and permissions in B4.
+
+Adjust the USB key directory, backup directory and backup filename. The
+separately stored file in the key directory must be called `jnpt.key`.
+Existing database files and any key generated on first start are moved aside,
+not deleted. Run the move-aside step even for a fresh installation:
+
+<!-- N4 -->
+```powershell
+Set-Location C:\JanuaPort\windows
+$HelperImage = 'busybox@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec'
+docker compose down
+docker run --rm -v jnpt-windows_jnpt-data:/data $HelperImage sh -ec 'd=/data/beiseite-$(date -u +%Y%m%dT%H%M%SZ) && mkdir $d && for f in jnpt.db jnpt.db-wal jnpt.db-shm jnpt.key; do [ ! -e /data/$f ] || mv /data/$f $d/; done'
+$KeyDirectory = 'E:\JanuaPort-Key'
+docker run --rm -v jnpt-windows_jnpt-data:/data -v "${KeyDirectory}:/in:ro" $HelperImage sh -ec 'cp /in/jnpt.key /data/jnpt.key && chown 65532:65532 /data /data/jnpt.key && chmod 600 /data/jnpt.key'
+$BackupDirectory = 'E:\JanuaPort-Backup'
+$BackupFile = 'sicherung.jnpt-backup'
+docker compose run --rm --no-deps -v "${BackupDirectory}:/in:ro" jnpt restore "/in/$BackupFile"
+docker compose up -d
+curl.exe --fail http://127.0.0.1:8484/healthz
+```
+
+Then verify an admin login: health must return 200 and the expected data must
+be available. Unplug the USB drive afterwards. If a key copy was placed on the
+computer, remove that copy after verification; retain the separately stored
+original. See the deployed core version's `docs/disaster-recovery.md` for further
+verification.
 
 ## Mail
 
