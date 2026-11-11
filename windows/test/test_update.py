@@ -222,7 +222,11 @@ if (Test-Path -LiteralPath (Join-Path $ProfileDirectory '.env')) {
         result=ps(r'''$tokens=$null; $errors=$null
 [Management.Automation.Language.Parser]::ParseFile($env:PROBE_SOURCE,[ref]$tokens,[ref]$errors) | Out-Null
 if ($errors.Count) {throw 'parse errors'}
-($tokens | Where-Object {$_.Kind -ne 'Comment'} | ForEach-Object {$_.Text}) -join ' '
+$code=[IO.File]::ReadAllText($env:PROBE_SOURCE)
+foreach ($token in @($tokens | Where-Object {$_.Kind -eq 'Comment'} | Sort-Object {$_.Extent.StartOffset} -Descending)) {
+    $code=$code.Remove($token.Extent.StartOffset, $token.Extent.EndOffset-$token.Extent.StartOffset)
+}
+$code
 ''',extra_env={'PROBE_SOURCE':str(ROOT/'jnpt-update.ps1')})
         self.assertEqual(result.returncode,0,result.stderr)
         code=result.stdout.lower()

@@ -15,9 +15,9 @@ festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
    sagt ausdrücklich, dass Container und Images mit dem WSL-2-Backend nicht
    zwischen Konten geteilt werden können; Volumes benennt diese Passage nicht.
    Andere Backends dürfen aus diesem Befund nicht abgeleitet werden.
-2. **Upgrade 0.1.0 → 0.2.0 am Testrechner einmal gehen.** Von den drei
+2. **Upgrade 0.1.0 → 0.3.0 am Testrechner einmal gehen.** Von den drei
    Originaldateien plus `.env` ausgehen (alte Summenliste optional), neues
-   Einrichtungsskript verwenden. Vollständiges 0.2.0-Profil, unveränderte `.env`
+   Einrichtungsskript verwenden. Vollständiges 0.3.0-Profil, unveränderte `.env`
    und Secrets, bisheriges Kern-Image und Zertifikat prüfen; zweiter Lauf ohne
    Download. Profilpfad und Windows-Konto separat prüfen: keine automatische
    Migration einer Engine oder ihrer Volumes zwischen Konten.
@@ -152,7 +152,7 @@ foreach ($rule in $inboundAllow) {
    ein Mensch beim Betreiber nimmt jede Sitzung an. Kein unbeaufsichtigter
    Fernzugriff, kein festes Fernwartungskennwort. Sperrbildschirm entsperrt der
    Betreiber vor Ort. Wartungskonto startet nur Aufgaben. B5-Update-Aufgabe
-   bleibt bis zu deren eigenem Paket offen. Docker-Desktop-Lizenz und
+   separat nach [PRUEFSTEIN-B5.md](PRUEFSTEIN-B5.md) abnehmen; sie ist ohne Auslöser. Docker-Desktop-Lizenz und
    unterstütztes Windows/ESU separat bestätigen.
 2a. **Kontowechsel der Daten:** Eine 0.1.0-Anlage, die unter einem persönlichen Konto lief, per `jnpt backup` sichern, unter `jnpt-dienst` neu einrichten und mit dem getrennt verwahrten Master-Key gemäß README zurückspielen. Das TLS-Zertifikat hängt am Volume `tls-leaf` der alten Engine; unter `jnpt-dienst` entsteht ein neues mit neuem Fingerprint. Alle gekoppelten Desktop-Läufer nach 2a mit neuem Code und neuem, lokal vertrauenswürdig übermitteltem Fingerprint erneut koppeln und prüfen. Danach Anmeldung und ein Lesewerkzeug grün. Dann im alten Konto `docker compose down -v`; `docker volume ls` im alten Konto zeigt kein `jnpt-windows_*`-Volume mehr (SEC E1).
 

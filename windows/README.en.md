@@ -2,7 +2,7 @@
 
 **English** · [Deutsch](README.md)
 
-Package A with B1 mail forwarding, B2 service operation and B3 backups (#1246), tested locally with Docker Desktop. Requires Windows 10/11
+Package A with B1 mail forwarding, B2 service operation, B3 backups and B5 updates (#1246), tested locally with Docker Desktop. Requires Windows 10/11
 Pro (amd64), WSL2 Linux containers, Docker Desktop **≥ 4.44.3**
 (CVE-2025-9074), Compose ≥ 2.35 and PowerShell ≥ 5.1. Keep **“Expose daemon on
 tcp://localhost:2375” disabled**, AutoStart enabled, automatic downloads/updates disabled. Review updates manually.
@@ -36,7 +36,7 @@ from a workstation in the local subnet afterwards. Admin port 8484 stays on loop
 ## Two commands
 
 The publisher must first publish the immutable **profile release tag**
-`windows-v0.2.0` at the reviewed commit. The following URL works only after
+`windows-v0.3.0` at the reviewed commit. The following URL works only after
 publication. `<tag>` in distribution instructions means this profile release,
 not the core image tag or `main`. The installer downloads the profile and its
 checksum manifest from this fixed tag. New profile releases must update the
@@ -47,7 +47,7 @@ After [service setup](#service-operation-b2), the operator commissions the syste
 in the `jnpt-dienst` session. The maintenance account only triggers tasks.
 
 ```powershell
-curl.exe -fLo e.ps1 https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.2.0/windows/einrichten.ps1
+curl.exe -fLo e.ps1 https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.3.0/windows/einrichten.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\e.ps1
 ```
 
@@ -58,7 +58,7 @@ and mandatory `JANUAPORT_IMAGE_DIGEST`; Compose combines them into a digest
 reference. Caddy, OpenSSL and script-runner images are already pinned. A complete
 existing profile is verified and started again, preserving its files, `.env`,
 certificate and key, without downloading files or prompting for an image again.
-Unmodified 0.1.0 profiles use the [upgrade path](#from-010-to-020); other
+Unmodified 0.1.0 and 0.2.0 profiles use the [upgrade path](#from-010-or-020-to-030); other
 incomplete target directories are still rejected. Use
 `-Directory <profile-directory>` for another directory; service tasks always
 use `C:\JanuaPort\windows`.
@@ -77,7 +77,7 @@ The GUI output is exactly `Admin-GUI: http://127.0.0.1:8484`. Follow the product
 `docs/inbetriebnahme.md`: secure the master key, set the admin password and
 create the first admin token.
 
-## From 0.1.0 to 0.2.0
+## From 0.1.0 or 0.2.0 to 0.3.0
 
 After GATE publishes the tag, download the **new** `einrichten.ps1` (see “Two
 commands”) and run it in `jnpt-dienst` with the existing profile directory:
@@ -88,11 +88,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\e.ps1 -Directory '<existin
 
 The script recognizes the three unchanged original `windows-v0.1.0` files
 (`docker-compose.yml`, `Caddyfile`, `einrichten.ps1`) by their fixed SHA-256 hashes.
+For `windows-v0.2.0`, all eleven release-managed original files must be
+present unchanged; their published hashes are also embedded in the installer.
+Any changed file blocks automatic upgrade.
 `.env` must exist; the old `SHA256SUMS` may be present or absent. It downloads the
-complete profile and manifest only from `windows-v0.2.0` into a temporary directory
+complete profile and manifest only from `windows-v0.3.0` into a temporary directory
 and verifies everything before writing to the target. It then replaces the
 release-managed files and adds the missing READMEs, `.gitignore`, runbook, B2/B3
-scripts including `jnpt-sperren.ps1` and the acceptance checklist. Setup and upgrade
+scripts including `jnpt-sperren.ps1`, `jnpt-update.ps1` and both acceptance checklists. Setup and upgrade
 also create the local `backups\` directory under the B-7 ACL; this runtime directory
 is excluded from SHA256SUMS. Locally changed legacy files require manual
 reconciliation and abort before downloading. Download or checksum failure leaves
@@ -102,7 +105,11 @@ existing files unchanged. A second successful run downloads nothing.
 Missing mail secret files are created empty as before. There is no image prompt
 or change to the saved core image. Without `-NeuesZertifikat`, the certificate
 and key remain unchanged. Local staging by `dienst-einrichten.ps1` recognizes
-the same legacy files and uses its already verified release directory.
+the same 0.1.0 or 0.2.0 original files and uses its verified release directory.
+After the 0.2.0 → 0.3.0 file upgrade, rerun `dienst-einrichten.ps1` as
+administrator from the verified 0.3.0 release with the previous `-BackupTarget`
+to register “JanuaPort Update”. This file upgrade preserves the core image.
+Acceptance is covered by [B5](PRUEFSTEIN-B5.md).
 
 This file upgrade moves neither the profile directory nor engines or volumes
 between Windows accounts. Service operation still uses `C:\JanuaPort\windows`;
@@ -134,7 +141,7 @@ pairing code and the new fingerprint transferred through a trusted local channel
 ## Service operation (B2)
 
 On the intended deployment machine, use an administrative PowerShell in the
-`windows` directory of the complete, verified `windows-v0.2.0` release:
+`windows` directory of the complete, verified `windows-v0.3.0` release:
 `.\dienst-einrichten.ps1 -BackupTarget 'E:\JanuaPort-Backup'`. GATE publishes
 the tag after review. The script verifies `SHA256SUMS`, creates `jnpt-dienst`,
 adds it to `docker-users`. **B-7/F5:** For both `C:\JanuaPort` and
@@ -150,7 +157,7 @@ protected DACL is not written again, preserving access to inherited files on
 repeat runs. Profile files are staged afterwards. For installations already
 affected by F5, see the [manual RUNBOOK repair](RUNBOOK.md#f5-reparatur-nach-entzogenen-dateirechten).
 Different existing files are rejected outside the
-verified 0.1.0 upgrade; `.env` and secrets are preserved. Initial
+verified upgrades from 0.1.0 or 0.2.0; `.env` and secrets are preserved. Initial
 installation adds `.env` to a verified B2 profile that does not yet have one.
 
 A random password is never displayed or saved to a password file. Repeated runs
@@ -212,12 +219,13 @@ with `-KennwortNeu` and reboots to restore the random password, matching autolog
 and lock. This is local commissioning before any production data. The operator performs initial commissioning and answers
 the image prompt there. The service provider never works in this session.
 “JanuaPort Anlage starten” is an on-demand task; “JanuaPort Sicherung” runs
-daily at 20:00. Both use the account's interactive token without a stored task
+daily at 20:00. “JanuaPort Update” also has no trigger. All three use the account's interactive token without a stored task
 password. The maintenance account only triggers tasks:
 
 ```powershell
 schtasks /run /tn "JanuaPort Anlage starten"
 schtasks /run /tn "JanuaPort Sicherung"
+schtasks /run /tn "JanuaPort Update"
 ```
 
 `docker-users` effectively grants administrator control of the computer.
@@ -232,7 +240,7 @@ acceptance remains open.
 says containers and images cannot be shared across accounts with the WSL 2
 backend. That passage does not explicitly name volumes. The full “engine and
 volumes per Windows user” finding still needs B4 verification; it is not a
-blanket claim about other backends. Installation, future updates (B5) and
+blanket claim about other backends. Installation, updates (B5) and
 backups all run in `jnpt-dienst`.
 
 Docker Desktop is free for businesses with **fewer than 250 employees AND less
@@ -517,15 +525,64 @@ prove package delivery or job completion.
 
 Repository checks: `python -B -m unittest discover -s windows/test -v`
 (Python standard library and Docker). See [test/README.md](test/README.md) for
-live checks and mutations. SHA256SUMS covers Compose, Caddyfile, all four scripts
-(`einrichten.ps1`, `dienst-einrichten.ps1`, `jnpt-sperren.ps1`, `jnpt-backup.ps1`),
-`.gitignore`, both READMEs, the runbook, B4 checklist and the external autologon pin. `.gitattributes` preserves the LF bytes covered by
+live checks and mutations. SHA256SUMS covers Compose, Caddyfile, all five scripts
+(`einrichten.ps1`, `dienst-einrichten.ps1`, `jnpt-sperren.ps1`, `jnpt-backup.ps1`, `jnpt-update.ps1`),
+`.gitignore`, both READMEs, the runbook, B4/B5 checklists and the external autologon pin. `.gitattributes` preserves the LF bytes covered by
 SHA256SUMS in both Windows checkouts and raw downloads.
 
-B2 configures local autologon and service tasks; B3 adds daily backups. The B5
-update script is a separate deliverable. Docker Desktop runs in the logged-in,
-locked `jnpt-dienst` session. Reboot acceptance is still open in the
-[B4 checklist](PRUEFSTEIN-B4.md). Tailscale is outside this package.
+## Updates (B5)
+
+`jnpt-update.ps1` executes the core's plan. “JanuaPort Update” runs under
+`jnpt-dienst`, Interactive/Limited with `IgnoreNew`, without a trigger.
+Approve in the local admin GUI, then use the maintenance account:
+
+```powershell
+schtasks /run /tn "JanuaPort Update"
+Get-ScheduledTaskInfo -TaskName 'JanuaPort Update' | Select-Object LastRunTime,LastTaskResult
+Get-Content C:\JanuaPort\windows\log\update.log -Tail 100
+```
+
+The `jnpt` service receives `JNPT_UPDATE_MANIFEST_URL` and
+`JNPT_UPDATE_PUBLIC_KEYS` from `.env`. Missing or empty means offline-first;
+the core returns `action=none`. After changing feed settings, run
+`docker compose up -d --force-recreate jnpt` in the profile folder as
+`jnpt-dienst`. Only the core evaluates signatures, versions, migrations and
+approval. The host script derives no policy from `current`, `latest`,
+`on_failure` or `reason` and performs no restore or automatic reversal.
+
+Sequence: plan → verified backup in a child process → pull
+`ghcr.io/januaport/januaport@<digest>` → log the two old image lines →
+atomically replace only those two `.env` lines (UTF-8 without BOM) → `up -d`
+→ host health and TLS fingerprint → record the result.
+Neither `latest` nor `reason` supplies an image reference. The digest must
+be exactly `sha256:` followed by 64 lowercase hex digits; uppercase, newlines
+and extra reference components are rejected. The core container runs only
+`/jnpt`; OpenSSL only reads the certificate in `cert-init`. Replacement keeps
+the `.env` DACL; the script writes no ACL.
+
+| Exit | Meaning |
+|---|---|
+| 0 | `none` or healthy update (`installed`) |
+| 1 | Wrong session or incomplete profile |
+| 2 | Plan is not exactly one JSON line, Docker not ready, invalid digest or `rollback` (RUNBOOK) |
+| 3 | Backup, pull or file replacement failed; backup/pull failure preserves `.env` |
+| 6 | Start, host health or TLS failed; `failed` with digest, new state remains for diagnosis |
+
+An unbookable result is logged only; the update's exit code is preserved.
+Check `LastTaskResult=0` together with the log and GUI. Native output and raw
+exception messages stay off the console and log. `log\update.log` retains
+at most 100 lines without usernames. It records the old two image values
+before replacement; retain them locally before a later run for manual recovery.
+Each Docker call is bounded to 30 seconds, backup to 600 seconds. If Docker
+is not ready after reboot, the plan attempt ends with a fixed error message
+and exit 2; trigger again once ready. Host health has at most 90 attempts,
+with a 3-second request timeout and 2-second pause; TLS has at most 30 attempts
+with a 2-second pause, as in setup.
+
+Manual recovery and concurrent daily backups: [RUNBOOK](RUNBOOK.md#7-update-b5).
+BOX must complete [B5](PRUEFSTEIN-B5.md) on VM `jnpt-b4` before tagging
+`windows-v0.3.0`. Docker Desktop continues to run in the logged-in, locked
+`jnpt-dienst` session. Tailscale is outside this package.
 
 
 ## Remote maintenance

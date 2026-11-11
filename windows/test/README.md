@@ -1,4 +1,4 @@
-# Prüfungen für das Windows-Profil (Paket A und B1–B4)
+# Prüfungen für das Windows-Profil (Paket A und B1–B5)
 
 Vom Repo-Root unter Windows: Python-Standardbibliothek, Windows PowerShell 5.1
 und Docker Desktop (Linux/amd64). Kein Python-Paket und kein PowerShell-Modul
@@ -90,7 +90,7 @@ beim zweiten Lauf nichts nach. Download/HTTP und Docker sind Fakes; Datei- und
 Summenadapter sind echt. Download- und Hashfehler dürfen vor der ersten
 Ersetzung keine vorhandene Datei ändern. Geänderte/unvollständige Altprofile
 werden vor dem Download abgewiesen. Die lokale Bereitstellung über B2 wird
-ebenfalls geprüft. Ein Test hält `$ProfileRef` auf `windows-v0.2.0` fest.
+ebenfalls geprüft. Ein Test hält `$ProfileRef` auf `windows-v0.3.0` fest.
 
 B-7/F5 prueft die vollstaendige geschuetzte DirectorySecurity mit genau drei
 expliziten FullControl-Regeln (ContainerInherit, ObjectInherit, Propagation None,
@@ -274,3 +274,63 @@ bestehende Anlage. Den Firewallzugriff von einem zweiten Gerät innerhalb und
 außerhalb des lokalen Subnetzes muss der Betreiber separat prüfen. Ein
 vollständiges Desktop-Pairing und ein produktiver Desktop-Auftrag sind weitere
 Abnahmeschritte; die leere Kopplungsanfrage im Rundlauf ist kein solcher Beleg.
+
+
+## B5: Update und Profil 0.3.0
+
+```powershell
+$env:PYTHONPATH = 'windows/test'
+python -B -m unittest test_update test_upgrade.Upgrade -v
+python -B -m unittest discover -s windows/test -v
+```
+
+`test_update.py` enthält die elf Auftragsfälle: `none`, `approved`,
+`unattended`, ungültige Digests/JSON-Zeilen, Sicherungs-/Pullfehler, rote
+Health/TLS/Start-Prüfung, nicht buchbare Ergebnisse, `rollback`, Sitzung/Profil,
+natives stderr/Docker noch nicht bereit sowie den kommentarlosen Wächter gegen
+eigene Kernentscheidungen. PS 5.1 läuft wirklich; `docker.cmd` auf PATH zeichnet
+die Argumente auf. Die Reihenfolge wird über Protokoll-Indizes geprüft. Das
+Backup läuft in einem echten separaten PowerShell-Prozess mit einem synthetischen
+Backup-Skript. Das ist kein Nachweis einer echten Sicherung; diese bleibt B3/B4
+und BOX vorbehalten. Host-HTTP und TLS-Gegenstelle sind Adapter-Fakes, die
+503 und abweichenden Fingerprint tatsächlich liefern. Die Gesundheit wird nicht
+im Container geprüft. Die vorhandene Live-Prüfung belegt den echten
+Fingerprint-Adapter gegen Caddy; B5 im Betriebsmodell bleibt BOX-Aufgabe.
+
+Dateiaustausch, UTF-8-Bytes ohne BOM, erhaltene Kommentar-/Mail-Zeilen,
+`icacls` vor/nach dem Austausch, Logdatei und Kindprozess-Zeitlimit sind echte
+Windows-Adapter. Die Testordner liegen kurz unter dem System-Temp-Pfad.
+Zusätzliche Adapterfälle versuchen `sh`, `stat`, `compose cp`, Restore,
+Health im Container, `update rollback` und einen Pull aus einem fremden
+Repository direkt am produktiven Docker-Adapter: Abweisung vor dem nativen
+Aufruf. Doppelte Image-Zeilen werden vor dem Austausch abgewiesen.
+Der Logtest bietet den aktuellen Benutzernamen und einen Zeilenumbruch
+wirklich an und verlangt Redaktion bzw. Escaping. 105 vorgegebene Logzeilen
+müssen nach einem Lauf auf höchstens 100 begrenzt sein. Der Prozessadapter
+muss einen echten schlafenden Kindprozess am Zeitlimit beenden.
+
+Die sieben Pflichtmutationen werden einzeln in isolierten Kopien ausgeführt
+und nicht als veränderter Produktcode committed: Versionsvergleich einfügen,
+`-cmatch` durch `-match` ersetzen, `\z` durch `$` ersetzen, Backup-Exit ignorieren,
+Image aus `latest` bauen, `record installed` entfernen, `update rollback`
+einfügen. Jede Probe muss an einer Assertion rot werden; Adapterfehler zählen
+nicht. Weitere Proben entfernen jeweils native Sperre, Sitzungs-/Profilprüfung,
+JSON-Zeilenprüfung, Eindeutigkeit der `.env`-Zeilen, Zeitlimit, Logbegrenzung,
+Redaktion oder Ausgabeschutz. Originalbytes werden danach verglichen.
+Die Ergebnisse gehören in den Arbeitsbericht; Mutanten werden nicht ausgeliefert.
+
+`test_profile.py` prüft beide Feed-Werte über den echten Compose-Adapter aus
+Prozessumgebung und `.env`, gesetzt/leer/fehlend und nur beim Dienst `jnpt`.
+`test_install.py` prüft die Update-Aufgabe über die vorhandenen System-Fakes:
+Interactive/Limited als `jnpt-dienst`, IgnoreNew, kein Auslöser, `EncodedCommand`
+mit USB-Wurzel, Apostroph und SMB-Ziel. Beide Dateilisten und Summen enthalten
+Update-Skript und B5-Prüfstein. `test_upgrade.py` liest zusätzlich die elf
+veröffentlichten 0.2.0-Dateien aus dem lokalen Tag und führt 0.2.0 → 0.3.0 durch
+beide Installer mit echten Datei-/Hashadaptern aus. `.env` und Secret-Inhalte
+bleiben erhalten, der zweite Lauf lädt nichts. Jede der elf geänderten
+Originaldateien sperrt die lokale Diensteinrichtung; fehlendes/geändertes
+Altprofil sperrt den Download. Der 0.1.0-Weg bleibt ebenfalls geprüft.
+
+Offen bis BOX: [Prüfstein B5](../PRUEFSTEIN-B5.md) auf VM `jnpt-b4`, echte
+Feed-Freigabe und GUI-Buchung, TaskResult, USB-Sicherung, Engine-Zuordnung,
+Rechtegleichheit, Exit 3/6, manueller Rückweg und früher Anstoß nach Neustart.
