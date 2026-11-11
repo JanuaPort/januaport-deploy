@@ -46,7 +46,10 @@ services:
       # Host-side verification/cleanup; distroless only runs /jnpt backup.
       - ./backups:/backups
       - plugin-keys:/run/jnpt/plugins
-    networks: [default, plugins]
+    networks:
+      default: {}
+      plugins:
+        ipv4_address: 172.21.0.2
     depends_on:
       plugin-init:
         condition: service_completed_successfully
@@ -213,4 +216,9 @@ volumes:
 networks:
   plugins:
     internal: true
+    # Gateway-Platz ausserhalb der dynamischen Spanne fuer Beisteller (#1355).
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+          ip_range: 172.21.128.0/17
   egress:

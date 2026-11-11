@@ -101,6 +101,7 @@ eine neue Sitzung nötig ist.
    `jnpt-dienst`. Das Wartungskonto stößt nur Aufgaben mit `schtasks /run` an.
 4. Docker Desktop startet in `jnpt-dienst`; einige Minuten bis zur Bereitschaft berücksichtigen.
    Engine und Volumes nicht aus dem Wartungskonto beurteilen. Maßgeblich ist der Aufgabenstatus.
+   `jnpt` behält im Plugin-Netz `172.21.0.0/16` die feste Adresse `172.21.0.2` außerhalb der dynamischen Beisteller-Spanne `172.21.128.0/17`; zusammen mit `restart: unless-stopped` an allen Dauerdiensten bleibt sein Platz beim Neustart frei (#1355; Umstellung bestehender Netze siehe [README](README.md#sicherheits-defaults)).
 
 ### 3.4 Anlage einrichten
 Vor `dienst-einrichten.ps1` Docker Desktop einmal als `jnpt-dienst` starten,

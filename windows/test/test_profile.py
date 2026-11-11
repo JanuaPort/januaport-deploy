@@ -104,7 +104,7 @@ class Profile(unittest.TestCase):
                 subnet = ipaddress.IPv4Network(pool['subnet'])
                 dynamic = ipaddress.IPv4Network(pool['ip_range'])
                 self.assertTrue(dynamic.subnet_of(subnet))
-                address = gateway_networks[network].get('ipv4_address')
+                address = (gateway_networks[network] or {}).get('ipv4_address')
                 self.assertIsNotNone(address)
                 address = ipaddress.IPv4Address(address)
                 self.assertIn(address, subnet)

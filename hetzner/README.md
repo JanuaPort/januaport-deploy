@@ -91,16 +91,27 @@ Wer Beisteller betreibt (Skript-Läufer, agent-runner, google-reporting), brauch
 
 1. **Bridge-Namen pinnen**, damit die Regel an einem festen Namen hängt und nicht am Subnetz:
    ```yaml
+   services:
+     jnpt:
+       restart: unless-stopped
+       networks:
+         default: {}
+         plugins:
+           ipv4_address: 172.21.0.2
    networks:
      plugins:
        name: jnpt_plugins
        internal: true
+       ipam:
+         config:
+           - subnet: 172.21.0.0/16
+             ip_range: 172.21.128.0/17
        driver_opts:
          com.docker.network.bridge.name: jnpt-plugins
    ```
-   Hat ein Container eine feste Adresse im Netz (etwa google-reporting), pinnst du zusätzlich das Subnetz per `ipam`, sonst passt die Adresse nach dem Neuanlegen nicht mehr.
+   Das Beispiel ergänzt die bestehende Gateway-Dienstdefinition. `jnpt` hat im Subnetz `172.21.0.0/16` den festen Platz `172.21.0.2` außerhalb der dynamischen Spanne `172.21.128.0/17`; sonst kann ein Beisteller beim Neustart die Adresse des Gateways belegen (JanuaPort/januaport#1355). Beisteller beziehen ihre Adressen ausschließlich dynamisch aus dieser Spanne. Dieses Muster gilt für jedes gemeinsame Netz von `jnpt` und Beistellern; alle Dauerdienste verwenden `restart: unless-stopped`, Init-Dienste behalten `restart: "no"`.
 
-   ⚠️ Ein Bridge-Name lässt sich nur beim Anlegen des Netzes setzen. Bei einer bestehenden Anlage nimmst du deshalb zuerst alle Plugin-Stacks herunter, danach den Kern, und startest dann in umgekehrter Reihenfolge. Plugin-Stacks laufen je mit `-f docker-compose.yml` im eigenen Ordner. Den Kern startest du mit **allen** seinen Dateien, also mit `-f` je Datei oder mit `COMPOSE_FILE=… docker compose …` nur als Präfix dieses einen Aufrufs. `COMPOSE_FILE` darf **nie** exportiert sein, sonst trifft ein `down` das falsche Projekt.
+   ⚠️ Bridge-Name und IPAM-Konfiguration lassen sich nur beim Anlegen des Netzes setzen. Bei einer bestehenden Anlage nimmst du deshalb zuerst alle Plugin-Stacks herunter, danach den Kern, und startest dann in umgekehrter Reihenfolge. Plugin-Stacks laufen je mit `-f docker-compose.yml` im eigenen Ordner. Den Kern startest du mit **allen** seinen Dateien, also mit `-f` je Datei oder mit `COMPOSE_FILE=… docker compose …` nur als Präfix dieses einen Aufrufs. `COMPOSE_FILE` darf **nie** exportiert sein, sonst trifft ein `down` das falsche Projekt.
 2. **Regel**, idempotent, für IPv4 und IPv6. Sie greift auch, bevor Docker die Bridge anlegt:
    ```sh
    # /usr/local/sbin/jnpt-plugin-net-guard.sh
