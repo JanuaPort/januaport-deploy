@@ -237,6 +237,11 @@ function Register-DienstTasks {
     $backup = New-ScheduledTaskAction -Execute $ps -WorkingDirectory $DienstDirectory -Argument ('-NoProfile -ExecutionPolicy Bypass -EncodedCommand ' + $encoded)
     $daily = New-ScheduledTaskTrigger -Daily -At '20:00'
     Register-ScheduledTask -TaskName 'JanuaPort Sicherung' -Action $backup -Trigger $daily -Principal $principal -Settings $settings -Force | Out-Null
+    $updateCommand = "& '" + $DienstDirectory + "\jnpt-update.ps1' -Target '" + $BackupTarget.Replace("'", "''") + "'"
+    $updateEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($updateCommand))
+    $update = New-ScheduledTaskAction -Execute $ps -WorkingDirectory $DienstDirectory -Argument ('-NoProfile -ExecutionPolicy Bypass -EncodedCommand ' + $updateEncoded)
+    # On demand only; the core's action is the sole update policy.
+    Register-ScheduledTask -TaskName 'JanuaPort Update' -Action $update -Principal $principal -Settings $settings -Force | Out-Null
 }
 
 function Initialize-Dienst {

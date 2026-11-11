@@ -12,9 +12,9 @@ from test_profile import ROOT, run
 
 REPOSITORY = 'ghcr.io/januaport/januaport'
 DIGEST = 'sha256:' + 'b' * 64
-OLD = (b'# synthetic retained setting\r\nJANUAPORT_IMAGE=ghcr.io/januaport/januaport:old\r\n'
+OLD = (b'# retained JANUAPORT_IMAGE=ghcr.io/januaport/januaport:old\r\nJANUAPORT_IMAGE=ghcr.io/januaport/januaport:old\r\n'
        b'JNPT_SMTP_HOST=smtp.example.org\nJANUAPORT_IMAGE_DIGEST=' + b'a' * 64 + b'\r\nKEEP=Gr\xc3\xbc\xc3\x9fe')
-NEW = OLD.replace(b'ghcr.io/januaport/januaport:old', REPOSITORY.encode()).replace(b'a' * 64, b'b' * 64)
+NEW = OLD.replace(b'\r\nJANUAPORT_IMAGE=ghcr.io/januaport/januaport:old', b'\r\nJANUAPORT_IMAGE='+REPOSITORY.encode()).replace(b'a' * 64, b'b' * 64)
 SHIM = r'''
 import json,os,pathlib,sys
 r=pathlib.Path(os.environ['PROBE_ROOT']); a=sys.argv[1:]
@@ -86,14 +86,23 @@ function Start-Sleep {param($Seconds,$Milliseconds)}
 '''
             if identity:
                 bootstrap += "\nfunction Get-CurrentAccount {$env:COMPUTERNAME+'\\jnpt-dienst'}\n"
-            bootstrap += extra + '\n'
+            bootstrap += r"""
+if (Test-Path -LiteralPath (Join-Path $ProfileDirectory '.env')) {
+    [IO.File]::WriteAllText((Join-Path $env:PROBE_ROOT 'acl-before'), ((& icacls.exe (Join-Path $ProfileDirectory '.env')) -join "`n"))
+}
+""" + extra + '\n'
             text = source.read_text(encoding='utf-8-sig')
             anchor = "if ($MyInvocation.InvocationName -ne '.')"
             self.assertEqual(text.count(anchor), 1)
             script = profile / 'jnpt-update.ps1'
             script.write_text(text.replace(anchor, bootstrap + anchor), encoding='utf-8-sig')
             driver = root / 'driver.ps1'
-            driver.write_text("& '" + str(script) + "' -ProfileDirectory '" + str(profile) + "' -Target 'E:\\Back''up\\'\n", encoding='utf-8-sig')
+            driver.write_text("try { & '" + str(script) + "' -ProfileDirectory '" + str(profile) + "' -Target 'E:\\Back''up\\'; $code=$LASTEXITCODE } catch {$code=1}\n" + r"""
++if (Test-Path -LiteralPath (Join-Path $env:PROBE_ROOT 'p/.env')) {
++    [IO.File]::WriteAllText((Join-Path $env:PROBE_ROOT 'acl-after'), ((& icacls.exe (Join-Path $env:PROBE_ROOT 'p/.env')) -join "`n"))
++}
++exit $code
++""".replace('\n+','\n'), encoding='utf-8-sig')
             env = {k:v for k,v in os.environ.items() if k.lower() != 'psmodulepath'}
             env.update(PROBE_ROOT=tmp, PROBE_FAIL=mode, PATH=tmp+os.pathsep+env['PATH'])
             result = run('powershell.exe','-NoProfile','-File',str(driver),check=False,env=env)
@@ -106,6 +115,8 @@ function Start-Sleep {param($Seconds,$Milliseconds)}
             for value in [os.environ.get('USERNAME',''), 'jnpt-dienst']:
                 if value: self.assertNotIn(value, self.log)
             self.assertEqual(list(profile.glob('*.tmp')), [])
+            if (root/'acl-before').exists():
+                self.assertEqual((root/'acl-before').read_text().strip(), (root/'acl-after').read_text().strip())
             return result, trace
 
     @staticmethod
@@ -121,7 +132,10 @@ function Start-Sleep {param($Seconds,$Milliseconds)}
     def success(self, action):
         r,t = self.invoke(action, seed=True)
         self.assertEqual(r.returncode,0,r.stderr)
-        def index(word): return next(i for i,a in enumerate(t) if word in a)
+        def index(word):
+            matches=[i for i,a in enumerate(t) if word in a]
+            self.assertTrue(matches, 'missing protocol event: '+word)
+            return matches[0]
         self.assertLess(index('plan'),index('backup'))
         self.assertLess(index('backup'),index('pull'))
         self.assertLess(index('pull'),index('env'))
@@ -213,18 +227,34 @@ if ($errors.Count) {throw 'parse errors'}
         self.assertEqual(result.returncode,0,result.stderr)
         code=result.stdout.lower()
         for word in ['action','digest','plan','record']: self.assertIn(word,code)
-        for pattern in [r'\[version\]',r'has_migration',r'\bbump\b',r'min_version',r'sort-object',r'wartungsfenster',r'update\s+rollback',r"['\"]update['\"]\s*,\s*['\"]rollback",r'jnpt\s+restore',r"['\"]/jnpt['\"]\s*,\s*['\"]restore",r'get-filehash',r'cosign',r'(?:(?:current|latest).{0,30}-(?:gt|lt|ge|le)|-(?:gt|lt|ge|le).{0,30}(?:current|latest))']:
+        for pattern in [r'\[version\]',r'has_migration',r'\bbump\b',r'min_version',r'sort-object',r'wartungsfenster',r'update\s+rollback',r"['\"]update['\"]\s*,\s*['\"]rollback",r'jnpt\s+restore',r"['\"]/jnpt['\"]\s*,\s*['\"]restore",r'get-filehash',r'cosign',r'setaccesscontrol',r'(?:(?:current|latest).{0,30}-(?:gt|lt|ge|le)|-(?:gt|lt|ge|le).{0,30}(?:current|latest))']:
             self.assertNotRegex(code,pattern)
 
 
 class UpdateAdapter(unittest.TestCase):
     def test_non_core_programs_and_other_docker_operations_rejected_at_native_adapter(self):
         probe=Update()
-        for args in ["@('compose','exec','-T','jnpt','sh')", "@('compose','exec','-T','jnpt','stat')", "@('compose','cp','jnpt:/data','x')", "@('compose','exec','-T','jnpt','/jnpt','restore')", "@('compose','exec','-T','jnpt','/jnpt','update','rollback')"]:
+        for args in ["@('compose','exec','-T','jnpt','sh')", "@('compose','exec','-T','jnpt','stat')", "@('compose','cp','jnpt:/data','x')", "@('compose','exec','-T','jnpt','/jnpt','restore')", "@('compose','exec','-T','jnpt','/jnpt','healthz')", "@('pull','other.example/EVIL@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')", "@('compose','exec','-T','jnpt','/jnpt','update','rollback')"]:
             with self.subTest(args=args):
                 r,t=probe.invoke(extra='Invoke-UpdateDocker '+args+' | Out-Null\nexit 99')
                 self.assertNotEqual(r.returncode,99); self.assertNotEqual(r.returncode,0)
                 self.assertEqual(t,[])
+
+    def test_native_process_timeout_is_bounded_at_real_process_adapter(self):
+        r,t=Update().invoke(extra="try {Invoke-UpdateProcess '[Threading.Thread]::Sleep(5000)' 1 | Out-Null; exit 99} catch {exit 12}")
+        self.assertEqual(r.returncode,12,r.stderr)
+        self.assertEqual(t,[])
+
+    def test_log_escapes_untrusted_values_and_redacts_current_identity(self):
+        from test_install import ps
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); (root/'log').mkdir()
+            result=ps("$ProfileDirectory='"+tmp+"'; Write-UpdateLog ($env:USERNAME+\"`nEVIL=1\"+ 'jnpt-dienst')",ROOT/'jnpt-update.ps1')
+            self.assertEqual(result.returncode,0,result.stderr)
+            text=(root/'log'/'update.log').read_text()
+            self.assertEqual(len(text.splitlines()),1)
+            self.assertNotIn(os.environ['USERNAME'],text); self.assertNotIn('jnpt-dienst',text)
+            self.assertIn(r'\nEVIL=1',text)
 
     def test_ambiguous_env_is_not_replaced(self):
         probe=Update()

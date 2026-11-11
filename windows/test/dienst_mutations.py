@@ -71,8 +71,8 @@ def main():
           "$ProfileRef = 'windows-v0.3.0'", "$ProfileRef = 'windows-v0.1.0'",
           'test_upgrade.Upgrade.test_release_ref_is_windows_v030')
     probe('legacy managed-file changes rejected', 'einrichten.ps1',
-          'if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -cne $legacy[$name])',
-          'if ($false)', 'test_upgrade.Upgrade.test_modified_or_missing_legacy_file_is_rejected_before_download')
+          '(Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -cne $candidate[$name]',
+          '$false', 'test_upgrade.Upgrade.test_modified_or_missing_legacy_file_is_rejected_before_download')
     probe('upgrade verifies download before replacing any file', 'einrichten.ps1',
           '            Test-ProfileFiles $staging\n', '',
           'test_upgrade.Upgrade.test_download_or_hash_failure_cannot_replace_existing_files')
