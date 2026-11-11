@@ -30,11 +30,11 @@ function Enable-DienstAutologon { param($Binary,$Password) $script:events.Add('a
 function New-ScheduledTaskAction { param($Execute,$Argument,$WorkingDirectory) [pscustomobject]@{Execute=$Execute;Argument=$Argument;WorkingDirectory=$WorkingDirectory} }
 function New-ScheduledTaskTrigger { param([switch]$AtLogOn,$User,[switch]$Daily,$At) [pscustomobject]@{Logon=[bool]$AtLogOn;User=$User;Daily=[bool]$Daily;Delay=$null} }
 function New-ScheduledTaskPrincipal { param($UserId,$LogonType,$RunLevel) [pscustomobject]@{UserId=$UserId;LogonType=$LogonType;RunLevel=$RunLevel} }
-function New-ScheduledTaskSettingsSet { param([switch]$StartWhenAvailable,$MultipleInstances) 'settings' }
+function New-ScheduledTaskSettingsSet { param([switch]$StartWhenAvailable,$MultipleInstances) [pscustomobject]@{MultipleInstances=$MultipleInstances;StartWhenAvailable=[bool]$StartWhenAvailable} }
 function Register-ScheduledTask { param($TaskName,$Action,$Trigger,$Principal,$Settings,[switch]$Force)
     $script:events.Add('task:'+$TaskName)
     if ($env:PROBE_FAIL -eq 'task') {throw 'task'}
-    [pscustomobject]@{TaskName=$TaskName;Action=$Action;Trigger=$Trigger;Principal=$Principal} | ConvertTo-Json -Depth 6 -Compress | Add-Content (Join-Path $env:PROBE_ROOT 'tasks.jsonl')
+    [pscustomobject]@{TaskName=$TaskName;Action=$Action;Trigger=$Trigger;Principal=$Principal;Settings=$Settings} | ConvertTo-Json -Depth 6 -Compress | Add-Content (Join-Path $env:PROBE_ROOT 'tasks.jsonl')
 }
 function cmdkey.exe { throw 'FORBIDDEN cmdkey adapter called' }
 function Start-Process { throw 'FORBIDDEN Start-Process adapter called' }

@@ -107,7 +107,7 @@ class Dienst(unittest.TestCase):
         self.assertEqual(events.count('group:docker-users'), 1)
         self.assertEqual(events.count('group:Users'), 1)
         self.assertEqual(events.count('autologon'), 1)
-        self.assertEqual(len(tasks), 6)
+        self.assertEqual(len(tasks), 8)
         self.assertIn('memory=4GB', wsl)
         self.assertIn('screen:60', events)
         self.assertIn('power:/hibernate off', events)
@@ -120,6 +120,7 @@ class Dienst(unittest.TestCase):
         actions = ' '.join(self.task_command(t) for t in tasks)
         self.assertIn('jnpt-sperren.ps1', actions)
         self.assertIn('jnpt-backup.ps1', actions)
+        self.assertIn('jnpt-update.ps1', actions)
         self.assertIn('einrichten.ps1', actions)
         for task in tasks:
             if task['TaskName'] == 'JanuaPort Sperren bei Anmeldung':
@@ -145,6 +146,25 @@ class Dienst(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 backup = next(t for t in tasks if t['TaskName'] == 'JanuaPort Sicherung')
                 self.assertTrue(self.task_command(backup).endswith("-Target '" + target.replace("'", "''") + "'"))
+
+    def test_update_task_is_on_demand_interactive_limited_ignore_new_and_encoded(self):
+        for target in ['E:\\', "E:\\Back'up", r'\\backup-host\dedicated-share']:
+            with self.subTest(target=target):
+                result,tasks,_ = self.fake_setup(backup_target=target,repeat=False)
+                self.assertEqual(result.returncode,0,result.stderr)
+                update = [t for t in tasks if t['TaskName']=='JanuaPort Update']
+                self.assertEqual(len(update),1)
+                task=update[0]
+                self.assertIsNone(task['Trigger'])
+                self.assertEqual(task['Principal']['LogonType'],'Interactive')
+                self.assertEqual(task['Principal']['RunLevel'],'Limited')
+                self.assertTrue(task['Principal']['UserId'].endswith('\\jnpt-dienst'))
+                self.assertEqual(task['Settings']['MultipleInstances'],'IgnoreNew')
+                self.assertIn('-EncodedCommand ',task['Action']['Argument'])
+                command=self.task_command(task)
+                self.assertIn('jnpt-update.ps1',command)
+                self.assertTrue(command.endswith("-Target '"+target.replace("'","''")+"'"),command)
+                self.assertTrue(task['Action']['WorkingDirectory'].endswith('profile'))
 
     def test_setup_failure_never_prints_password(self):
         for mode in ['admin', 'privileged', 'disabled', 'root-acl', 'power', 'task']:

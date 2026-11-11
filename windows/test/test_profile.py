@@ -35,7 +35,8 @@ MAIL_VALUES = {
 }
 PROFILE_FILES = ('docker-compose.yml', 'Caddyfile', 'einrichten.ps1', '.gitignore',
                  'README.md', 'README.en.md', 'RUNBOOK.md', 'dienst-einrichten.ps1',
-                 'jnpt-backup.ps1', 'jnpt-sperren.ps1', 'PRUEFSTEIN-B4.md')
+                 'jnpt-backup.ps1', 'jnpt-sperren.ps1', 'PRUEFSTEIN-B4.md',
+                 'jnpt-update.ps1', 'PRUEFSTEIN-B5.md')
 AUTOLOGON_SHA256 = '5d96bbc4e5b726d87c7cf547f5fe98f8f05434ec2130bd60cbf5671fd3a7381b'
 
 
@@ -47,7 +48,7 @@ def run(*args, input=None, check=True, env=None):
 def config(directory=ROOT, extra_env=None, check=True, env_file=None):
     # Mail tests must not inherit an operator's settings or credentials.
     env = {key: value for key, value in os.environ.items()
-           if not key.startswith(('JNPT_SMTP_', 'JNPT_NOTIFY_')) and key != 'JNPT_ADMIN_URL'}
+           if not key.startswith(('JNPT_SMTP_', 'JNPT_NOTIFY_', 'JNPT_UPDATE_')) and key != 'JNPT_ADMIN_URL'}
     env.update(EXAMPLE)
     env.update(extra_env or {})
     return run("docker", "compose", "--env-file", str(env_file or os.devnull), "-f",
@@ -125,6 +126,22 @@ class Profile(unittest.TestCase):
             with self.subTest(service=name):
                 self.assertEqual(service.get('restart'),
                                  'no' if name in init_services else 'unless-stopped')
+    def test_update_feed_from_dotenv_or_environment_and_empty_offline_default(self):
+        values = {'JNPT_UPDATE_MANIFEST_URL': 'https://updates.example.org/manifest.json',
+                  'JNPT_UPDATE_PUBLIC_KEYS': 'synthetic-public-key'}
+        with tempfile.TemporaryDirectory() as tmp:
+            dotenv = Path(tmp) / '.env'
+            for supplied in [values, dict.fromkeys(values, ''), {}]:
+                dotenv.write_text(''.join(k+'='+v+'\n' for k,v in supplied.items()))
+                for source in ['dotenv', 'process']:
+                    with self.subTest(supplied=supplied, source=source):
+                        cfg = json.loads(config(extra_env=supplied if source=='process' else None,
+                                                env_file=dotenv if source=='dotenv' else None).stdout)
+                        for key in values:
+                            self.assertEqual(cfg['services']['jnpt']['environment'].get(key), supplied.get(key,''))
+                        for name,service in cfg['services'].items():
+                            if name!='jnpt':
+                                self.assertTrue(set(values).isdisjoint(service.get('environment',{})), name)
 
     def test_mail_environment(self):
         with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
@@ -141,7 +158,8 @@ class Profile(unittest.TestCase):
                         self.assertEqual(environment.get(name), value)
                 self.assertEqual(set(environment), set(MAIL_VALUES) |
                                  {'JNPT_SMTP_PASSWORD_FILE', 'JNPT_ADMIN_URL',
-                                  'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE'})
+                                  'JNPT_NOTIFY_GRAPH_CLIENT_SECRET_FILE',
+                                  'JNPT_UPDATE_MANIFEST_URL', 'JNPT_UPDATE_PUBLIC_KEYS'})
 
     def test_graph_client_secret_is_file_only(self):
         attempted = {'JNPT_NOTIFY_GRAPH_CLIENT_SECRET': 'synthetic graph probe'}
