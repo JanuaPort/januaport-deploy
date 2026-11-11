@@ -486,6 +486,14 @@ completed job separately from pairing.
   and for the Docker processes. No rule may allow "Any" as remote address. Where
   possible, add a negative probe from a foreign subnet.
 
+On the internal `plugins` network, `jnpt` uses the fixed address `172.21.0.2`
+in subnet `172.21.0.0/16`; sidecars receive addresses exclusively from the dynamic
+pool `172.21.128.0/17`, keeping the gateway address free during restarts (#1355).
+All long-running services use `restart: unless-stopped`; init services use `restart: "no"`.
+When updating an existing profile, run `docker compose down` followed by
+`docker compose up -d` once in the profile directory to recreate the network
+with the new IPAM configuration; retain the named volumes.
+
 An internal Docker network alone does not isolate all Windows/WSL host services.
 The Linux iptables guidance in `compose/README.md` is not Windows verification;
 check host/WSL firewall policies with the operator. The fetcher has a separate

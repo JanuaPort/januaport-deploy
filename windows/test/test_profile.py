@@ -5,6 +5,7 @@ Only disposable containers/volumes belonging to this test are used.
 """
 import hashlib
 import http.client
+import ipaddress
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -83,6 +84,48 @@ def create_leaf(cfg, volume, san='DNS:localhost,IP:127.0.0.1'):
 
 
 class Profile(unittest.TestCase):
+    def test_plugin_network_addresses(self):
+        cfg = json.loads(config().stdout)
+        services = cfg['services']
+        gateway_networks = services['jnpt']['networks']
+        shared = {
+            network for name, service in services.items() if name != 'jnpt'
+            for network in service.get('networks', {}) if network in gateway_networks
+        }
+        self.assertIn('plugins', shared)
+        # Check every shared network, including future sidecar attachments.
+        for network in sorted(shared):
+            with self.subTest(network=network, invariant='IPAM'):
+                pools = cfg['networks'][network].get('ipam', {}).get('config', [])
+                self.assertEqual(len(pools), 1)
+                pool = pools[0]
+                self.assertEqual(pool.get('subnet'), '172.21.0.0/16')
+                self.assertEqual(pool.get('ip_range'), '172.21.128.0/17')
+                subnet = ipaddress.IPv4Network(pool['subnet'])
+                dynamic = ipaddress.IPv4Network(pool['ip_range'])
+                self.assertTrue(dynamic.subnet_of(subnet))
+                address = (gateway_networks[network] or {}).get('ipv4_address')
+                self.assertIsNotNone(address)
+                address = ipaddress.IPv4Address(address)
+                self.assertIn(address, subnet)
+                self.assertNotIn(address, dynamic)
+                self.assertEqual(str(address), '172.21.0.2')
+            for name, service in services.items():
+                if name != 'jnpt' and network in service.get('networks', {}):
+                    with self.subTest(network=network, service=name, invariant='dynamic sidecar'):
+                        attachment = service['networks'][network] or {}
+                        self.assertNotIn('ipv4_address', attachment)
+                        self.assertNotIn('ipv6_address', attachment)
+
+    def test_restart_policies(self):
+        services = json.loads(config().stdout)['services']
+        init_services = {'cert-init', 'plugin-init', 'script-runner-init'}
+        self.assertTrue(init_services.issubset(services))
+        for name, service in services.items():
+            with self.subTest(service=name):
+                self.assertEqual(service.get('restart'),
+                                 'no' if name in init_services else 'unless-stopped')
+
     def test_mail_environment(self):
         with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
             dotenv = Path(tmp) / '.env'

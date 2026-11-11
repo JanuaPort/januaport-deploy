@@ -537,6 +537,14 @@ erfolgreicher Auftragslauf sind zusätzlich zur Kopplung zu prüfen.
   in den Abnahmebericht. Eine Freigabe mit „Beliebig“ als Remoteadresse darf es nicht
   geben. Wo möglich, kommt eine Gegenprobe aus einem fremden Subnetz dazu.
 
+Im internen Plugin-Netz `plugins` ist `jnpt` fest auf `172.21.0.2` im Subnetz
+`172.21.0.0/16` gesetzt; Beisteller erhalten Adressen ausschließlich dynamisch
+aus `172.21.128.0/17`, damit sie beim Neustart den Gateway-Platz freihalten (#1355).
+Alle Dauerdienste verwenden `restart: unless-stopped`, Init-Dienste `restart: "no"`.
+Beim Umstellen eines bestehenden Profils im Profilordner einmal
+`docker compose down` und danach `docker compose up -d` ausführen, damit das
+Netz mit der neuen IPAM-Konfiguration entsteht; die benannten Volumes erhalten.
+
 Das interne Plugin-Netz begrenzt den Ausgang, sperrt aber nicht von selbst
 jeden Dienst des Windows-/WSL-Hosts. Die Linux-iptables-Anleitung in
 `compose/README.md` ist kein Windows-Nachweis. Host-/WSL-Firewall nach den
