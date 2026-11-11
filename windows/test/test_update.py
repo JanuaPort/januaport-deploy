@@ -12,6 +12,15 @@ from test_profile import ROOT, run
 
 REPOSITORY = 'ghcr.io/januaport/januaport'
 DIGEST = 'sha256:' + 'b' * 64
+
+
+def update_plan(**values):
+    fixture = Path(__file__).with_name('fixtures') / 'update-plan.json'
+    plan = json.loads(fixture.read_text(encoding='utf-8'))
+    plan.update(values)
+    return plan
+
+
 OLD = (b'# retained JANUAPORT_IMAGE=ghcr.io/januaport/januaport:old\r\nJANUAPORT_IMAGE=ghcr.io/januaport/januaport:old\r\n'
        b'JNPT_SMTP_HOST=smtp.example.org\nJANUAPORT_IMAGE_DIGEST=' + b'a' * 64 + b'\r\nKEEP=Gr\xc3\xbc\xc3\x9fe')
 NEW = OLD.replace(b'\r\nJANUAPORT_IMAGE=ghcr.io/januaport/januaport:old', b'\r\nJANUAPORT_IMAGE='+REPOSITORY.encode()).replace(b'a' * 64, b'b' * 64)
@@ -66,8 +75,8 @@ exit 0
                 (profile / incomplete).unlink()
             (root / 'docker_shim.py').write_text(SHIM)
             (root / 'docker.cmd').write_text('@echo off\n"' + sys.executable + '" "' + str(root / 'docker_shim.py') + '" %*\n')
-            plan = dict(current='opaque-current', latest='other.example/EVIL:latest', digest=digest,
-                        action=action, on_failure='rollback', reason='other.example/EVIL:reason')
+            plan = update_plan(current='opaque-current', latest='other.example/EVIL:latest', digest=digest,
+                               action=action, on_failure='rollback', reason='other.example/EVIL:reason')
             (root / 'plan').write_text(json.dumps(plan) + '\n' if raw is None else raw)
             if seed:
                 (profile / 'log' / 'update.log').write_text('synthetic previous entry\n' * 105)
@@ -129,8 +138,8 @@ if (Test-Path -LiteralPath (Join-Path $ProfileDirectory '.env')) {
         self.assertEqual(len(t),2,t)
         self.assertIn('--result=none',t[-1]); self.assertEqual(self.env_after,OLD)
 
-    def success(self, action):
-        r,t = self.invoke(action, seed=True)
+    def success(self, action, raw=None):
+        r,t = self.invoke(action, seed=True, raw=raw)
         self.assertEqual(r.returncode,0,r.stderr)
         def index(word):
             matches=[i for i,a in enumerate(t) if word in a]
@@ -147,7 +156,8 @@ if (Test-Path -LiteralPath (Join-Path $ProfileDirectory '.env')) {
         self.assertEqual(next(a for a in t if a[0]=='pull'),['pull',REPOSITORY+'@'+DIGEST])
         self.assertEqual(self.env_after,NEW)
         rec=self.records(t); self.assertEqual(len(rec),1)
-        for arg in ['--result=installed','--from=opaque-current','--to=other.example/EVIL:latest','--digest='+DIGEST]: self.assertIn(arg,rec[0])
+        plan = json.loads(raw) if raw is not None else update_plan(current='opaque-current', latest='other.example/EVIL:latest')
+        for arg in ['--result=installed','--from='+plan['current'],'--to='+plan['latest'],'--digest='+DIGEST]: self.assertIn(arg,rec[0])
         self.assertFalse(any(a.startswith('--backup') for a in rec[0]))
         self.assertEqual(sum(a==['compose','up','-d'] for a in t),1)
         return t
@@ -155,13 +165,38 @@ if (Test-Path -LiteralPath (Join-Path $ProfileDirectory '.env')) {
     def test_02_approved_green(self): self.success('approved')
     def test_03_unattended_green(self): self.success('unattended')
 
+    def test_core_plan_fixture_and_unknown_extra_field_are_accepted(self):
+        plan = update_plan()
+        self.assertEqual(set(plan), {'current','latest','digest','has_migration','bump',
+                                     'action','on_failure','backup','reason'})
+        for additional in [False, True]:
+            with self.subTest(unknown_extra_field=additional):
+                offered = dict(plan)
+                if additional:
+                    offered['future_field'] = {'enabled': True}
+                self.success('approved', raw=json.dumps(offered)+'\n')
+
+    def test_every_required_plan_field_must_be_present_and_a_string(self):
+        for field in ['current','latest','digest','action','on_failure','reason']:
+            for malformed in ['missing', 'wrong-type']:
+                with self.subTest(field=field, malformed=malformed):
+                    plan = update_plan()
+                    if malformed == 'missing':
+                        del plan[field]
+                    else:
+                        plan[field] = False
+                    r,t = self.invoke(raw=json.dumps(plan)+'\n')
+                    self.assertEqual(r.returncode,2,r.stderr)
+                    self.assertEqual(len(t),1,t)
+                    self.assertEqual(self.env_after,OLD)
+
     def test_04_invalid_digest_and_plan_rejected(self):
         for digest in ['', 'sha256:'+'B'*64, 'sha256:'+'b'*63, 'b'*64, DIGEST+'\n',DIGEST+'\nEVIL=1',REPOSITORY+'@'+DIGEST]:
             with self.subTest(digest=digest):
                 r,t=self.invoke(digest=digest)
                 self.assertEqual(r.returncode,2,r.stderr); self.assertEqual(self.env_after,OLD)
                 self.assertEqual(len(t),1,t)
-        good=json.dumps(dict(current='x',latest='y',digest=DIGEST,action='none',on_failure='',reason=''))
+        good=json.dumps(update_plan(current='x',latest='y',digest=DIGEST,action='none',on_failure='',reason=''))
         for raw in ['', '{}\n{}\n', '\n'+good+'\n', good+'\n\n', '[{}]\n', '{\n"action":"none"\n}\n', '{}\n', good.replace('none','unknown')+'\n']:
             with self.subTest(raw=raw):
                 r,t=self.invoke(raw=raw)
