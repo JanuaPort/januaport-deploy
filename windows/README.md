@@ -549,9 +549,9 @@ Im internen Plugin-Netz `plugins` ist `jnpt` fest auf `172.21.0.2` im Subnetz
 `172.21.0.0/16` gesetzt; Beisteller erhalten Adressen ausschließlich dynamisch
 aus `172.21.128.0/17`, damit sie beim Neustart den Gateway-Platz freihalten (#1355).
 Alle Dauerdienste verwenden `restart: unless-stopped`, Init-Dienste `restart: "no"`.
-Beim Umstellen eines bestehenden Profils im Profilordner einmal
-`docker compose down` und danach `docker compose up -d` ausführen, damit das
-Netz mit der neuen IPAM-Konfiguration entsteht; die benannten Volumes erhalten.
+Compose legt das Netz beim Upgrade selbst neu an; nur wenn es mit
+„needs to be recreated“ abbricht, im Profilordner einmal `docker compose down`
+und danach `docker compose up -d` ausführen. Die benannten Volumes erhalten.
 
 Das interne Plugin-Netz begrenzt den Ausgang, sperrt aber nicht von selbst
 jeden Dienst des Windows-/WSL-Hosts. Die Linux-iptables-Anleitung in
@@ -623,7 +623,9 @@ Die `.env`-DACL bleibt beim Dateiaustausch erhalten; das Skript setzt keine ACL.
 | 6 | Start, Host-Health oder TLS rot; `failed` mit Digest, neuer Stand bleibt zur Diagnose |
 
 Ist das Ergebnis nicht buchbar, steht es nur im Log; der Exit-Code des Laufs
-bleibt erhalten. `LastTaskResult=0` deshalb zusammen mit Log und GUI prüfen.
+bleibt erhalten. Bei „JanuaPort Update“ und „JanuaPort Sicherung“ entspricht
+`LastTaskResult` dem Exit-Code des Skripts. `LastTaskResult=0` deshalb zusammen
+mit Log und GUI prüfen.
 Native Ausgaben und Fehlermeldungsinhalte erscheinen weder auf der Konsole
 noch im Log. `log\update.log` hält höchstens 100 Zeilen ohne Benutzernamen.
 Die alten beiden Image-Werte stehen dort vor dem Austausch; vor einem späteren

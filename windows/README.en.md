@@ -498,9 +498,9 @@ On the internal `plugins` network, `jnpt` uses the fixed address `172.21.0.2`
 in subnet `172.21.0.0/16`; sidecars receive addresses exclusively from the dynamic
 pool `172.21.128.0/17`, keeping the gateway address free during restarts (#1355).
 All long-running services use `restart: unless-stopped`; init services use `restart: "no"`.
-When updating an existing profile, run `docker compose down` followed by
-`docker compose up -d` once in the profile directory to recreate the network
-with the new IPAM configuration; retain the named volumes.
+Compose recreates the network itself during upgrade. Only if it aborts with
+“needs to be recreated”, run `docker compose down` followed by
+`docker compose up -d` once in the profile directory. Retain the named volumes.
 
 An internal Docker network alone does not isolate all Windows/WSL host services.
 The Linux iptables guidance in `compose/README.md` is not Windows verification;
@@ -569,7 +569,8 @@ the `.env` DACL; the script writes no ACL.
 | 6 | Start, host health or TLS failed; `failed` with digest, new state remains for diagnosis |
 
 An unbookable result is logged only; the update's exit code is preserved.
-Check `LastTaskResult=0` together with the log and GUI. Native output and raw
+For “JanuaPort Update” and “JanuaPort Sicherung”, `LastTaskResult` equals the
+script's exit code. Check `LastTaskResult=0` together with the log and GUI. Native output and raw
 exception messages stay off the console and log. `log\update.log` retains
 at most 100 lines without usernames. It records the old two image values
 before replacement; retain them locally before a later run for manual recovery.

@@ -301,7 +301,8 @@ Daten des Kunden. Vor dem Start hakt die Person ab:
    ```
 
    `schtasks /run` bestätigt nur den Anstoß. Abschluss und `LastTaskResult`
-   abwarten, das Log lesen und die GUI-Anzeige „installiert“ prüfen. Die tägliche
+   abwarten; bei „JanuaPort Update“ und „JanuaPort Sicherung“ entspricht es dem
+   Exit-Code des Skripts. Das Log lesen und die GUI-Anzeige „installiert“ prüfen. Die tägliche
    Sicherung um 20:00 und die Update-Sicherung sind getrennte Aufgaben.
    `IgnoreNew` verhindert nur einen zweiten Lauf derselben Aufgabe. Der Betreiber
    stimmt den Anstoß so ab, dass die tägliche Sicherung vorher beendet ist;
@@ -323,6 +324,10 @@ Der Host trifft keine Versions-, Migrations-, Signatur- oder Freigabeentscheidun
 - `/jnpt update plan --json` gibt genau eine JSON-Zeile mit den Feldern `current`, `latest`, `digest`, `action` (eins von `none`, `unattended`, `approved`, `rollback`), `on_failure`, `reason`.
 - `/jnpt update record --result=none|installed|failed --from=<current> --to=<latest> [--digest=<sha256:…>]` (bei installed/failed sind --from und --to Pflicht; `--backup` in v1 NICHT mitgeben).
 - Feed-Umgebung des Kerns: `JNPT_UPDATE_MANIFEST_URL`, `JNPT_UPDATE_PUBLIC_KEYS` (Box reicht beide aus `.env` durch; gleiches Muster im Windows-Compose am Dienst `jnpt`, leer = offline-first, Plan bleibt dann `none`).
+
+Die sechs gebrauchten Planfelder sind Pflicht und müssen jeweils Zeichenketten
+sein. Weitere Felder werden ohne Auswertung ignoriert, auch bei künftigen
+Erweiterungen des Kerns.
 
 ### Fehler und begrenzter Abbruch
 

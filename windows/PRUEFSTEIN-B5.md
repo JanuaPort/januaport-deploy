@@ -27,6 +27,8 @@ Die Adaptertests ersetzen diese Abnahme nicht. B4 gilt ergänzend weiter.
   20:00 muss beendet sein (Abstimmung nach RUNBOOK, keine neue technische Sperre).
   `schtasks /run /tn "JanuaPort Update"` ausführen. Abschluss abwarten:
   `Get-ScheduledTaskInfo -TaskName 'JanuaPort Update'` zeigt `LastTaskResult=0`.
+  LastTaskResult entspricht dem Exit-Code des Skripts; das auch für die
+  Aufgabe „JanuaPort Sicherung“ prüfen.
   `log\update.log` lesen, Admin-GUI zeigt „installiert“.
 - [ ] **Sicherung und unveränderliche Referenz:** Neue, geprüfte Sicherung
   von vor dem Wechsel am markierten USB-Ziel; keine `.teil` und keine Key-Kopie.

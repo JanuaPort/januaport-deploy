@@ -80,7 +80,6 @@ function Read-UpdatePlan {
     $plan = ConvertFrom-Json -InputObject $native.Output
     if ($plan -isnot [pscustomobject]) { throw 'JSON-Objekt erforderlich.' }
     $fields = @('current', 'latest', 'digest', 'action', 'on_failure', 'reason')
-    if (@($plan.PSObject.Properties).Count -ne $fields.Count) { throw 'Planfelder unvollstaendig.' }
     foreach ($field in $fields) {
         if ($null -eq $plan.PSObject.Properties[$field] -or $plan.$field -isnot [string]) {
             throw 'Planfeld ungueltig.'
