@@ -19,7 +19,7 @@ function Get-LocalGroupMember { param($Group)
 $script:usersMember = $false
 function Add-LocalGroupMember { param($Group,$Member) $script:events.Add('group:'+$Group); if ($Group -eq 'Users') {$script:usersMember=$true} else {$script:member=$true} }
 function Get-DienstProfilePath { param($User) Join-Path $env:PROBE_ROOT 'user' }
-function Protect-DienstRoot { param($SID) $script:events.Add('root-acl'); if ($env:PROBE_FAIL -eq 'root-acl') {throw 'icacls failed'} }
+function Protect-DienstRoot { param($SID) $script:events.Add('root-acl'); if ($env:PROBE_FAIL -eq 'root-acl') {throw 'DACL failed'} }
 function Protect-DienstDirectory { param($Path,$SID) $script:events.Add('acl') }
 function Set-DienstScreenLock { param($ProfilePath,$SID) $script:events.Add('screen:60') }
 function powercfg.exe { $script:events.Add('power:' + ($args -join ' ')); $global:LASTEXITCODE=0; if ($env:PROBE_FAIL -eq 'power') {$global:LASTEXITCODE=1} }
@@ -28,7 +28,7 @@ function Get-AutologonBinary { $script:events.Add('binary-verified'); 'unused-te
 function Test-DienstAutologon { $script:autologon }
 function Enable-DienstAutologon { param($Binary,$Password) $script:events.Add('autologon'); $script:autologon=$true }
 function New-ScheduledTaskAction { param($Execute,$Argument,$WorkingDirectory) [pscustomobject]@{Execute=$Execute;Argument=$Argument;WorkingDirectory=$WorkingDirectory} }
-function New-ScheduledTaskTrigger { param([switch]$AtLogOn,$User,[switch]$Daily,$At) [pscustomobject]@{Logon=[bool]$AtLogOn;User=$User;Daily=[bool]$Daily} }
+function New-ScheduledTaskTrigger { param([switch]$AtLogOn,$User,[switch]$Daily,$At) [pscustomobject]@{Logon=[bool]$AtLogOn;User=$User;Daily=[bool]$Daily;Delay=$null} }
 function New-ScheduledTaskPrincipal { param($UserId,$LogonType,$RunLevel) [pscustomobject]@{UserId=$UserId;LogonType=$LogonType;RunLevel=$RunLevel} }
 function New-ScheduledTaskSettingsSet { param([switch]$StartWhenAvailable,$MultipleInstances) 'settings' }
 function Register-ScheduledTask { param($TaskName,$Action,$Trigger,$Principal,$Settings,[switch]$Force)

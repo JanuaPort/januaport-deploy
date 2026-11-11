@@ -127,36 +127,19 @@ Install-Profile
 
 class ParentAcl(unittest.TestCase):
     def root_probe(self, fail=False):
-        command = r'''
-$DienstDirectory='C:\JanuaPort\windows'
-$script:calls=@()
-function New-Item {param($Path,$ItemType,[switch]$Force)
-    if ($Path -cne 'C:\JanuaPort') {throw 'unexpected real root creation'}
-}
-function Clear-DienstExplicitAccess {param($Path) if ($Path -cne 'C:\JanuaPort') {throw 'wrong ACL root'} }
-function icacls.exe {
-    $script:calls += ,@($args)
-    $global:LASTEXITCODE=[int]$env:PROBE_FAIL
-}
-Protect-DienstRoot 'S-1-5-21-100-100-100-1001'
-ConvertTo-Json -InputObject $script:calls -Compress
-'''
-        return ps(command, ROOT / 'dienst-einrichten.ps1', dict(PROBE_FAIL='1' if fail else '0'))
+        from test_acl_f5 import root_probe
+        return root_probe(fail=fail)
 
-    def test_b7_icacls_fixed_parent_inheritance_and_exact_three_principals(self):
+    def test_b7_one_atomic_write_exact_three_rules_and_second_run_no_write(self):
+        from test_acl_f5 import assert_exact_rules
         result = self.root_probe()
         self.assertEqual(result.returncode, 0, result.stderr)
-        calls = json.loads(result.stdout)
-        self.assertEqual(len(calls), 1, calls)
-        self.assertEqual(calls[0][0], 'C:\\JanuaPort')
-        self.assertEqual(calls[0][1:3], ['/inheritance:r', '/grant:r'])
-        self.assertCountEqual(calls[0][3:], ['*S-1-5-21-100-100-100-1001:(OI)(CI)F',
-                                           '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-18:(OI)(CI)F'])
+        assert_exact_rules(self, json.loads(result.stdout), writes=1)
 
-    def test_b7_native_icacls_error_aborts(self):
+    def test_b7_acl_write_error_aborts(self):
         result = self.root_probe(fail=True)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('icacls', result.stderr)
+        self.assertIn('DACL write failed', result.stderr)
 
     def test_b7_real_temp_parent_removes_inherited_and_explicit_other_principals(self):
         with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:

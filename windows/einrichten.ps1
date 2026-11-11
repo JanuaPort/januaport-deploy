@@ -14,7 +14,7 @@ $ProfileBase = "https://raw.githubusercontent.com/JanuaPort/januaport-deploy/$Pr
 $Repository = 'ghcr.io/januaport/januaport'
 $ProfileFiles = @('docker-compose.yml', 'Caddyfile', 'einrichten.ps1', '.gitignore',
     'README.md', 'README.en.md', 'RUNBOOK.md', 'dienst-einrichten.ps1',
-    'jnpt-backup.ps1', 'PRUEFSTEIN-B4.md')
+    'jnpt-backup.ps1', 'jnpt-sperren.ps1', 'PRUEFSTEIN-B4.md')
 
 function Invoke-Docker {
     param([string[]]$Arguments)
@@ -192,6 +192,8 @@ function Install-Profile {
         }
     }
     Initialize-MailSecret $Directory
+    # Relative Compose bind source; inherits the service profile's B-7 ACL.
+    New-Item -ItemType Directory -Path (Join-Path $Directory 'backups') -Force | Out-Null
     Push-Location $Directory
     try {
         Invoke-Docker @('compose', 'config', '--quiet') | Out-Host

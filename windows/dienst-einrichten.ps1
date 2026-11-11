@@ -52,24 +52,49 @@ namespace Jnpt {
     return $path.ToString()
 }
 
-function Clear-DienstExplicitAccess {
-    param([string]$Path)
-    $acl = [IO.Directory]::GetAccessControl($Path, [Security.AccessControl.AccessControlSections]::Access)
-    foreach ($existing in @($acl.Access)) {
-        if (-not $existing.IsInherited) { $acl.RemoveAccessRuleSpecific($existing) }
-    }
-    [IO.Directory]::SetAccessControl($Path, $acl)
-}
-
 function Protect-DienstDirectory {
     param([string]$Path, $SID)
-    # Remove previous explicit grants as well; /grant:r alone would keep grants
-    # to other accounts. Inherited C:\ grants are removed by icacls itself.
-    Clear-DienstExplicitAccess $Path
-    $grants = @(("*" + [string]$SID + ':(OI)(CI)F'),
-        '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-18:(OI)(CI)F')
-    & icacls.exe $Path '/inheritance:r' '/grant:r' @grants *> $null
-    if ($LASTEXITCODE -ne 0) { throw 'icacls fuer Dienstordner fehlgeschlagen.' }
+    $principals = @([string]$SID, 'S-1-5-32-544', 'S-1-5-18')
+    $inheritance = [Security.AccessControl.InheritanceFlags]::ContainerInherit -bor
+        [Security.AccessControl.InheritanceFlags]::ObjectInherit
+    $current = [IO.Directory]::GetAccessControl($Path, [Security.AccessControl.AccessControlSections]::Access)
+    $rules = @($current.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
+    # GetAccessRules can omit opaque ACEs or project callback ACEs as Allow.
+    # Check the complete binary DACL as well as the three expected rules (R4).
+    $raw = New-Object Security.AccessControl.RawSecurityDescriptor($current.GetSecurityDescriptorBinaryForm(), 0)
+    $rawRules = @($raw.DiscretionaryAcl)
+    $exact = $current.AreAccessRulesProtected -and $rules.Count -eq 3 -and $rawRules.Count -eq 3
+    $expectedAceFlags = [Security.AccessControl.AceFlags]'ContainerInherit,ObjectInherit'
+    foreach ($ace in $rawRules) {
+        if ($ace -isnot [Security.AccessControl.CommonAce] -or
+            $ace.AceType -ne [Security.AccessControl.AceType]::AccessAllowed -or
+            $ace.AceFlags -ne $expectedAceFlags) { $exact = $false }
+    }
+    foreach ($principal in $principals) {
+        $matching = @($rules | Where-Object {
+            $_.IdentityReference.Value -ceq $principal -and -not $_.IsInherited -and
+            $_.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and
+            $_.FileSystemRights -eq [Security.AccessControl.FileSystemRights]::FullControl -and
+            $_.InheritanceFlags -eq $inheritance -and
+            $_.PropagationFlags -eq [Security.AccessControl.PropagationFlags]::None
+        })
+        if ($matching.Count -ne 1) { $exact = $false }
+    }
+    if ($exact) { return }
+
+    # Build the complete Access section before a single native write. Never
+    # persist an empty DACL: children may be owned by the service account (F5).
+    # A fresh descriptor leaves Owner, Group and Audit sections unmodified.
+    $sec = New-Object Security.AccessControl.DirectorySecurity
+    $sec.SetAccessRuleProtection($true, $false)
+    foreach ($principal in $principals) {
+        $identity = New-Object Security.Principal.SecurityIdentifier($principal)
+        $rule = New-Object Security.AccessControl.FileSystemAccessRule($identity,
+            [Security.AccessControl.FileSystemRights]::FullControl, $inheritance,
+            [Security.AccessControl.PropagationFlags]::None, [Security.AccessControl.AccessControlType]::Allow)
+        $sec.AddAccessRule($rule)
+    }
+    [IO.Directory]::SetAccessControl($Path, $sec)
 }
 
 function Protect-DienstRoot {
@@ -108,6 +133,9 @@ function Test-DockerDesktopSettings {
     $path = Join-Path $ProfilePath 'AppData\Roaming\Docker\settings-store.json'
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         $path = Join-Path $ProfilePath 'AppData\Roaming\Docker\settings.json'
+    }
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw 'Docker Desktop einmal in jnpt-dienst starten und die Einstellungen pruefen (AutoStart an, 2375 aus, Auto-Update aus)'
     }
     $settings = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
     foreach ($requirement in @(@('autoStart',$true), @('exposeDockerAPIOnTCP2375',$false),
@@ -179,7 +207,12 @@ function Enable-DienstAutologon {
         $plain = $null
         [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
     }
-    if (-not (Test-DienstAutologon)) { throw 'Autologon konnte nicht bestaetigt werden.' }
+    # Autologon64 may return before Winlogon exposes all updated values.
+    for ($attempt = 0; $attempt -le 20; $attempt++) {
+        if (Test-DienstAutologon) { return }
+        if ($attempt -eq 20) { throw 'Autologon konnte nicht bestaetigt werden.' }
+        Start-Sleep -Milliseconds 500
+    }
 }
 
 function Register-DienstTasks {
@@ -187,9 +220,12 @@ function Register-DienstTasks {
     $principal = New-ScheduledTaskPrincipal -UserId $account -LogonType Interactive -RunLevel Limited
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew
     $logon = New-ScheduledTaskTrigger -AtLogOn -User $account
-    $lock = New-ScheduledTaskAction -Execute ($env:SystemRoot + '\System32\rundll32.exe') -Argument 'user32.dll,LockWorkStation'
-    Register-ScheduledTask -TaskName 'JanuaPort Sperren bei Anmeldung' -Action $lock -Trigger $logon -Principal $principal -Settings $settings -Force | Out-Null
     $ps = $env:SystemRoot + '\System32\WindowsPowerShell\v1.0\powershell.exe'
+    # Windows Terminal ignoriert -WindowStyle Hidden (B4 N7); conhost --headless startet ohne Fenster.
+    # Entfällt der Schalter je, kommt nur das Fenster zurück, die Sperre bleibt.
+    $conhost = $env:SystemRoot + '\System32\conhost.exe'
+    $lock = New-ScheduledTaskAction -Execute $conhost -Argument ('--headless "' + $ps + '" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "C:\JanuaPort\windows\jnpt-sperren.ps1"')
+    Register-ScheduledTask -TaskName 'JanuaPort Sperren bei Anmeldung' -Action $lock -Trigger $logon -Principal $principal -Settings $settings -Force | Out-Null
     $install = New-ScheduledTaskAction -Execute $ps -WorkingDirectory $DienstDirectory -Argument ('-NoProfile -ExecutionPolicy Bypass -File "' + $DienstDirectory + '\einrichten.ps1"')
     # On demand only: the operator supplies the image tag in the initial
     # interactive commissioning session. Later runs reuse the existing .env.
@@ -237,6 +273,9 @@ function Initialize-Dienst {
         $upgrade = Test-LegacyProfile $DienstDirectory
         New-Item -ItemType Directory -Path $DienstDirectory -Force | Out-Null
         Protect-DienstDirectory $DienstDirectory $user.SID
+        # Inherits the private B-7 ACL; created before the logon task is installed.
+        New-Item -ItemType Directory -Path (Join-Path $DienstDirectory 'log') -Force | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $DienstDirectory 'backups') -Force | Out-Null
         foreach ($name in (@('SHA256SUMS') + $ProfileFiles)) {
             $destination = Join-Path $DienstDirectory $name
             $source = Join-Path $PSScriptRoot $name

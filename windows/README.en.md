@@ -8,6 +8,31 @@ Pro (amd64), WSL2 Linux containers, Docker Desktop **≥ 4.44.3**
 tcp://localhost:2375” disabled**, AutoStart enabled, automatic downloads/updates disabled. Review updates manually.
 TCP ports 443 and 8484 must be available. Registry/GitHub access is required.
 
+### LAN access during setup (N5)
+
+B4 found no Docker allow rule. Docker Desktop had created only two block rules
+for the Public profile because the firewall dialog was left unanswered.
+The effect of choosing “Allow” was not measured.
+Do not answer the Docker Desktop firewall dialog with “Allow” for public networks.
+At every real acceptance, list Docker application filters and all port filters
+opening 443 using [RUNBOOK, N5-1](RUNBOOK.md). Apart from “JanuaPort 443 LAN”,
+no allow rule may open 443; disable additional rules or restrict them to
+`LocalSubnet`. For LAN desktop runners, the operator or their IT checks the network
+profile in an administrative PowerShell: it must be **Private** or **Domain**.
+Have IT verify trust before reclassifying a public network as private. Then
+allow TCP 443 only from `LocalSubnet` on `Private,Domain` profiles:
+
+<!-- N5 -->
+```powershell
+Get-NetConnectionProfile
+New-NetFirewallRule -DisplayName 'JanuaPort 443 LAN' -Direction Inbound -Protocol TCP -LocalPort 443 -RemoteAddress LocalSubnet -Action Allow -Profile Private,Domain
+```
+
+Do not use `Any` for remote addresses. This is a manual operator step;
+`einrichten.ps1` changes neither firewall nor network profile. Verify HTTPS
+from a workstation in the local subnet afterwards. Admin port 8484 stays on loopback.
+
+
 ## Two commands
 
 The publisher must first publish the immutable **profile release tag**
@@ -67,7 +92,9 @@ The script recognizes the three unchanged original `windows-v0.1.0` files
 complete profile and manifest only from `windows-v0.2.0` into a temporary directory
 and verifies everything before writing to the target. It then replaces the
 release-managed files and adds the missing READMEs, `.gitignore`, runbook, B2/B3
-scripts and acceptance checklist. Locally changed legacy files require manual
+scripts including `jnpt-sperren.ps1` and the acceptance checklist. Setup and upgrade
+also create the local `backups\` directory under the B-7 ACL; this runtime directory
+is excluded from SHA256SUMS. Locally changed legacy files require manual
 reconciliation and abort before downloading. Download or checksum failure leaves
 existing files unchanged. A second successful run downloads nothing.
 
@@ -99,23 +126,38 @@ with vault and master key stays there, and Docker Desktop may start it again at
 sign-in. Afterwards `docker volume ls` in the old account shows no
 `jnpt-windows_*` volume. This path is a step of the B4 checkpoint.
 
+The TLS certificate belongs to the old engine's `tls-leaf` volume. Switching
+accounts creates a new certificate with a new fingerprint under `jnpt-dienst`.
+After B4 step 2a, pair every previously paired desktop runner again with a new
+pairing code and the new fingerprint transferred through a trusted local channel.
+
 ## Service operation (B2)
 
 On the intended deployment machine, use an administrative PowerShell in the
 `windows` directory of the complete, verified `windows-v0.2.0` release:
 `.\dienst-einrichten.ps1 -BackupTarget 'E:\JanuaPort-Backup'`. GATE publishes
 the tag after review. The script verifies `SHA256SUMS`, creates `jnpt-dienst`,
-adds it to `docker-users`. **B-7:** First it disables inheritance on the parent
-`C:\JanuaPort` with `icacls /inheritance:r` and grants inheritable full access
-only to `jnpt-dienst`, Administrators and SYSTEM. Previous explicit grants are
-removed. The same three principals apply to `C:\JanuaPort\windows` before
-profile files are staged. Different existing files are rejected outside the
+adds it to `docker-users`. **B-7/F5:** For both `C:\JanuaPort` and
+`C:\JanuaPort\windows`, setup prepares a complete protected DACL with exactly
+three explicit Allow rules: `jnpt-dienst`, Administrators and SYSTEM receive
+FullControl with ContainerInherit and ObjectInherit. R4 also requires
+Propagation None: no InheritOnly or NoPropagate and no additional ACEs,
+whether Allow or Deny, explicit or inherited. One
+`Directory.SetAccessControl` call replaces only the Access section, without
+clearing it first. Additional grants and inheritance from the parent are
+removed together; owner, group and audit remain unchanged. An already matching
+protected DACL is not written again, preserving access to inherited files on
+repeat runs. Profile files are staged afterwards. For installations already
+affected by F5, see the [manual RUNBOOK repair](RUNBOOK.md#f5-reparatur-nach-entzogenen-dateirechten).
+Different existing files are rejected outside the
 verified 0.1.0 upgrade; `.env` and secrets are preserved. Initial
 installation adds `.env` to a verified B2 profile that does not yet have one.
 
 A random password is never displayed or saved to a password file. Repeated runs
 keep it; `-KennwortNeu` deliberately resets it and reconfigures autologon,
-including after an administrator reset. Master key, admin password and SMTP/Graph
+including after an administrator reset. After invoking Autologon64, setup checks
+the Winlogon values every 500 ms for up to 10 seconds before reporting a missing
+confirmation. Master key, admin password and SMTP/Graph
 secrets live in profile files or volumes, never in Credential Manager or EFS;
 they do not depend on this account's DPAPI secrets. Sysinternals autologon uses
 an LSA secret readable by administrators. Its CLI briefly needs a plaintext
@@ -129,8 +171,24 @@ signature. A mismatch aborts without a fallback. The licensed binary is local
 only and excluded from the public repository. Changed upstream bytes require a
 reviewed pin update.
 
-“JanuaPort Sperren bei Anmeldung” locks at logon. A password-protected screen
-saver locks after 60 seconds. `powercfg` disables AC/battery standby and
+“JanuaPort Sperren bei Anmeldung” starts the fixed
+`C:\JanuaPort\windows\jnpt-sperren.ps1` with hidden PowerShell immediately at
+logon, without a fixed delay. The B-7 ACL protects that path. The script checks
+once per second for `explorer.exe` in its own session, calls `LockWorkStation`, and
+verifies the lock through `WTSQuerySessionInformation` /
+`WTSSessionInfoEx.SessionFlags`. Without confirmation it retries every second.
+Readiness and locking share a 120-second deadline. Failure returns a nonzero
+exit code visible in Task Scheduler; there is no logoff or shutdown fallback.
+Exactly one line per logon in `C:\JanuaPort\windows\log\sperren.log` records the
+ISO start time, ISO confirmed-lock time or `nicht_gesperrt`, attempt count and
+exit code. It contains no usernames or window contents and retains the last
+100 lines. Setup creates the directory under the B-7 ACL. A log failure also
+returns a nonzero exit code.
+After reboot, the `jnpt-dienst` desktop is visible and unlocked for at most about 7 seconds
+until locking is confirmed (measured in checkpoint B4: lock 12.6 seconds after start, about
+6 seconds of which are conhost and PowerShell start-up). Protection during this interval depends on controlling
+access to the operator's room. A password-protected screen saver also locks after
+60 seconds. `powercfg` disables AC/battery standby and
 hibernation. The account's `.wslconfig` sets `[wsl2]` / `memory=4GB`; conflicting
 existing settings require manual reconciliation. The script does not restart
 Docker or WSL; the limit takes effect at the next WSL start.
@@ -139,11 +197,17 @@ Docker Desktop settings are only checked: AutoStart on, TCP 2375 off, automatic
 downloads/updates off. The required keys are `autoStart=true`,
 `exposeDockerAPIOnTCP2375=false`, `autoDownloadUpdates=false`, `disableUpdate=true`
 and `silentModulesUpdate=false`, including component updates ([Docker reference](https://docs.docker.com/enterprise/security/hardened-desktop/settings-management/settings-reference/)).
-Missing, unknown or different values cause failure. On
-first setup this can happen after the account, lock and autologon are installed:
-the operator temporarily resets `jnpt-dienst` to a personally entered password
+Missing, unknown or different values cause failure.
+**Start Docker Desktop once as `jnpt-dienst` before `dienst-einrichten.ps1`,**
+accept its license and set these options. Setup reads that account's
+`%APPDATA%\Docker\settings-store.json`, falling back to `settings.json`.
+If both are absent, it fails with the fixed message:
+“Docker Desktop einmal in jnpt-dienst starten und die Einstellungen pruefen (AutoStart an, 2375 aus, Auto-Update aus)”.
+If the account does not yet exist, an initial preparation run creates the
+account, lock and autologon and stops at this message. The operator then
+temporarily resets `jnpt-dienst` to a personally entered password
 as local administrator, signs in, configures Docker Desktop and accepts its
-license. After initial installation, the operator reruns setup as administrator
+license. Afterwards, the operator reruns setup as administrator
 with `-KennwortNeu` and reboots to restore the random password, matching autologon
 and lock. This is local commissioning before any production data. The operator performs initial commissioning and answers
 the image prompt there. The service provider never works in this session.
@@ -156,10 +220,12 @@ schtasks /run /tn "JanuaPort Anlage starten"
 schtasks /run /tn "JanuaPort Sicherung"
 ```
 
-**`docker-users` is not a security boundary:** members can bind-mount `C:\`
-into containers and are effectively administrators. “Standard user” is an
-organizational choice. Autologon console protection depends on locking at
-logon. [B4](PRUEFSTEIN-B4.md) requires a photo of the lock screen after reboot;
+`docker-users` effectively grants administrator control of the computer.
+Console protection relies on locking and controlled access to the operator's room.
+Members can bind-mount `C:\` into containers. “Standard user” is an
+organizational choice. [B4](PRUEFSTEIN-B4.md) requires a photo and the earliest password prompt
+while pressing a key every 5 seconds from the first image after reboot,
+together with task result and log time; a photo alone does not prove locking.
 acceptance remains open.
 
 [Docker's Windows installation documentation](https://docs.docker.com/desktop/setup/install/windows-install/)
@@ -188,18 +254,32 @@ trigger the task:
 powershell -NoProfile -File C:\JanuaPort\windows\jnpt-backup.ps1 -Target 'E:\JanuaPort-Backup'
 ```
 
-The script runs `docker compose exec -T jnpt /jnpt backup --output
-/data/backups/<name>`, reads container size/SHA-256 and copies exactly this file
-with `docker compose cp`, without a bind mount. It writes `.teil`, renames it,
-and reads back size and `Get-FileHash` before and after renaming. Every error
-returns nonzero and removes its own incomplete destination; no fallback.
-After the destination hash matches, exactly this container copy is removed.
-A removal failure also fails the run and removes its destination file. v1 never
-automatically deletes older backups. Monitor free space and `LastTaskResult`.
+Compose binds the relative profile directory `./backups` to `/backups`. Setup
+creates `C:\JanuaPort\windows\backups` under the B-7 ACL. The only container
+command is `docker compose exec -T jnpt /jnpt backup --output /backups/<name>`.
+The core writes atomically using a temporary file and rename. The distroless
+image has no file utilities; the script reads size and SHA-256 on the host,
+copies exactly that file to `.teil` at the destination, verifies size/hash,
+renames it and verifies again. It then removes the local staging file.
+Every error returns nonzero and removes the run's own destination file.
+A staging removal failure also invalidates the run and removes its destination.
+Staging cleanup only deletes names matching `jnpt-<UTC-time>-<GUID>.jnpt-backup`,
+including leftovers from earlier runs; foreign files remain untouched.
+The exact pattern is `^jnpt-[0-9]{8}T[0-9]{9}Z-[a-f0-9]{32}\.jnpt-backup$`.
+Older external backups are not automatically deleted. Monitor free space and
+`LastTaskResult`.
+
+**B4/F4 still requires deployment evidence:** the nonroot core must be able to
+write and atomically rename on the Docker Desktop bind mount. Run
+`python -B windows/test/backup_live.py` against the real pinned core in its own
+project. A locally blocked live test is not success; BOX must rerun it.
+The backup path has no helper-container fallback.
+Inventory leftovers from earlier broken runs in the volume's `/data/backups`
+separately with LEAD/BOX; this host workflow only cleans `backups\`.
 
 **Keep the master key separately from backups.** The script never copies the
 key file or all of `/data`. Without `JNPT_MASTER_KEY_FILE`, the key is beside
-the database in `/data`. Restoring on a separate test machine with a separately
+the database at `/data/jnpt.key`. Restoring on a separate test machine with a separately
 provided key is required in [B4](PRUEFSTEIN-B4.md).
 
 Optional SMB requires a dedicated backup account and share with write access
@@ -208,6 +288,53 @@ them after an administrator password reset. These scripts create no `cmdkey`
 entries. A destination writable by the ZBOX does not protect against an attacker
 on that ZBOX. A rotating, unplugged USB drive does. The operator chooses;
 TeamViewer and the maintenance account do not receive these credentials.
+
+
+### Restore into a fresh installation (N4)
+
+Prepare the verified profile including `.env` and secret files. Supply the
+separately stored key before the first `docker compose up`. `einrichten.ps1`
+already starts the installation; if it has run, use `down` and move its generated
+database and key aside as below. Keep the gateway stopped until restore finishes.
+The target database must be empty: restore does not overwrite a database.
+Use the same master key as the backup.
+
+Compose sets neither `JNPT_DB_PATH` nor `JNPT_MASTER_KEY_FILE`. The image defaults
+to `/data/jnpt.db` and its adjacent key `/data/jnpt.key`. Project name
+`jnpt-windows` gives volume `jnpt-windows_jnpt-data`. For a deliberately different
+configuration, place the key where `JNPT_MASTER_KEY_FILE` expects it before the
+first start. The commands below apply to the shipped profile and use a pinned
+one-time helper. They also assign a fresh volume to UID/GID 65532. Key mode is
+600; BOX must confirm nonroot core readability and permissions in B4.
+
+Adjust the USB key directory, backup directory and backup filename. The
+separately stored file in the key directory must be called `jnpt.key`.
+Existing database files and any key generated on first start are moved aside,
+not deleted. Run the move-aside step even for a fresh installation:
+
+<!-- N4 -->
+```powershell
+Set-Location C:\JanuaPort\windows
+$HelperImage = 'busybox@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec'
+docker compose down
+docker run --rm -v jnpt-windows_jnpt-data:/data $HelperImage sh -ec 'd=/data/beiseite-$(date -u +%Y%m%dT%H%M%SZ) && mkdir $d && for f in jnpt.db jnpt.db-wal jnpt.db-shm jnpt.key; do [ ! -e /data/$f ] || mv /data/$f $d/; done'
+$KeyDirectory = 'E:\JanuaPort-Key'
+docker run --rm -v jnpt-windows_jnpt-data:/data -v "${KeyDirectory}:/in:ro" $HelperImage sh -ec 'cp /in/jnpt.key /data/jnpt.key && chown 65532:65532 /data /data/jnpt.key && chmod 600 /data/jnpt.key'
+$BackupDirectory = 'E:\JanuaPort-Backup'
+$BackupFile = 'sicherung.jnpt-backup'
+docker compose run --rm --no-deps -v "${BackupDirectory}:/in:ro" jnpt restore "/in/$BackupFile"
+docker compose up -d
+curl.exe --fail http://127.0.0.1:8484/healthz
+```
+
+Then verify an admin login: health must return 200 and the expected data must
+be available.
+Delete `/data/beiseite-<zeitstempel>` only after verifying the restore (healthz, login, read access).
+Applying the block to an existing installation otherwise loses its previous state.
+Unplug the USB drive afterwards. If a key copy was placed on the
+computer, remove that copy after verification; retain the separately stored
+original. See the deployed core version's `docs/disaster-recovery.md` for further
+verification.
 
 ## Mail
 
@@ -343,13 +470,9 @@ completed job separately from pairing.
   to `127.0.0.1` only; Caddy's admin API is disabled. Enable the commented exact
   `/mcp` block only when a LAN AI client needs it and after reviewing permissions
   and route tests again.
-- **W9:** Example in an administrative PowerShell:
-
-  ```powershell
-  New-NetFirewallRule -DisplayName 'JanuaPort HTTPS LAN' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 443 -RemoteAddress LocalSubnet -Profile Private
-  ```
-
-  Use a private network and keep the default inbound firewall policy at Block.
+- **W9:** Manually follow [LAN access during setup](#lan-access-during-setup-n5):
+  Private or Domain profile, rule “JanuaPort 443 LAN”, TCP 443 from
+  `LocalSubnet` only. Keep the default inbound firewall policy at Block.
   Restrict broader Docker/WSL allow rules; adding a narrow rule does not revoke
   broad rules. Test 443 from the local subnet and rejection from outside it;
   verify that 8484 cannot be reached from the LAN. Do not forward 443 at the
@@ -386,7 +509,8 @@ prove package delivery or job completion.
 
 Repository checks: `python -B -m unittest discover -s windows/test -v`
 (Python standard library and Docker). See [test/README.md](test/README.md) for
-live checks and mutations. SHA256SUMS covers Compose, Caddyfile, all three scripts,
+live checks and mutations. SHA256SUMS covers Compose, Caddyfile, all four scripts
+(`einrichten.ps1`, `dienst-einrichten.ps1`, `jnpt-sperren.ps1`, `jnpt-backup.ps1`),
 `.gitignore`, both READMEs, the runbook, B4 checklist and the external autologon pin. `.gitattributes` preserves the LF bytes covered by
 SHA256SUMS in both Windows checkouts and raw downloads.
 

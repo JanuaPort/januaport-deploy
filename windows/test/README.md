@@ -1,4 +1,4 @@
-# Prüfungen für das Windows-Profil (Paket A und B1–B3)
+# Prüfungen für das Windows-Profil (Paket A und B1–B4)
 
 Vom Repo-Root unter Windows: Python-Standardbibliothek, Windows PowerShell 5.1
 und Docker Desktop (Linux/amd64). Kein Python-Paket und kein PowerShell-Modul
@@ -10,6 +10,9 @@ python -B -m unittest discover -s windows/test -v
 python -B windows/test/live.py
 python -B windows/test/mutations.py
 python -B windows/test/dienst_mutations.py
+python -B windows/test/b4_mutations.py
+python -B windows/test/f4_mutations.py
+python -B windows/test/sec_r4_mutations.py
 ```
 
 B2/B3 nur in einer **nicht erhöhten** Testsitzung ausführen. Für die neuen
@@ -24,16 +27,32 @@ JSON-Dateiadapter prüfen AutoStart, TCP 2375, `autoDownloadUpdates`,
 `disableUpdate` und `silentModulesUpdate` ohne Schreibzugriff.
 
 `test_backup.py` startet den echten PS-5.1-Einstieg `Start-JnptBackup` mit einem
-Docker-Shim auf `PATH`. Der Shim implementiert `exec`, `stat`, `sha256sum`, `cp`
-und `rm`. Backup-Dateien, `.teil`, Umbenennen und Hash-Rücklesen sind echte
+Docker-Shim auf `PATH`. Der Shim implementiert ausschließlich
+`exec -T jnpt /jnpt backup --output /backups/<name>`; alle anderen Programme
+werden wie beim distroless-Image abgewiesen. Backup-Dateien, Host-Kopie,
+`.teil`, Umbenennen und Hash-Rücklesen sind echte
 Dateioperationen im temporären Ordner. Fehlender Marker, falsches Konto,
 relatives Ziel mit vorhandenem Marker, unvollständiges Profil, jeder native
-Docker-Fehler, ungültige Metadaten, Größen-/Hashfehler, Fehler nach Umbenennung
-und Container-Aufräumfehler müssen Exit ungleich 0 und keine neue Zieldatei
+Docker-Fehler, leere/fehlende Staging-Datei, Größen-/Hashfehler, Fehler nach Umbenennung
+und Host-Aufräumfehler müssen Exit ungleich 0 und keine neue Zieldatei
 liefern. Alte Sicherungen bleiben erhalten. Bei Erfolg gibt es genau eine
-Sicherungsdatei und keine Key-Datei; die Container-Kopie ist entfernt.
+Sicherungsdatei und keine Key-Datei; die Staging-Kopie ist entfernt.
+Liegengebliebene Dateien nach dem exakten Namensmuster werden entfernt; fremde
+Dateien und Pfade außerhalb von `backups\` bleiben erhalten. Der native
+Docker-Adapter weist `stat`, `sha256sum`, `rm` und `sh` vor dem Aufruf ab.
+Beide Installer müssen `backups\` anlegen. Compose wird mit dem echten Adapter
+auf den relativen Bind-Mount und den Git-Ausschluss geprüft.
 
-Nur die neuen Prüfungen ohne laufenden Docker-Daemon:
+Der zusätzliche Live-Test ist bewusst außerhalb der Standardsuite:
+`python -B windows/test/backup_live.py`. Er startet nur den echten gepinnten
+Kern aus der Compose-Konfiguration in einem eigenen zufälligen Projekt ohne
+Netzzugang oder veröffentlichte Ports und führt das echte Backup-Skript aus
+(nur Kontoidentität ersetzt). Host-Quellhash und Zielhash stimmen überein,
+genau eine Sicherung und keine Key-Datei liegen am Ziel, Staging ist leer.
+Seccomp errno 524 wird als blockierter Live-Test markiert, den BOX in B4
+ausführen muss; andere Fehler bleiben Fehler. Kern-Logs werden nicht ausgegeben.
+
+Die Windows-Adapterprüfungen (F4 enthält auch `docker compose config`):
 
 ```powershell
 $env:PYTHONPATH = 'windows/test'
@@ -45,8 +64,10 @@ python -B windows/test/dienst_mutations.py
 Assertion-Fehler. Unter anderem werden Hash-Pin bei gültiger Signatur,
 Microsoft-Herausgeber, Admin-/Kontosperren, bestehende Dateien, Docker-Einstellungen,
 Kennwort-Ausgabesperre, cmdkey-Verbot, ACLs und Sperrbildschirmrichtlinien entfernt.
-Die B-4-Mutation kopiert zusätzlich ganz `/data`: der Shim legt dabei tatsächlich
-eine synthetische Key-Datei am Ziel ab, die Erfolgsprüfung muss rot werden.
+Die B-4-Mutation kopiert zusätzlich eine synthetische Key-Datei aus dem
+Staging ins Ziel: die Erfolgsprüfung muss rot werden. F4-Mutationen erlauben
+`stat` im nativen Container-Adapter, entfernen den Löschwächter, versuchen
+fremde Dateien zu löschen oder lassen alte/neue Sicherungsdateien im Staging.
 Weitere Mutationen entfernen Exit ungleich 0, Marker-, Größen- und Hashprüfung,
 Rücklesen nach Umbenennung und beide Aufräumwege. Originale werden bytegenau
 verglichen. Mutationen und Standardsuite nacheinander ausführen; die
@@ -71,16 +92,104 @@ Ersetzung keine vorhandene Datei ändern. Geänderte/unvollständige Altprofile
 werden vor dem Download abgewiesen. Die lokale Bereitstellung über B2 wird
 ebenfalls geprüft. Ein Test hält `$ProfileRef` auf `windows-v0.2.0` fest.
 
-B-7 prüft den exakten `icacls`-Aufruf am festen Elternordner mit
-`/inheritance:r` und ausschließlich den SIDs von `jnpt-dienst`, Administratoren
-und SYSTEM. Im Fake wird an `C:\JanuaPort` nichts angelegt. Zusätzlich erhält
-ein echter temporärer Eltern-/Kindordner absichtlich breite Rechte für
-Authentifizierte Benutzer; der echte `icacls`-Adapter muss diese entfernen.
-Aufrufreihenfolge und native Fehler werden geprüft. Die Mutation ohne
-`/inheritance:r` muss sowohl die Argumentprüfung als auch den echten ACL-Test
-rot machen; weitere Mutationen entfernen die Elternordnersperre, das Entfernen
-alter expliziter Rechte, die Upgrade-Summenprüfung oder den Erhalt von `.env`
-und Secrets. Diese Proben sind in `dienst_mutations.py` enthalten.
+B-7/F5 prueft die vollstaendige geschuetzte DirectorySecurity mit genau drei
+expliziten FullControl-Regeln (ContainerInherit, ObjectInherit, Propagation None,
+Allow) fuer Dienst-SID, Administratoren und SYSTEM. Der Fake ersetzt nur die
+nativen Directory-Lese-/Schreibgrenzen; die echten Security-Descriptor-Klassen
+und der produktive Kontrollfluss bleiben erhalten. Der erste Lauf schreibt
+einmal, der identische zweite Lauf gar nicht. Fast passende DACLs mit vierter
+Regel, fehlendem Schutz, anderen Rechten, Vererbungs-/Propagationsflags oder
+Deny werden ersetzt. Native Schreibfehler muessen abbrechen.
+R4 prueft jede Abweichung einzeln: zusaetzliches Users-Read-ACE,
+fehlendes OI bzw. CI, fehlende SID, geringere Rechte, InheritOnly,
+NoPropagate, fehlender Schutz, Deny sowie zusaetzliche geerbte ACEs.
+Auch die binaere DACL wird geprueft: GetAccessRules kann opaque ACEs
+auslassen oder Callback-ACEs als Allow darstellen. Beide Faelle muessen
+neu geschrieben werden; gueltig sind nur genau drei gewoehnliche Allow-ACEs.
+
+`test_acl_f5.py` enthaelt einen AST-Waechter gegen zwei Schreibschritte oder
+alte Clear-/icacls-Adapter. Auf echtem NTFS unter dem Testordner werden nach
+der ersten Absicherung erbende `.env`-, Secret- und Logdateien angelegt und
+anschliessend manuell ein erbendes Users-Read-ACE hinzugefuegt und dann
+Eltern-/Profilordner erneut geschuetzt: Das Users-ACE verschwindet,
+Inhalt bleibt lesbar, Besitzer
+und SDDL bleiben gleich, alle Dateien tragen die drei geerbten ACEs. Breite
+geerbte und explizite Fremdrechte werden in den bestehenden Temp-ACL-Tests
+weiterhin am echten Adapter entfernt. Der Fall eines anderen Dateibesitzers
+bleibt BOX vorbehalten; der Test aendert keinen Kontobesitz.
+
+```powershell
+$env:PYTHONPATH = 'windows/test'
+python -B -m unittest test_acl_f5 test_upgrade.ParentAcl -v
+python -B windows/test/f5_mutations.py
+```
+
+Die sechs F5-Mutationen entfernen den Schutz, ergaenzen eine vierte Regel,
+schreiben erst eine leere DACL und dann die Ziel-DACL, entfernen Idempotenz,
+erhalten alte explizite Freigaben oder ignorieren einen Schreibfehler. Sie
+sind auch in `dienst_mutations.py` integriert. Die manuelle Reparatur im
+RUNBOOK wird nur als Anleitung geprueft; takeown und icacls /reset werden
+im Test nicht ausgefuehrt.
+
+`sec_r4_mutations.py` ersetzt "genau drei" durch "enthaelt die drei": Der
+Users-Read-Negativfall muss rot werden. Eine zweite Mutation akzeptiert ein
+Callback-ACE als gewoehnliches Allow. Drei weitere entfernen aus den echten
+N5-1-Dokumentationsrezepten den Docker-Anwendungsfilter, Any-Port oder
+Portbereiche. Alle fuenf muessen an Assertions scheitern; die Originalbytes
+bleiben erhalten.
+
+`test_b4.py` prüft den sofortigen Anmeldeauslöser ohne festen Delay und den
+festen Aufruf von `C:\JanuaPort\windows\jnpt-sperren.ps1`. Der echte PS-5.1-
+Einstieg läuft mit verwaltetem Ersatz für user32/WTS und virtuellem Sekundentakt.
+Nur Explorer derselben Sitzung zählt; Bereitschaft und Sperre teilen sich ein
+120-Sekunden-Limit. Erste/dritte bestätigte Sperre, nie gesperrte Sitzung und
+später Explorer werden geprüft. Das echte Dateiadapter-Protokoll enthält genau
+eine Zeile (ISO-Start, ISO-Sperre oder `nicht_gesperrt`, Versuche, Exit), ohne
+Benutzernamen; maximal 100 Zeilen. Ein Schreibfehler ergibt Exit ungleich 0.
+Die Einrichtung muss den B-7-geschützten Logordner vor der Aufgabe anlegen.
+Der C#-WTS-Decoder läuft mit ausschließlich ersetzten P/Invoke-Deklarationen:
+aktuelle Sitzung, Klasse 26, LOCK/UNLOCK/UNKNOWN, kurze/falsche/fehlgeschlagene
+Antwort und Speicherfreigabe. Keine echte native Sperre oder WTS-Abfrage.
+Autologon nutzt einen lokalen `.cmd`-Ersatz und virtuellen Takt (Bestätigung
+nach 2 Sekunden oder Fehler nach 10 Sekunden). Beide JSON-Dateivarianten und
+die feste Meldung bei fehlenden Docker-Einstellungen verwenden echte Dateien.
+
+```powershell
+$env:PYTHONPATH = 'windows/test'
+python -B -m unittest test_b4 -v
+python -B windows/test/b4_mutations.py
+```
+
+Die 15 SEC-Mutationen führen Delay, zu langsamen Takt, ersten Abbruch,
+fehlende/personenbezogene/unbegrenzte Protokollierung, fehlende Sperrprüfung,
+fremde Sitzung, falschen Erfolgs-Exit und unerlaubte Fehlerausgabe ein.
+Außerdem werden Autologon-Nachfragen und die feste N2-Meldung entfernt.
+Abmelden/Herunterfahren werden an protokollierenden Fehlerfallen tatsächlich
+versucht. Jede isolierte Kopie muss an einer Assertion scheitern; die
+Originalbytes bleiben erhalten.
+
+`test_operator_docs.py` führt die gepinnten N4-Hilfscontainer-Befehle aus den
+READMEs gegen ein eigenes zufälliges Test-Volume und synthetische Key-Dateien
+aus: bisherige DB/Key-Dateien bleiben beiseitegelegt erhalten, der neue Key
+ist als UID 65532 mit Modus 600 lesbar. `operator_mutations.py` muss Löschen
+statt Verschieben sowie falschen Eigentümer und Modus am echten Adapter erkennen.
+N5 führt die drei Dokumentationsrezepte in PS 5.1 mit einem aufzeichnenden
+Firewall-Adapter aus: Netzprofil zuerst, TCP 443 eingehend, `LocalSubnet`,
+Profile `Private,Domain`. Die echte Firewall wird nicht verändert. Der echte
+Installer läuft mit Fehlerfallen an allen Firewall-/Netzprofil-Schreibadaptern.
+Weitere Mutationen ersetzen `LocalSubnet` durch `Any`, erlauben öffentliche
+Profile, entfernen die Profilprüfung oder bauen eine automatische Regel ein.
+`test_sec_r4_docs.py` fuehrt die N5-1-Abnahmezeilen aus RUNBOOK und B4 mit
+PS-5.1-Firewall-Fakes aus: Docker-Regeln auch auf anderen Ports sowie
+443 als Einzelport, Liste, Bereich oder Any muessen sichtbar werden;
+unbeteiligte Regeln bleiben herausgefiltert. Kein echter Firewall-Zugriff.
+Die SEC-Texte zu Ruecksicherung, unbeantwortetem Docker-Dialog und
+Konsolenschutz werden in allen geforderten Dokumenten geprueft.
+Beide READMEs nennen das in B4 gemessene Restfenster (hoechstens rund 7 s sichtbar, Sperre 12,6 s nach Start); ein Platzhalter ist nicht mehr erlaubt. Die Firewall-Pruefzeile (N5-1/N8) zeigt nur Docker-Regeln und TCP-443-Regeln mit Programm Any ohne App-Paket.
+
+```powershell
+python -B windows/test/operator_mutations.py
+```
 
 Die manuelle B4-Abnahme steht in [PRUEFSTEIN-B4.md](../PRUEFSTEIN-B4.md):
 DPAPI-unabhängige Wiederherstellung nach Kennwortreset, Sperrbildschirmfoto nach

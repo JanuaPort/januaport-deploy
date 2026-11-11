@@ -34,7 +34,7 @@ MAIL_VALUES = {
 }
 PROFILE_FILES = ('docker-compose.yml', 'Caddyfile', 'einrichten.ps1', '.gitignore',
                  'README.md', 'README.en.md', 'RUNBOOK.md', 'dienst-einrichten.ps1',
-                 'jnpt-backup.ps1', 'PRUEFSTEIN-B4.md')
+                 'jnpt-backup.ps1', 'jnpt-sperren.ps1', 'PRUEFSTEIN-B4.md')
 AUTOLOGON_SHA256 = '5d96bbc4e5b726d87c7cf547f5fe98f8f05434ec2130bd60cbf5671fd3a7381b'
 
 

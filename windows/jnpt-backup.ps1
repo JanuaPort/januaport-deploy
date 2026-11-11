@@ -7,16 +7,40 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$BackupNamePattern = '^jnpt-[0-9]{8}T[0-9]{9}Z-[a-f0-9]{32}\.jnpt-backup$'
 
 function Get-CurrentAccount { [Security.Principal.WindowsIdentity]::GetCurrent().Name }
 
 function Invoke-BackupDocker {
     param([string[]]$Arguments)
-    # Docker/kernel output can contain secrets. Only the checked metadata is
-    # returned to our caller; native stderr is deliberately suppressed.
+    # The distroless core has no shell or file utilities. Guard the actual
+    # native adapter as well as its callers; no compose cp or second image.
+    if ($Arguments.Count -lt 4 -or $Arguments[0] -cne 'exec' -or
+        $Arguments[1] -cne '-T' -or $Arguments[2] -cne 'jnpt' -or $Arguments[3] -cne '/jnpt') {
+        throw 'Im Kern-Container ist nur /jnpt erlaubt.'
+    }
+    # Core output may contain secrets; it is never printed by the entry point.
     $output = & docker compose @Arguments 2>$null
     if ($LASTEXITCODE -ne 0) { throw 'Docker-Sicherung fehlgeschlagen.' }
     return $output
+}
+
+function Remove-StagedBackup {
+    param([string]$Path)
+    $resolved = [IO.Path]::GetFullPath($Path)
+    $staging = [IO.Path]::GetFullPath((Join-Path $ProfileDirectory 'backups')).TrimEnd('\')
+    if ([IO.Path]::GetDirectoryName($resolved) -ine $staging -or
+        [IO.Path]::GetFileName($resolved) -cnotmatch $BackupNamePattern) {
+        throw 'Nur benannte Sicherungsdateien im Staging loeschen.'
+    }
+    if (Test-Path -LiteralPath $resolved -PathType Leaf) { Remove-Item -LiteralPath $resolved -Force }
+}
+
+function Clear-StagedBackups {
+    $staging = Join-Path $ProfileDirectory 'backups'
+    foreach ($file in @(Get-ChildItem -LiteralPath $staging -File)) {
+        if ($file.Name -cmatch $BackupNamePattern) { Remove-StagedBackup $file.FullName }
+    }
 }
 
 function Assert-BackupCopy {
@@ -43,7 +67,13 @@ function Invoke-JnptBackup {
         }
     }
     $name = 'jnpt-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '-' + [Guid]::NewGuid().ToString('N') + '.jnpt-backup'
-    $remote = '/data/backups/' + $name
+    $staging = Join-Path $ProfileDirectory 'backups'
+    if (-not (Test-Path -LiteralPath $staging -PathType Container)) { throw 'Sicherungs-Staging fehlt.' }
+    # Recover only generated leftovers from previous failed runs, never foreign
+    # files or older backups on the external destination.
+    Clear-StagedBackups
+    $source = Join-Path $staging $name
+    $remote = '/backups/' + $name
     $final = Join-Path $Target $name
     $partial = $final + '.teil'
     $ownsPartial = $false
@@ -52,35 +82,27 @@ function Invoke-JnptBackup {
     Push-Location -LiteralPath $ProfileDirectory
     try {
         Invoke-BackupDocker @('exec', '-T', 'jnpt', '/jnpt', 'backup', '--output', $remote) | Out-Null
-        $sizeText = (Invoke-BackupDocker @('exec', '-T', 'jnpt', 'stat', '-c', '%s', $remote)) -join ''
-        [long]$size = 0
-        if ($sizeText -cnotmatch '^[1-9][0-9]*$' -or -not [long]::TryParse($sizeText, [ref]$size)) {
-            throw 'Ungueltige Sicherungsgroesse im Container.'
-        }
-        $hashText = (Invoke-BackupDocker @('exec', '-T', 'jnpt', 'sha256sum', $remote)) -join ''
-        if ($hashText -cnotmatch ('^([a-f0-9]{64})  ' + [regex]::Escape($remote) + '$')) {
-            throw 'Ungueltiger SHA-256 im Container.'
-        }
-        $digest = $Matches[1]
-        # Reserve only our own unique partial file. No directory/broad /data copy:
-        # the master key remains separate, including when stored next to the DB.
+        [long]$size = (Get-Item -LiteralPath $source).Length
+        if ($size -le 0) { throw 'Leere Sicherungsdatei im Staging.' }
+        $digest = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant()
+        # Copy exactly this backup; the master key remains in /data.
         $stream = [IO.File]::Open($partial, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
         $ownsPartial = $true
         $stream.Dispose()
-        Invoke-BackupDocker @('cp', ('jnpt:' + $remote), $partial) | Out-Null
+        Copy-Item -LiteralPath $source -Destination $partial -Force
         Assert-BackupCopy $partial $size $digest
         Move-Item -LiteralPath $partial -Destination $final
         $ownsFinal = $true
         Assert-BackupCopy $final $size $digest
-        # After reading back the destination hash, remove exactly this container
-        # copy. No retention/deletion of older backups in v1.
-        Invoke-BackupDocker @('exec', '-T', 'jnpt', 'rm', '--', $remote) | Out-Null
+        Remove-StagedBackup $source
         $success = $true
         Write-Host ('Sicherung geprueft: ' + $final)
     } finally {
-        Pop-Location
-        if ($ownsPartial -and (Test-Path -LiteralPath $partial)) { Remove-Item -LiteralPath $partial -Force }
-        if (-not $success -and $ownsFinal -and (Test-Path -LiteralPath $final)) { Remove-Item -LiteralPath $final -Force }
+        try { Remove-StagedBackup $source } finally {
+            Pop-Location
+            if ($ownsPartial -and (Test-Path -LiteralPath $partial)) { Remove-Item -LiteralPath $partial -Force }
+            if (-not $success -and $ownsFinal -and (Test-Path -LiteralPath $final)) { Remove-Item -LiteralPath $final -Force }
+        }
     }
 }
 

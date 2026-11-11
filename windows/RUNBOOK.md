@@ -85,8 +85,17 @@ eine neue Sitzung nötig ist.
 
 ### 3.3 Nach einem Neustart
 1. Die Fernsitzung bricht ab. Der Dienstleister ruft beim Kunden an.
-2. `jnpt-dienst` meldet sich lokal automatisch an und wird durch die Aufgabe gesperrt.
-   Der Betreiber prüft den Sperrbildschirm (Foto im B4-Abnahmeprotokoll).
+2. `jnpt-dienst` meldet sich lokal automatisch an. „JanuaPort Sperren bei Anmeldung“
+   startet sofort das B-7-geschützte `C:\JanuaPort\windows\jnpt-sperren.ps1`.
+   Es prüft Explorer derselben Sitzung und den WTS-Sperrstatus im Sekundentakt;
+   für beides zusammen gelten 120 Sekunden. Fehler sind als `LastTaskResult`
+   ungleich 0 sichtbar; kein Ersatz durch Abmelden oder Herunterfahren.
+   `log\sperren.log` enthält eine Zeile je Anmeldung (Startzeit, Sperrzeit oder
+   `nicht_gesperrt`, Versuche, Exit-Code), höchstens 100 Zeilen, ohne Benutzernamen.
+   Der Betreiber drückt ab dem ersten Bild alle 5 Sekunden eine Taste und
+   notiert die früheste Kennwortabfrage. Aufgabenresultat 0 und Protokollzeit
+   kommen zusammen mit dem Foto in den Gate-Bericht. Bis der Desktop steht,
+   schützt nur der kontrollierte Zutritt zum Raum die noch ungesperrte Sitzung.
 3. Die Person beim Kunden startet/akzeptiert eine neue TeamViewer-Sitzung nach dem vereinbarten
    Verfahren. Der Dienstleister verwendet ausschließlich das Wartungskonto und arbeitet nie als
    `jnpt-dienst`. Das Wartungskonto stößt nur Aufgaben mit `schtasks /run` an.
@@ -94,22 +103,47 @@ eine neue Sitzung nötig ist.
    Engine und Volumes nicht aus dem Wartungskonto beurteilen. Maßgeblich ist der Aufgabenstatus.
 
 ### 3.4 Anlage einrichten
-Zuerst die administrative [B2-Einrichtung](README.md#dienstbetrieb-b2) durchführen.
+Vor `dienst-einrichten.ps1` Docker Desktop einmal als `jnpt-dienst` starten,
+Lizenz annehmen und AutoStart an, TCP 2375 aus sowie automatische Updates aus
+setzen. Fehlt das Konto noch, legt ein erster B2-Vorbereitungslauf es an und
+endet mit „Docker Desktop einmal in jnpt-dienst starten und die Einstellungen pruefen (AutoStart an, 2375 aus, Auto-Update aus)“.
+Der Betreiber setzt dann lokal vorübergehend ein Kennwort, meldet sich als
+`jnpt-dienst` an und startet Docker Desktop. Danach die administrative
+[B2-Einrichtung](README.md#dienstbetrieb-b2) mit `-KennwortNeu` erneut ausführen;
+Autologon wird alle 500 ms bis höchstens 10 Sekunden nachgeprüft. Neustarten.
 B-7: `icacls C:\JanuaPort` und `icacls C:\JanuaPort\windows` zeigen ausschließlich
 `jnpt-dienst`, Administratoren und SYSTEM. Vererbung vom Laufwerksstamm ist aus.
+F5: Die Einrichtung ersetzt die vollständige DACL in einem einzigen
+Access-Schreibaufruf. R4: Nur eine geschützte DACL mit genau drei expliziten
+Allow-ACEs für die genannten SIDs, jeweils FullControl, ContainerInherit und
+ObjectInherit, ohne InheritOnly oder NoPropagate und ohne weitere explizite
+oder geerbte Allow-/Deny-ACEs bleibt ohne Schreibzugriff erhalten. Jede
+Abweichung wird ersetzt. Besitzer und andere Sicherheitsabschnitte bleiben unverändert.
 Bei einem Altprofil den [Upgrade-Weg 0.1.0 → 0.2.0](README.md#von-010-auf-020) und
 die zusätzliche Abnahme in B4 verwenden. Die
 Erstkonfiguration von Docker Desktop und die Schritte in [„Zwei Befehle“](README.md#zwei-befehle)
 führt der Betreiber in `jnpt-dienst` aus. Danach startet das Wartungskonto nur Aufgaben.
 Am Ende gibt `einrichten.ps1` den
 Zertifikats-Fingerprint aus. Ihn abschreiben und beim Dienstleister ablegen, nicht beim Kunden aushängen.
+Beim Kontowechsel verbleibt `tls-leaf` in der alten Engine. Nach B4-Schritt 2a
+alle Desktop-Läufer mit neuem Code und dem neuen Fingerprint erneut koppeln.
 
 Mail anschließend durch den Betreiber in `jnpt-dienst` gemäß [README, Abschnitt „Mail“](README.md#mail)
 einrichten. USB-Ziel und Marker vorbereiten, Aufgabe „JanuaPort Sicherung“ prüfen.
+Die Einrichtung legt `backups\` im B-7-geschützten Profilordner an. Der Kern
+schreibt dort über den relativen Bind-Mount `/backups`; Größe, Hash, Zielkopie
+und Aufräumen erfolgen auf dem Host. Schreibrecht und atomisches Rename durch
+den nonroot-Kern sowie alle USB-Fehlerfälle in B4/F4 erneut belegen.
 Master-Key getrennt von Sicherungen verwahren. Ein vom Rechner beschreibbares Ziel schützt nicht
 gegen einen Angreifer auf dem Rechner; wechselndes, abgezogenes USB dagegen schon. Die Wahl
 trifft der Betreiber. Wiederherstellung nach Kennwortreset und getrennte Rücksicherung gemäß
 [Prüfstein B4](PRUEFSTEIN-B4.md) belegen.
+Für eine frische Installation den getrennten Key vor dem ersten Start einlegen;
+nach Erststart DB und erzeugten Key bei gestoppter Anlage beiseitelegen.
+Die festen Befehle stehen unter [Rücksicherung (N4)](README.md#rücksicherung-in-eine-frische-installation-n4).
+Nach der Rücksicherung healthz, Admin-Anmeldung und Lesezugriff prüfen.
+Den Ordner `/data/beiseite-<zeitstempel>` erst löschen, wenn die Rücksicherung geprüft ist (healthz, Anmeldung, Lesezugriff).
+Wer den Block auf eine nicht frische Anlage anwendet, verliert sonst den alten Stand.
 
 **Das Admin-Passwort setzt der Kunde selbst am Rechner, nicht der Dienstleister.** Wer das Admin-Passwort
 kennt, verwaltet die Anlage. Der Dienstleister beendet dafür die Fernsitzung. Der Kunde setzt das Passwort in
@@ -118,7 +152,89 @@ Sitzung. Hat doch der Dienstleister das Passwort gesetzt, setzt der Kunde es neu
 
 Den Master-Schlüssel der Anlage auf Papier sichern. Das Papier bleibt beim Kunden, an einem verschlossenen Ort.
 
-### 3.5 Desktop-Läufer auf dem Rechner selbst
+#### F5-Reparatur nach entzogenen Dateirechten
+
+Falls `978b7eb` oder `6bb0d8f` bereits gelaufen ist und Dateien wegen leerer
+DACL unlesbar sind, im geprüften **F5-Releaseordner** als Administrator
+`takeown`, dann `icacls /reset` und unmittelbar die neue Diensteinrichtung
+ausführen; das Sicherungsziel anpassen. Die Reparatur ist ein manueller
+Wartungsschritt. Auf deutschem Windows ist `/d j` richtig (lokal mit
+`takeown /?` bestätigt), auf englischem Windows stattdessen `/d y` verwenden.
+Danach ist der angemeldete Administrator Besitzer; das ist in Ordnung.
+Die abschließende Diensteinrichtung setzt die B-7-DACL wieder auf genau die
+drei Prinzipale. Anschließend Lesbarkeit von `.env`, `secrets\` und
+`log\sperren.log`, Anlagenstart und Sicherung erneut prüfen.
+
+<!-- F5 -->
+```powershell
+takeown /f C:\JanuaPort /r /d j
+icacls C:\JanuaPort /reset /t
+.\dienst-einrichten.ps1 -BackupTarget 'E:\JanuaPort-Backup'
+```
+
+### 3.5 LAN-Freigabe vor dem Koppeln (N5)
+
+In B4 fand sich keine Allow-Regel für Docker. Docker Desktop hatte nur zwei
+Block-Regeln für das Profil „Öffentlich“ angelegt, weil der Firewall-Dialog
+unbeantwortet blieb. Was bei „Zulassen“ entsteht, ist nicht gemessen.
+Den Firewall-Dialog von Docker Desktop nicht mit ‚Zulassen‘ für öffentliche Netze beantworten.
+Der Betreiber bzw. seine IT prüft in einer administrativen PowerShell das
+Netzprofil: **Privat** oder **Domäne**. Ein öffentliches Netz erst nach Prüfung
+als vertrauenswürdiges privates Netz einordnen. Dann TCP 443 ausschließlich
+für das lokale Subnetz freigeben:
+
+<!-- N5 -->
+```powershell
+Get-NetConnectionProfile
+New-NetFirewallRule -DisplayName 'JanuaPort 443 LAN' -Direction Inbound -Protocol TCP -LocalPort 443 -RemoteAddress LocalSubnet -Action Allow -Profile Private,Domain
+```
+
+Kein `Any` bei Gegenstellen. Die Regel gilt nur für `Private,Domain`.
+`einrichten.ps1` ändert weder Firewall noch Netzprofil; dieser Schritt bleibt
+beim Menschen. HTTPS anschließend von einem Arbeitsplatz im lokalen Subnetz
+prüfen. Port 8484 bleibt am Server auf Loopback beschränkt.
+
+#### N5-1: Firewall bei jeder echten Abnahme prüfen
+
+In einer administrativen PowerShell alle aktiven eingehenden Allow-Regeln
+mit Docker-Anwendungsfilter sowie alle Portfilter auflisten, die 443 öffnen
+(auch `Any`, Portlisten und Bereiche). Die folgende Prüfung liest nur:
+
+<!-- N5-1 -->
+```powershell
+$inboundAllow = @(Get-NetFirewallRule -Enabled True -Direction Inbound -Action Allow)
+foreach ($rule in $inboundAllow) {
+    $applications = @($rule | Get-NetFirewallApplicationFilter)
+    $isDocker = @($applications | Where-Object { $_.Program -match 'docker' }).Count -gt 0
+    foreach ($port in @($rule | Get-NetFirewallPortFilter)) {
+        $opens443 = @($port.LocalPort -split ',' | Where-Object {
+            $_ -eq 'Any' -or $_ -eq '443' -or
+            ($_ -match '^([0-9]+)-([0-9]+)$' -and [int]$Matches[1] -le 443 -and [int]$Matches[2] -ge 443)
+        }).Count -gt 0
+        # N8: Nur Regeln, die den Docker-Listener auf TCP 443 öffnen könnten (Programm Any, kein App-Paket).
+        $tcp = $port.Protocol -in @('TCP', 'Any')
+        $anyProgram = @($applications | Where-Object { $_.Program -eq 'Any' }).Count -gt 0
+        $package = @($applications | Where-Object { $_.Package }).Count -gt 0
+        if ($isDocker -or ($opens443 -and $tcp -and $anyProgram -and -not $package)) {
+            [pscustomobject]@{
+                Name = $rule.Name; DisplayName = $rule.DisplayName; Profile = $rule.Profile
+                Program = ($applications.Program -join ',')
+                Protocol = $port.Protocol; LocalPort = ($port.LocalPort -join ',')
+                RemoteAddress = (@($rule | Get-NetFirewallAddressFilter).RemoteAddress -join ',')
+            }
+        }
+    }
+}
+```
+
+Ergebnis im Abnahmeprotokoll festhalten. Außer „JanuaPort 443 LAN“ darf keine
+Allow-Regel 443 öffnen. Gibt es eine weitere, wird sie deaktiviert oder auf
+`LocalSubnet` eingeengt. Auch die benannte Regel auf TCP 443, `LocalSubnet`
+und `Private,Domain` prüfen. Danach HTTPS aus dem lokalen Subnetz und die
+Abweisung von außerhalb sowie die Unerreichbarkeit von 8484 im LAN belegen.
+
+
+### 3.6 Desktop-Läufer auf dem Rechner selbst
 1. In der Admin-Oberfläche ein Gerät anlegen: Art `dedicated`, gerätebezogener Name wie `desktop-01`,
    kein Personenname. Kopplungscode holen (gilt 15 Minuten).
 2. Läufer aus dem Release `desktop-runner-v*` laden und die Prüfsumme gegen `SHA256SUMS` prüfen.
@@ -133,7 +249,7 @@ Den Master-Schlüssel der Anlage auf Papier sichern. Das Papier bleibt beim Kund
 Läufer auf Arbeitsplätzen im lokalen Netz koppeln mit `https://<Adresse des Rechners>` und demselben
 Fingerprint. Die CA des Rechners kommt nie in den Zertifikatsspeicher der Arbeitsplätze.
 
-### 3.6 Erster Lauf
+### 3.7 Erster Lauf
 Ein harmloses Test-Skript ohne Bezug zum Kunden, etwa eines, das den Editor öffnet, belegt die Kette aus
 Anlage, Skript-Läufer, Kopplung und Lauf. Den Zeitplan danach löschen.
 
@@ -157,4 +273,4 @@ Daten des Kunden. Vor dem Start hakt die Person ab:
 | Nach dem Neustart keine Sitzung möglich | kein unbeaufsichtigter Zugriff (gewollt) | Mensch beim Kunden nimmt TeamViewer erneut an (3.3); Wartung nur über Wartungskonto |
 | `docker version` zeigt keinen Server | Docker Desktop startet noch oder ist nicht angemeldet | einige Minuten warten; Docker Desktop startet nur in einer angemeldeten Sitzung |
 | `pair` scheitert ohne TLS-Fehler | Kopplung über HTTP an einen Container | immer über `https://` mit Fingerprint koppeln |
-| Läufer im Netz erreicht die Anlage nicht | Windows-Firewall oder falsche Adresse | Freigabe für 443 aus dem lokalen Netz prüfen |
+| Läufer im Netz erreicht die Anlage nicht | Windows-Firewall oder falsche Adresse | Netzprofil Privat/Domäne und Regel „JanuaPort 443 LAN“ gemäß 3.5 prüfen (`LocalSubnet`, TCP 443) |

@@ -43,6 +43,8 @@ services:
     security_opt: [no-new-privileges:true]
     volumes:
       - jnpt-data:/data
+      # Host-side verification/cleanup; distroless only runs /jnpt backup.
+      - ./backups:/backups
       - plugin-keys:/run/jnpt/plugins
     networks: [default, plugins]
     depends_on:

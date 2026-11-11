@@ -2,3 +2,7 @@
 secrets/
 # Sysinternals-Lizenz: nur lokal nach SHA-256 und Authenticode verwenden.
 Autologon64.exe
+# Lokales Sperrprotokoll unter der B-7-ACL.
+log/
+# Atomically written backup staging, verified and removed by the host script.
+backups/
