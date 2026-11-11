@@ -176,11 +176,15 @@ function Invoke-JnptUpdate {
         $targetArgument = $Target.Replace("'", "''")
         $backup = Invoke-UpdateProcess ("& '$backupScript' -ProfileDirectory '$profileArgument' -Target '$targetArgument'; exit `$LASTEXITCODE") 600
         if ($backup.ExitCode -ne 0) { throw 'Sicherung fehlgeschlagen.' }
+    } catch { Write-UpdateLog 'Sicherung fehlgeschlagen; exit=3'; return 3 }
+    try {
         $image = $UpdateRepository + '@' + $plan.digest
         $pull = Invoke-UpdateDocker @('pull', $image)
         if ($pull.ExitCode -ne 0) { throw 'Pull fehlgeschlagen.' }
+    } catch { Write-UpdateLog 'Pull fehlgeschlagen; exit=3'; return 3 }
+    try {
         Set-UpdateEnvironment $plan.digest
-    } catch { Write-UpdateLog 'Sicherung, Pull oder Dateiaustausch fehlgeschlagen; exit=3'; return 3 }
+    } catch { Write-UpdateLog 'Austausch der .env fehlgeschlagen; exit=3'; return 3 }
     try {
         $up = Invoke-UpdateDocker @('compose', 'up', '-d')
         if ($up.ExitCode -ne 0) { throw 'Start fehlgeschlagen.' }

@@ -209,6 +209,19 @@ if (Test-Path -LiteralPath (Join-Path $ProfileDirectory '.env')) {
                 self.assertEqual(r.returncode,3,r.stderr); self.assertEqual(self.env_after,OLD)
                 self.assertFalse(any('up' in a for a in t)); self.assertEqual(self.records(t),[])
                 if mode=='backup': self.assertFalse(any('pull' in a for a in t))
+                message = 'Sicherung fehlgeschlagen; exit=3' if mode=='backup' else 'Pull fehlgeschlagen; exit=3'
+                self.assertIn(message,self.log)
+                self.assertEqual(sum('exit=3' in line for line in self.log.splitlines()),1)
+
+    def test_environment_replace_failure_has_its_own_exit_3_log(self):
+        # A real NTFS sharing violation at File.Replace; source remains readable.
+        r,t=self.invoke(extra=r"$script:envLock=[IO.File]::Open((Join-Path $ProfileDirectory '.env'), 'Open', 'Read', 'Read')")
+        self.assertEqual(r.returncode,3,r.stderr)
+        self.assertEqual(self.env_after,OLD)
+        self.assertTrue(any('pull' in a for a in t))
+        self.assertFalse(any('up' in a for a in t)); self.assertEqual(self.records(t),[])
+        self.assertIn('Austausch der .env fehlgeschlagen; exit=3',self.log)
+        self.assertEqual(sum('exit=3' in line for line in self.log.splitlines()),1)
 
     def test_06_health_tls_or_up_failure_records_failed_without_reversal(self):
         for mode in ['health','tls','up']:

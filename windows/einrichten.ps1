@@ -125,7 +125,8 @@ function Initialize-MailSecret {
 }
 
 function Test-LegacyProfile {
-    param([string]$Path)
+    param([string]$Path, [ref]$Modified)
+    if ($null -ne $Modified) { $Modified.Value = $false }
     # Exact published windows-v0.1.0 bytes, independent of an optional local
     # SHA256SUMS. An altered installation is not an automatic upgrade source.
     $legacy = @{
@@ -148,18 +149,32 @@ function Test-LegacyProfile {
         'jnpt-sperren.ps1' = 'f19ae5e4e153b742a992a1d48c8cb80d03adae952f39cab0bf84be30559eefe4'
     }
     if (-not (Test-Path -LiteralPath (Join-Path $Path '.env') -PathType Leaf)) { return $false }
+    $closestMatches = -1
+    $closestComplete = $false
     foreach ($candidate in @($legacy, $b4)) {
         $exact = $true
+        $complete = $true
+        $matching = 0
         foreach ($name in $candidate.Keys) {
             $file = Join-Path $Path $name
-            if (-not (Test-Path -LiteralPath $file -PathType Leaf) -or
-                (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -cne $candidate[$name]) {
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+                $complete = $false
                 $exact = $false
-                break
+                continue
             }
+            if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -cne $candidate[$name]) {
+                $exact = $false
+            } else { $matching++ }
         }
         if ($exact) { return $true }
+        # Diagnostic only: missing files of the closest source remain distinct
+        # from changed bytes. Acceptance still requires every pinned hash.
+        if ($matching -gt $closestMatches) {
+            $closestMatches = $matching
+            $closestComplete = $complete
+        }
     }
+    if ($null -ne $Modified) { $Modified.Value = $closestComplete }
     return $false
 }
 
@@ -167,10 +182,15 @@ function Install-Profile {
     Assert-DienstSession
     Get-Command docker -ErrorAction Stop | Out-Null
     Invoke-Docker @('compose', 'version') | Out-Host
-    $upgrade = Test-LegacyProfile $Directory
+    $modifiedProfile = $false
+    $upgrade = Test-LegacyProfile $Directory ([ref]$modifiedProfile)
     if ((Test-Path -LiteralPath $Directory) -and -not $upgrade) {
         foreach ($name in (@('SHA256SUMS') + $ProfileFiles)) {
             if (-not (Test-Path -LiteralPath (Join-Path $Directory $name) -PathType Leaf)) {
+                if ($modifiedProfile) {
+                    # ASCII source also preserves the exact message in PS 5.1.
+                    throw ('Upgrade gesperrt: eine Profildatei weicht vom ausgelieferten Stand ab (SHA256SUMS). Datei pr{0}fen oder zur{0}cksetzen.' -f [char]0x00fc)
+                }
                 throw 'Ziel existiert bereits und ist kein vollstaendiges Profil.'
             }
         }

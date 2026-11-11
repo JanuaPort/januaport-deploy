@@ -1,5 +1,6 @@
 """0.1.0/0.2.0 -> 0.3.0 through real PS 5.1 file/hash adapters, with transport fakes."""
 import json
+import base64
 from pathlib import Path
 import subprocess
 import tempfile
@@ -10,10 +11,11 @@ from test_profile import PROFILE_FILES, ROOT, verify_sums
 
 LEGACY_FILES = ('docker-compose.yml', 'Caddyfile', 'einrichten.ps1')
 OLD_B4_FILES = tuple(row.split('  ')[1] for row in subprocess.check_output(['git','show','windows-v0.2.0:windows/SHA256SUMS'],text=True).splitlines() if not row.endswith('  Autologon64.exe'))
+UPGRADE_BLOCKED = 'Upgrade gesperrt: eine Profildatei weicht vom ausgelieferten Stand ab (SHA256SUMS). Datei prüfen oder zurücksetzen.'
 
 
 class Upgrade(unittest.TestCase):
-    def exercise(self, mode='', manifest=False, release='windows-v0.1.0'):
+    def exercise(self, mode='', manifest=False, release='windows-v0.1.0', altered='docker-compose.yml', capture_error=False):
         with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
             root = Path(tmp)
             target = root / 'profile'
@@ -29,7 +31,7 @@ class Upgrade(unittest.TestCase):
             if mode == 'missing-base':
                 (target / 'Caddyfile').unlink()
             if mode == 'modified-base':
-                with (target / 'docker-compose.yml').open('ab') as file:
+                with (target / altered).open('ab') as file:
                     file.write(b'# synthetic local change\n')
             before = {p.relative_to(target).as_posix(): p.read_bytes()
                       for p in target.rglob('*') if p.is_file()}
@@ -59,7 +61,13 @@ Install-Profile
 Test-ProfileFiles $Directory
 Install-Profile
 '''
+            if capture_error:
+                # Read the exact .NET message without locale-dependent native
+                # console decoding between PS 5.1 and Python.
+                command = 'try {\n' + command + '\n} catch { [Console]::Error.WriteLine([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($_.Exception.Message))); exit 1 }'
             result = ps(command, extra_env=dict(PROBE_ROOT=tmp, PROBE_SOURCE=str(ROOT), PROBE_FAIL=mode))
+            if capture_error and result.returncode:
+                result.stderr = base64.b64decode(result.stderr.strip()).decode('utf-16le') + '\n'
             after = {p.relative_to(target).as_posix(): p.read_bytes()
                      for p in target.rglob('*') if p.is_file()}
             downloads = (root / 'downloads.txt').read_text().splitlines() if (root / 'downloads.txt').exists() else []
@@ -85,6 +93,25 @@ Install-Profile
             self.assertNotEqual(r.returncode,0)
             self.assertEqual(before,after); self.assertEqual(downloads,[])
             self.assertNotIn('compose up',docker)
+
+    def test_modified_original_reports_exact_upgrade_block_without_file_contents(self):
+        for release,files in [('windows-v0.1.0',LEGACY_FILES),('windows-v0.2.0',OLD_B4_FILES)]:
+            for altered in files:
+                with self.subTest(release=release,altered=altered):
+                    r,before,after,downloads,docker=self.exercise(mode='modified-base',release=release,
+                                                                altered=altered,capture_error=True)
+                    self.assertNotEqual(r.returncode,0)
+                    self.assertEqual(r.stderr.strip(),UPGRADE_BLOCKED)
+                    self.assertEqual(before,after); self.assertEqual(downloads,[])
+                    self.assertNotIn('compose up',docker)
+
+    def test_missing_original_remains_a_separate_incomplete_profile_error(self):
+        for release in ['windows-v0.1.0','windows-v0.2.0']:
+            with self.subTest(release=release):
+                r,before,after,downloads,docker=self.exercise(mode='missing-base',release=release,capture_error=True)
+                self.assertNotEqual(r.returncode,0)
+                self.assertEqual(r.stderr.strip(),'Ziel existiert bereits und ist kein vollstaendiges Profil.')
+                self.assertEqual(before,after); self.assertEqual(downloads,[])
 
     def test_local_dienst_staging_also_upgrades_b4_and_rejects_every_changed_file(self):
         for altered in [None,*OLD_B4_FILES]:
