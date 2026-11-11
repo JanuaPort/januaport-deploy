@@ -262,6 +262,10 @@ zum Nachweis; ein Foto allein genügt nicht. Dieser Nachweis steht noch aus.
 Es gibt eine Engine. Die Regel, dass das Wartungskonto nur Aufgaben anstößt
 (`schtasks /run`) und nie selbst `docker` aufruft, ist eine Betriebsregel,
 keine technische Trennung. Wer in `docker-users` ist, erreicht die Container.
+**Jedes lokale Admin-Konto, auch das Wartungskonto, erreicht Container,
+Datenvolume, Master-Key und `.env`**, unabhängig von `docker-users`: Admins lesen
+über die DACL des Profilordners (B-7) ohnehin Key und `.env`. Getragen wird die
+Regel von der TeamViewer-Annahme und dem AVV, nicht von der Technik.
 BOX hat auf VM `jnpt-b4` belegt, dass `docker ps` aus dem Wartungskonto dieselben
 `jnpt-windows-*`-Container zeigt (B5 @`a87f571`, Protokoll `c-6796028725`, #1246).
 
@@ -269,7 +273,9 @@ In die Gruppe `docker-users` gehört für dieses Profil nur `jnpt-dienst`.
 `dienst-einrichten.ps1` fügt ausschließlich dieses fest benannte Konto hinzu;
 es fügt das Wartungskonto nicht hinzu und entfernt keine vorhandenen anderen
 Mitglieder. Die lokale IT prüft die Gruppe in einer administrativen PowerShell
-und bereinigt weitere Mitglieder, insbesondere das Wartungskonto:
+und bereinigt weitere Mitglieder ohne Admin-Rechte. Ein Admin aus der Gruppe zu
+nehmen schützt nichts (siehe oben). Das Betreiber-Konto bleibt Standardbenutzer
+und steht nicht in `docker-users`:
 
 ```powershell
 Get-LocalGroupMember -Group 'docker-users'

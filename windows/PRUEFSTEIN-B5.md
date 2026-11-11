@@ -45,7 +45,11 @@ Die Adaptertests ersetzen diese Abnahme nicht. B4 gilt ergänzend weiter.
   nachweisen. Es gibt eine Engine; wer in `docker-users` ist, erreicht die
   Container. Nur `jnpt-dienst` gehört in diese Gruppe. Das Wartungskonto stößt
   nur Aufgaben mit `schtasks /run` an und ruft nie selbst `docker` auf;
-  das ist eine Betriebsregel, keine technische Trennung.
+  das ist eine Betriebsregel, keine technische Trennung. Jedes lokale
+  Admin-Konto erreicht Container, Datenvolume, Master-Key und `.env`.
+  Nachweis: `Get-LocalGroupMember Administrators` und `docker-users`
+  protokollieren; das Betreiber-Konto ist Standardbenutzer und steht nicht in
+  `docker-users`.
 - [ ] **USB weg → Exit 3:** USB abziehen und ein weiteres freigegebenes
   Test-Update anstoßen. `LastTaskResult=3`, `.env` bytegleich, kein Pull und
   kein `up -d`. Log meldet Sicherungsfehler; es wird kein anderes Ziel verwendet.

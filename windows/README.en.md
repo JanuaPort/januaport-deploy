@@ -230,14 +230,20 @@ acceptance remains open.
 There is one engine. Having the maintenance account trigger only tasks
 (`schtasks /run`) and never invoke `docker` itself is an operating rule,
 not technical isolation. Members of `docker-users` can access the containers.
+**Every local admin account, including the maintenance account, reaches the
+containers, the data volume, the master key and `.env`**, regardless of
+`docker-users`: admins read the key and `.env` through the profile folder DACL
+(B-7) anyway. The rule rests on the TeamViewer acceptance and the DPA, not on
+technology.
 On VM `jnpt-b4`, BOX confirmed that `docker ps` under the maintenance account
 shows the same `jnpt-windows-*` containers (B5 @`a87f571`, record `c-6796028725`, #1246).
 
 For this profile, only `jnpt-dienst` belongs in `docker-users`.
 `dienst-einrichten.ps1` adds only this fixed account; it does not add the
 maintenance account or remove other existing members. Local IT checks membership
-in an administrative PowerShell and removes other members, particularly the
-maintenance account:
+in an administrative PowerShell and removes other members without admin rights.
+Removing an admin from the group protects nothing (see above). The operator
+account stays a standard user and is not in `docker-users`:
 
 ```powershell
 Get-LocalGroupMember -Group 'docker-users'
