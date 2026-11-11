@@ -100,7 +100,11 @@ eine neue Sitzung nötig ist.
    Verfahren. Der Dienstleister verwendet ausschließlich das Wartungskonto und arbeitet nie als
    `jnpt-dienst`. Das Wartungskonto stößt nur Aufgaben mit `schtasks /run` an.
 4. Docker Desktop startet in `jnpt-dienst`; einige Minuten bis zur Bereitschaft berücksichtigen.
-   Engine und Volumes nicht aus dem Wartungskonto beurteilen. Maßgeblich ist der Aufgabenstatus.
+   Es gibt eine Engine. Wer in `docker-users` ist, erreicht die Container.
+   Dass das Wartungskonto nur `schtasks /run` und nie selbst `docker` aufruft,
+   ist eine Betriebsregel, keine technische Trennung. In `docker-users` gehört
+   nur `jnpt-dienst`; vorhandene weitere Mitglieder prüft und entfernt die IT
+   gemäß README. Das Skript fügt das Wartungskonto nicht hinzu.
    `jnpt` behält im Plugin-Netz `172.21.0.0/16` die feste Adresse `172.21.0.2` außerhalb der dynamischen Beisteller-Spanne `172.21.128.0/17`; zusammen mit `restart: unless-stopped` an allen Dauerdiensten bleibt sein Platz beim Neustart frei (#1355; Umstellung bestehender Netze siehe [README](README.md#sicherheits-defaults)).
 
 ### 3.4 Anlage einrichten
@@ -126,8 +130,9 @@ Erstkonfiguration von Docker Desktop und die Schritte in [„Zwei Befehle“](RE
 führt der Betreiber in `jnpt-dienst` aus. Danach startet das Wartungskonto nur Aufgaben.
 Am Ende gibt `einrichten.ps1` den
 Zertifikats-Fingerprint aus. Ihn abschreiben und beim Dienstleister ablegen, nicht beim Kunden aushängen.
-Beim Kontowechsel verbleibt `tls-leaf` in der alten Engine. Nach B4-Schritt 2a
-alle Desktop-Läufer mit neuem Code und dem neuen Fingerprint erneut koppeln.
+Beim Kontowechsel bleibt `tls-leaf` in derselben Engine erhalten. Das allein
+ändert den Fingerprint nicht; erneute Kopplung ist erst bei einem bewussten
+Zertifikatswechsel nötig. B4-Schritt 2a verwendet die bestehenden Volumes weiter.
 
 Mail anschließend durch den Betreiber in `jnpt-dienst` gemäß [README, Abschnitt „Mail“](README.md#mail)
 einrichten. USB-Ziel und Marker vorbereiten, Aufgabe „JanuaPort Sicherung“ prüfen.
@@ -287,7 +292,9 @@ Daten des Kunden. Vor dem Start hakt die Person ab:
    `dienst-einrichten.ps1` als Administrator mit dem bisherigen `-BackupTarget`
    wiederholen. Das legt die Aufgabe „JanuaPort Update“ an: `jnpt-dienst`,
    Interactive/Limited, `IgnoreNew`, kein Auslöser.
-2. Der Betreiber trägt `JNPT_UPDATE_MANIFEST_URL` und `JNPT_UPDATE_PUBLIC_KEYS`
+2. Feed: VENDOR-Feed oder ein öffentlich erreichbarer Test-Feed; private Ziele
+   (auch host.docker.internal) sperrt der SSRF-Schutz des Kerns.
+   Der Betreiber trägt `JNPT_UPDATE_MANIFEST_URL` und `JNPT_UPDATE_PUBLIC_KEYS`
    in der lokalen `.env` ein und übernimmt sie in `jnpt-dienst` mit
    `docker compose up -d --force-recreate jnpt`. Beide Werte werden nur an den
    Kern durchgereicht. Fehlend oder leer = offline-first, Plan bleibt `none`.
@@ -365,5 +372,8 @@ Frist und 2 Sekunden Pause; TLS danach maximal 30 Versuche mit 2 Sekunden Pause.
    erfolgreicher Rücksicherung `up -d`, Health, Anmeldung und Daten prüfen.
    Den Ordner `/data/beiseite-<zeitstempel>` erst löschen, wenn die Rücksicherung geprüft ist (healthz, Anmeldung, Lesezugriff).
    Wer den Block auf eine nicht frische Anlage anwendet, verliert sonst den alten Stand.
-3. GUI-Zustand und weitere Freigabe danach durch den Betreiber prüfen. Das
-   Host-Skript führt weder `update rollback` noch `/jnpt restore` aus.
+3. Nach der Rücksicherung steht die Freigabe aus der Sicherung wieder in der
+   Datenbank. Der nächste Anstoß installiert dasselbe Update erneut. Vorher in
+   der Admin-GUI die Freigabe zurücknehmen. GUI-Zustand danach durch den
+   Betreiber prüfen. Das Host-Skript führt weder `update rollback` noch
+   `/jnpt restore` aus.

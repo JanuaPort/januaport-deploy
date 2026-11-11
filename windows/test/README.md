@@ -193,8 +193,10 @@ python -B windows/test/operator_mutations.py
 
 Die manuelle B4-Abnahme steht in [PRUEFSTEIN-B4.md](../PRUEFSTEIN-B4.md):
 DPAPI-unabhängige Wiederherstellung nach Kennwortreset, Sperrbildschirmfoto nach
-Neustart, Engine-/Volume-Vergleich je Benutzer und Rücksicherung mit getrenntem
-Master-Key. Das ist kein Ergebnis der Fakes und bleibt auf dem Testrechner offen.
+Neustart und Rücksicherung mit getrenntem Master-Key. Die Engine-Frage wurde
+in B5 auf VM `jnpt-b4` geklärt: eine gemeinsame Engine, keine technische
+Kontentrennung. Das Wartungskonto startet nur Aufgaben; diese Betriebsregel
+wird von den Fakes nicht als technische Zugriffssperre belegt.
 
 Die Mail-Tests lesen die SMTP-/Notify-Umgebung aus echtem `docker compose config`:
 gesetzte, fehlende und leere Werte, fester SMTP-Secret-Dateipfad und feste lokale
@@ -331,6 +333,10 @@ bleiben erhalten, der zweite Lauf lädt nichts. Jede der elf geänderten
 Originaldateien sperrt die lokale Diensteinrichtung; fehlendes/geändertes
 Altprofil sperrt den Download. Der 0.1.0-Weg bleibt ebenfalls geprüft.
 
-Offen bis BOX: [Prüfstein B5](../PRUEFSTEIN-B5.md) auf VM `jnpt-b4`, echte
-Feed-Freigabe und GUI-Buchung, TaskResult, USB-Sicherung, Engine-Zuordnung,
-Rechtegleichheit, Exit 3/6, manueller Rückweg und früher Anstoß nach Neustart.
+[Prüfstein B5](../PRUEFSTEIN-B5.md) ist durch BOX auf VM `jnpt-b4` @`a87f571`
+grün (Protokoll `c-6796028725`, #1246): Feed-Freigabe und GUI-Buchung, TaskResult,
+USB-Sicherung, gemeinsame Engine, Rechtegleichheit, Exit 3/6, manueller Rückweg
+und früher Anstoß nach Neustart. Der Hersteller-Feed oder ein öffentlich
+erreichbarer Test-Feed ist nötig; private Ziele sperrt der Kern per SSRF-Schutz.
+Das Wartungskonto ruft nach Betriebsregel kein `docker` auf. Die Standardsuite
+belegt diese Windows-Betriebsabnahme nicht selbst.

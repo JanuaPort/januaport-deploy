@@ -1,7 +1,11 @@
 # Prüfstein B5: Update unter Windows
 
-**Abnahmestatus: offen — BOX auf VM `jnpt-b4`, vor dem Tag `windows-v0.3.0`.**
-Nur synthetische Daten und ein kontrollierter Test-Feed. Keine Geheimnisse,
+**Abnahmestatus: GRÜN @`a87f571` — BOX auf VM `jnpt-b4`, Protokoll
+`c-6796028725` auf #1246.** Die folgende Checkliste gilt auch für weitere Abnahmen
+vor dem Tag `windows-v0.3.0`.
+Nur synthetische Daten. Feed: VENDOR-Feed oder ein öffentlich erreichbarer
+Test-Feed; private Ziele (auch host.docker.internal) sperrt der SSRF-Schutz des Kerns.
+Keine Geheimnisse,
 Benutzernamen oder Daten des Betreibers im Bericht. Zeitpunkt, Windows-/Docker-
 Version, Backend, Profil-Commit und Nachweis je Schritt lokal festhalten.
 Die Adaptertests ersetzen diese Abnahme nicht. B4 gilt ergänzend weiter.
@@ -17,8 +21,8 @@ Die Adaptertests ersetzen diese Abnahme nicht. B4 gilt ergänzend weiter.
   keinen Auslöser und ein `EncodedCommand` mit genau diesem Sicherungsziel.
 - [ ] **Feed und Freigabe:** Zunächst leere/fehlende Werte für
   `JNPT_UPDATE_MANIFEST_URL` und `JNPT_UPDATE_PUBLIC_KEYS`: Plan `none`, nur
-  `record none`, keine Sicherung und kein Pull. Dann Test-Feed und öffentliche
-  Schlüssel gemäß Kernformat in `.env` setzen und in `jnpt-dienst` mit
+  `record none`, keine Sicherung und kein Pull. Anschließend die vorgesehene
+  Feed-URL und öffentliche Schlüssel gemäß Kernformat in `.env` setzen und in `jnpt-dienst` mit
   `docker compose up -d --force-recreate jnpt` übernehmen. In der lokalen
   Admin-GUI das Test-Update freigeben. Signatur, Version und Freigabe bleiben
   Kernaufgabe; das Host-Skript trifft keine eigene Entscheidung.
@@ -37,16 +41,25 @@ Die Adaptertests ersetzen diese Abnahme nicht. B4 gilt ergänzend weiter.
   ausschließlich `ghcr.io/januaport/januaport@sha256:<64 kleine Hex-Zeichen>`.
   `.env` enthält nur die zwei geänderten Image-Zeilen, UTF-8 ohne BOM;
   `icacls .env` ist vor/nach dem Austausch gleich. Host-Health 200 und derselbe
-  eingerichtete TLS-Fingerprint. Image nur in der Engine von `jnpt-dienst`
-  nachweisen; im Wartungskonto keine zweite Installation starten.
+  eingerichtete TLS-Fingerprint. Das neue Image in der gemeinsamen Engine
+  nachweisen. Es gibt eine Engine; wer in `docker-users` ist, erreicht die
+  Container. Nur `jnpt-dienst` gehört in diese Gruppe. Das Wartungskonto stößt
+  nur Aufgaben mit `schtasks /run` an und ruft nie selbst `docker` auf;
+  das ist eine Betriebsregel, keine technische Trennung.
 - [ ] **USB weg → Exit 3:** USB abziehen und ein weiteres freigegebenes
   Test-Update anstoßen. `LastTaskResult=3`, `.env` bytegleich, kein Pull und
   kein `up -d`. Log meldet Sicherungsfehler; es wird kein anderes Ziel verwendet.
   USB wieder anstecken, Marker und vorhandene Sicherungen prüfen.
-- [ ] **Erzwungen rot → Exit 6 und Rückweg:** Mit kontrolliertem Test-Image
-  Health 503 bzw. falschen TLS-Fingerprint hervorrufen. Genau ein `up -d`,
+- [ ] **Erzwungen rot → Exit 6 und Rückweg:** Den ursprünglichen `key.pem`
+  aus dem Volume `tls-leaf` lokal geschützt für den Rückweg sichern. Darin
+  einen fremden, nicht zu `cert.pem` passenden `key.pem` hinterlegen und das
+  freigegebene Update anstoßen. Caddy teilt das Netz mit `jnpt` und wird mit
+  ihm neu erzeugt. Das getauschte Leaf allein erzwingt deshalb keinen roten
+  Lauf; das unpassende Schlüsselpaar verhindert hier erfolgreiches TLS.
+  Genau ein `up -d`,
   `record failed` mit Digest, `LastTaskResult=6`; neuer Stand bleibt erhalten.
-  Alte zwei Zeilen stehen im Log. Nach [RUNBOOK, Update](RUNBOOK.md#7-update-b5)
+  Alte zwei Zeilen stehen im Log. Den ursprünglichen `key.pem` wiederherstellen.
+  Nach [RUNBOOK, Update](RUNBOOK.md#7-update-b5)
   von Hand zurückschreiben und `docker compose up -d`, Health, Fingerprint,
   Admin-Anmeldung und Daten prüfen. Bei einer Migration die Sicherung von
   vor dem Update mit dem alten Image und getrenntem Master-Key bei leerer

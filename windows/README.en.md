@@ -111,32 +111,23 @@ administrator from the verified 0.3.0 release with the previous `-BackupTarget`
 to register “JanuaPort Update”. This file upgrade preserves the core image.
 Acceptance is covered by [B5](PRUEFSTEIN-B5.md).
 
-This file upgrade moves neither the profile directory nor engines or volumes
-between Windows accounts. Service operation still uses `C:\JanuaPort\windows`;
-`%LOCALAPPDATA%\JanuaPort\windows` is a legacy location, not the new default.
-Identify the account holding the existing engine/data before changing deployment
-and exercise the upgrade on the test machine under [B4](PRUEFSTEIN-B4.md).
-The script does not automatically migrate another Windows account's data.
+This file upgrade does not move the profile directory. Service operation uses
+`C:\JanuaPort\windows`; `%LOCALAPPDATA%\JanuaPort\windows` is a legacy location.
+Record the profile directory, Compose project name and existing volumes before
+the transition, and keep a verified backup with its master key stored separately.
 
-**In-place upgrade only under `jnpt-dienst`:** The script requires the
-`jnpt-dienst` session. If 0.1.0 ran under a personal account, there is no
-in-place upgrade, only the following path.
+**Run under `jnpt-dienst`:** The script requires this session even if another
+Windows account previously started the installation. The existing installation
+uses the same engine. Keep the same Compose project name and volumes when
+changing the account running the tasks; an account change alone needs no restore.
+`docker compose down -v` would remove the shared volumes and must not be used
+to clean up another Windows account.
 
-**Data from another Windows account:** Docker Desktop keeps containers, images and,
-as far as we know, volumes per Windows account. If 0.1.0 ran under a personal account,
-the installation's data lives there and not with `jnpt-dienst`. The file upgrade does
-not move it. Run `jnpt backup` in the old account first and keep the master key
-separately, then set up again under `jnpt-dienst` and restore the backup. Only once the installation
-runs under `jnpt-dienst` and the restore is checked, run `docker compose down -v`
-in the old profile folder under the old account. Otherwise a complete installation
-with vault and master key stays there, and Docker Desktop may start it again at
-sign-in. Afterwards `docker volume ls` in the old account shows no
-`jnpt-windows_*` volume. This path is a step of the B4 checkpoint.
-
-The TLS certificate belongs to the old engine's `tls-leaf` volume. Switching
-accounts creates a new certificate with a new fingerprint under `jnpt-dienst`.
-After B4 step 2a, pair every previously paired desktop runner again with a new
-pairing code and the new fingerprint transferred through a trusted local channel.
+The TLS certificate belongs to the shared `tls-leaf` volume. Changing Windows
+accounts alone neither creates a certificate nor changes its fingerprint.
+Only after deliberate certificate replacement, pair desktop runners again with
+a new pairing code and the new fingerprint transferred through a trusted local
+channel. Verify account changes using [B4, step 2a](PRUEFSTEIN-B4.md).
 
 ## Service operation (B2)
 
@@ -236,12 +227,25 @@ while pressing a key every 5 seconds from the first image after reboot,
 together with task result and log time; a photo alone does not prove locking.
 acceptance remains open.
 
-[Docker's Windows installation documentation](https://docs.docker.com/desktop/setup/install/windows-install/)
-says containers and images cannot be shared across accounts with the WSL 2
-backend. That passage does not explicitly name volumes. The full “engine and
-volumes per Windows user” finding still needs B4 verification; it is not a
-blanket claim about other backends. Installation, updates (B5) and
-backups all run in `jnpt-dienst`.
+There is one engine. Having the maintenance account trigger only tasks
+(`schtasks /run`) and never invoke `docker` itself is an operating rule,
+not technical isolation. Members of `docker-users` can access the containers.
+On VM `jnpt-b4`, BOX confirmed that `docker ps` under the maintenance account
+shows the same `jnpt-windows-*` containers (B5 @`a87f571`, record `c-6796028725`, #1246).
+
+For this profile, only `jnpt-dienst` belongs in `docker-users`.
+`dienst-einrichten.ps1` adds only this fixed account; it does not add the
+maintenance account or remove other existing members. Local IT checks membership
+in an administrative PowerShell and removes other members, particularly the
+maintenance account:
+
+```powershell
+Get-LocalGroupMember -Group 'docker-users'
+```
+
+Installation, updates (B5) and backups run under `jnpt-dienst`. Access from the
+maintenance account does not demonstrate a separate engine or replace this
+operating rule.
 
 Docker Desktop is free for businesses with **fewer than 250 employees AND less
 than USD 10 million annual revenue**. Other professional use generally needs a

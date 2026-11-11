@@ -131,35 +131,25 @@ Bei 0.2.0 → 0.3.0 anschließend `dienst-einrichten.ps1` aus dem geprüften
 damit die Aufgabe „JanuaPort Update“ registriert wird. Dieser Dateischritt
 aktualisiert das Kern-Image nicht. Die Abnahme steht in [B5](PRUEFSTEIN-B5.md).
 
-Diese Dateimigration verschiebt weder den Profilordner noch Engine oder Volumes
-zwischen Windows-Konten. Für den Dienstbetrieb bleibt das Ziel
-`C:\JanuaPort\windows`; eine frühere Ablage unter `%LOCALAPPDATA%\JanuaPort\windows`
-ist ein Altpfad, kein neuer Standard. Vor dem Übergang die vorhandene Engine und
-Daten dem richtigen Konto zuordnen und den Ablauf auf dem Testrechner gemäß
-[Prüfstein B4](PRUEFSTEIN-B4.md) gehen. Das Skript migriert keine Daten eines
-anderen Windows-Kontos automatisch.
+Diese Dateimigration verschiebt den Profilordner nicht. Für den Dienstbetrieb
+bleibt das Ziel `C:\JanuaPort\windows`; eine frühere Ablage unter
+`%LOCALAPPDATA%\JanuaPort\windows` ist ein Altpfad. Vor dem Übergang den
+Profilordner, den Compose-Projektnamen und die vorhandenen Volumes festhalten
+und eine geprüfte Sicherung mit getrennt verwahrtem Master-Key bereithalten.
 
-**Upgrade an Ort und Stelle nur unter `jnpt-dienst`:** Das Skript verlangt die
-Sitzung von `jnpt-dienst`. Lief 0.1.0 unter einem persönlichen Konto, gibt es
-kein Upgrade an Ort und Stelle, nur den folgenden Weg.
+**Ausführung unter `jnpt-dienst`:** Das Skript verlangt diese Sitzung auch
+dann, wenn die Anlage zuvor unter einem anderen Windows-Konto gestartet wurde.
+Die vorhandene Anlage läuft in derselben Engine. Beim Wechsel des ausführenden
+Kontos denselben Compose-Projektnamen und dieselben Volumes weiterverwenden;
+eine Rücksicherung allein wegen des Kontowechsels ist nicht erforderlich.
+`docker compose down -v` würde die gemeinsam verwendeten Volumes entfernen
+und ist kein Aufräumschritt für ein anderes Windows-Konto.
 
-**Daten aus einem anderen Windows-Konto:** Docker Desktop hält Container, Images und
-nach unserem Stand auch Volumes je Windows-Konto. Lief 0.1.0 unter einem persönlichen
-Konto, liegen die Daten der Anlage dort und nicht bei `jnpt-dienst`. Das Upgrade der
-Dateien zieht sie nicht um. Vorher im alten Konto `jnpt backup` ausführen und den
-Master-Key getrennt verwahren, dann unter `jnpt-dienst` neu einrichten und die
-Sicherung zurückspielen. Erst wenn die Anlage unter `jnpt-dienst` läuft und die
-Rücksicherung geprüft ist, im alten Konto im alten Profilordner
-`docker compose down -v` ausführen. Sonst liegt dort weiter eine vollständige
-Anlage mit Tresor und Master-Key, und Docker Desktop startet sie beim Anmelden
-vielleicht wieder. Danach zeigt `docker volume ls` im alten Konto kein
-`jnpt-windows_*`-Volume mehr. Dieser Weg ist ein Schritt im Prüfstein B4.
-
-Das TLS-Zertifikat liegt im Volume `tls-leaf` der alten Engine. Beim
-Kontowechsel entsteht unter `jnpt-dienst` ein neues Zertifikat mit neuem
-Fingerprint. Nach B4-Schritt 2a müssen alle gekoppelten Desktop-Läufer mit
-neuem Kopplungscode und dem neuen, lokal vertrauenswürdig übermittelten
-Fingerprint erneut koppeln.
+Das TLS-Zertifikat liegt im gemeinsamen Volume `tls-leaf`. Ein Kontowechsel
+allein erzeugt kein neues Zertifikat und ändert den Fingerprint nicht.
+Nur nach einem bewussten Zertifikatswechsel die Desktop-Läufer mit neuem
+Kopplungscode und dem neuen, lokal vertrauenswürdig übermittelten Fingerprint
+erneut koppeln. Den Kontowechsel nach [B4, Schritt 2a](PRUEFSTEIN-B4.md) prüfen.
 
 ## Dienstbetrieb (B2)
 
@@ -269,12 +259,25 @@ Sperrbildschirms nach Neustart und die früheste Kennwortabfrage bei Tastendruck
 alle 5 Sekunden ab dem ersten Bild. Aufgabenresultat und Protokollzeit gehören
 zum Nachweis; ein Foto allein genügt nicht. Dieser Nachweis steht noch aus.
 
-Für das WSL-2-Backend bestätigt die [Docker-Doku zur Windows-Installation](https://docs.docker.com/desktop/setup/install/windows-install/),
-dass Container und Images nicht zwischen Konten geteilt werden können. Volumes
-werden dort nicht ausdrücklich benannt. „Engine und Volumes je Windows-Benutzer“
-ist deshalb als vollständiger Befund noch auf B4 zu prüfen; für andere Backends
-gilt diese Behauptung nicht pauschal. Installation, Updates (B5) und
-Sicherung laufen durchgehend in `jnpt-dienst`.
+Es gibt eine Engine. Die Regel, dass das Wartungskonto nur Aufgaben anstößt
+(`schtasks /run`) und nie selbst `docker` aufruft, ist eine Betriebsregel,
+keine technische Trennung. Wer in `docker-users` ist, erreicht die Container.
+BOX hat auf VM `jnpt-b4` belegt, dass `docker ps` aus dem Wartungskonto dieselben
+`jnpt-windows-*`-Container zeigt (B5 @`a87f571`, Protokoll `c-6796028725`, #1246).
+
+In die Gruppe `docker-users` gehört für dieses Profil nur `jnpt-dienst`.
+`dienst-einrichten.ps1` fügt ausschließlich dieses fest benannte Konto hinzu;
+es fügt das Wartungskonto nicht hinzu und entfernt keine vorhandenen anderen
+Mitglieder. Die lokale IT prüft die Gruppe in einer administrativen PowerShell
+und bereinigt weitere Mitglieder, insbesondere das Wartungskonto:
+
+```powershell
+Get-LocalGroupMember -Group 'docker-users'
+```
+
+Installation, Updates (B5) und Sicherung laufen durchgehend in `jnpt-dienst`.
+Der tatsächliche Zugriff des Wartungskontos ist kein Nachweis einer getrennten
+Engine und ersetzt diese Betriebsregel nicht.
 
 Docker Desktop ist für Unternehmen mit **weniger als 250 Mitarbeitern UND
 weniger als 10 Mio. USD Jahresumsatz** kostenlos, sonst ist für geschäftliche
