@@ -2,7 +2,7 @@
 
 [English](README.en.md) · **Deutsch**
 
-Paket A mit B1-Mail sowie B2-Dienstbetrieb und B3-Sicherung (#1246): Windows 10/11 Pro, Docker Desktop mit WSL2 und Linux-Containern
+Paket A mit B1-Mail, B2-Dienstbetrieb, B3-Sicherung und B5-Update (#1246): Windows 10/11 Pro, Docker Desktop mit WSL2 und Linux-Containern
 (amd64). Gebaut und mit Docker Desktop lokal geprüft; kein Nachweis eines
 unbeaufsichtigten Dauerbetriebs. Die Oberfläche bleibt am Gerät, Desktop-Läufer
 im LAN und am selben Rechner sprechen HTTPS mit Zertifikatbindung.
@@ -14,7 +14,7 @@ Den Ablauf vor Ort und bei Fernwartung (wer wann was tut) beschreibt das [Runboo
 - Docker Desktop **≥ 4.44.3** (Behebung von CVE-2025-9074), laufende WSL2-Engine,
   Compose ≥ 2.35 (Volume-Subpaths) und PowerShell 5.1 oder neuer.
 - Docker Desktop: **„Expose daemon on tcp://localhost:2375“ aus**. AutoStart **an**, automatische Downloads/Updates **aus**; Updates
-  nur nach Prüfung freigeben; dieses Profil installiert keine Updates.
+  nur nach Prüfung freigeben; dieses Profil installiert keine Docker-Desktop-Updates.
 - Die TCP-Ports 443 und 8484 sind frei. Kein Router-Portforwarding für 443.
 - Zugang zur öffentlichen Image-Registry und zu GitHub. Für Desktop-Pins später
   ein eigenes Skript-Repository und dessen Nur-Lese-Deploy-Key.
@@ -47,7 +47,7 @@ Arbeitsplatz im lokalen Subnetz prüfen. Der Admin-Port 8484 bleibt auf Loopback
 
 ## Zwei Befehle
 
-Der Herausgeber muss zuerst den unveränderlichen Profil-Tag `windows-v0.2.0`
+Der Herausgeber muss zuerst den unveränderlichen Profil-Tag `windows-v0.3.0`
 auf dem geprüften Commit dieses Repos veröffentlichen. **Bis dahin ist die URL
 noch nicht nutzbar.** `<tag>` in eigenen Verteilanweisungen steht für diesen
 Profil-Release, nicht für einen JanuaPort-Image-Tag und nicht für `main`.
@@ -61,7 +61,7 @@ Ersteinrichtung durch den Betreiber in der Sitzung von `jnpt-dienst`, nach der
 In einer normalen PowerShell von `jnpt-dienst` im gewünschten Downloadordner:
 
 ```powershell
-curl.exe -fLo e.ps1 https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.2.0/windows/einrichten.ps1
+curl.exe -fLo e.ps1 https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.3.0/windows/einrichten.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\e.ps1
 ```
 
@@ -73,7 +73,7 @@ Digest-Referenz. Caddy und Skript-Läufer sind bereits per Digest festgelegt.
 Ein vollständiges vorhandenes Profil wird erneut geprüft und gestartet; seine
 Dateien, `.env`, Zertifikat und Schlüssel bleiben erhalten. Dabei gibt es
 keinen Download und keine erneute Image-Abfrage. Für unveränderte Profile aus
-0.1.0 gilt der [Upgrade-Weg](#von-010-auf-020); andere unvollständige Zielordner
+0.1.0 und 0.2.0 gilt der [Upgrade-Weg](#von-010-oder-020-auf-030); andere unvollständige Zielordner
 werden weiterhin abgewiesen. Für ein anderes Ziel gibt es
 `-Directory <Profilordner>`; der Dienstbetrieb und seine Aufgaben verwenden immer
 `C:\JanuaPort\windows`.
@@ -93,7 +93,7 @@ Die GUI-Ausgabe lautet wörtlich `Admin-GUI: http://127.0.0.1:8484`. Weiter mit
 `docs/inbetriebnahme.md` im Produkt-Repo `JanuaPort/januaport`: Master-Schlüssel
 sichern, Admin-Passwort setzen, ersten Admin-Token erzeugen.
 
-## Von 0.1.0 auf 0.2.0
+## Von 0.1.0 oder 0.2.0 auf 0.3.0
 
 Nach Veröffentlichung des Tags durch GATE das **neue** `einrichten.ps1` laden
 (siehe „Zwei Befehle“) und in `jnpt-dienst` mit dem bisherigen Profilordner starten:
@@ -104,15 +104,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\e.ps1 -Directory '<bisheri
 
 Das Skript erkennt die drei unveränderten Originaldateien aus `windows-v0.1.0`
 (`docker-compose.yml`, `Caddyfile`, `einrichten.ps1`) an ihren festen SHA-256-Werten.
+Für `windows-v0.2.0` müssen alle elf releaseverwalteten Originaldateien
+unverändert vorhanden sein; ihre veröffentlichten SHA-256-Werte sind ebenfalls
+fest im Skript hinterlegt. Eine abweichende Datei sperrt das automatische Upgrade.
 `.env` muss vorhanden sein; eine alte `SHA256SUMS` darf vorhanden sein oder fehlen.
-Es lädt sämtliche Dateien und die Summenliste ausschließlich von `windows-v0.2.0`
+Es lädt sämtliche Dateien und die Summenliste ausschließlich von `windows-v0.3.0`
 in einen temporären Ordner und prüft sie vollständig, bevor es im Ziel schreibt.
 Danach ersetzt es die releaseverwalteten Dateien und ergänzt die bisher fehlenden
-READMEs, `.gitignore`, das Runbook sowie B2/B3-Skripte einschließlich
-`jnpt-sperren.ps1` und Prüfstein.
+READMEs, `.gitignore`, das Runbook sowie B2/B3/B5-Skripte einschließlich
+`jnpt-sperren.ps1`, `jnpt-update.ps1` und beider Prüfsteine.
 Der lokale Ordner `backups\` wird bei der Einrichtung und beim Upgrade angelegt;
 er erbt die B-7-ACL und ist kein Bestandteil von SHA256SUMS.
-Änderungen an den drei alten Originaldateien erfordern eine manuelle Abstimmung und führen
+Änderungen an den jeweils geprüften Originaldateien erfordern eine manuelle Abstimmung und führen
 zum Abbruch vor dem Download. Bei Download- oder Prüfsummenfehlern bleiben die
 vorhandenen Dateien unverändert. Nach einem erfolgreichen Upgrade lädt der
 zweite Lauf nichts mehr nach.
@@ -122,42 +125,36 @@ Die beiden fehlenden Mail-Secret-Dateien werden wie bisher nur bei Bedarf leer
 angelegt. Es gibt keine Image-Abfrage und keinen Wechsel des gespeicherten
 Kern-Images. Ohne `-NeuesZertifikat` bleiben Zertifikat und Schlüssel erhalten.
 Die lokale Bereitstellung durch `dienst-einrichten.ps1` erkennt dieselben
-0.1.0-Dateien und verwendet dafür den bereits geprüften Release-Ordner.
+0.1.0- bzw. 0.2.0-Dateien und verwendet dafür den bereits geprüften Release-Ordner.
+Bei 0.2.0 → 0.3.0 anschließend `dienst-einrichten.ps1` aus dem geprüften
+0.3.0-Release als Administrator mit dem bisherigen `-BackupTarget` wiederholen,
+damit die Aufgabe „JanuaPort Update“ registriert wird. Dieser Dateischritt
+aktualisiert das Kern-Image nicht. Die Abnahme steht in [B5](PRUEFSTEIN-B5.md).
 
-Diese Dateimigration verschiebt weder den Profilordner noch Engine oder Volumes
-zwischen Windows-Konten. Für den Dienstbetrieb bleibt das Ziel
-`C:\JanuaPort\windows`; eine frühere Ablage unter `%LOCALAPPDATA%\JanuaPort\windows`
-ist ein Altpfad, kein neuer Standard. Vor dem Übergang die vorhandene Engine und
-Daten dem richtigen Konto zuordnen und den Ablauf auf dem Testrechner gemäß
-[Prüfstein B4](PRUEFSTEIN-B4.md) gehen. Das Skript migriert keine Daten eines
-anderen Windows-Kontos automatisch.
+Diese Dateimigration verschiebt den Profilordner nicht. Für den Dienstbetrieb
+bleibt das Ziel `C:\JanuaPort\windows`; eine frühere Ablage unter
+`%LOCALAPPDATA%\JanuaPort\windows` ist ein Altpfad. Vor dem Übergang den
+Profilordner, den Compose-Projektnamen und die vorhandenen Volumes festhalten
+und eine geprüfte Sicherung mit getrennt verwahrtem Master-Key bereithalten.
 
-**Upgrade an Ort und Stelle nur unter `jnpt-dienst`:** Das Skript verlangt die
-Sitzung von `jnpt-dienst`. Lief 0.1.0 unter einem persönlichen Konto, gibt es
-kein Upgrade an Ort und Stelle, nur den folgenden Weg.
+**Ausführung unter `jnpt-dienst`:** Das Skript verlangt diese Sitzung auch
+dann, wenn die Anlage zuvor unter einem anderen Windows-Konto gestartet wurde.
+Die vorhandene Anlage läuft in derselben Engine. Beim Wechsel des ausführenden
+Kontos denselben Compose-Projektnamen und dieselben Volumes weiterverwenden;
+eine Rücksicherung allein wegen des Kontowechsels ist nicht erforderlich.
+`docker compose down -v` würde die gemeinsam verwendeten Volumes entfernen
+und ist kein Aufräumschritt für ein anderes Windows-Konto.
 
-**Daten aus einem anderen Windows-Konto:** Docker Desktop hält Container, Images und
-nach unserem Stand auch Volumes je Windows-Konto. Lief 0.1.0 unter einem persönlichen
-Konto, liegen die Daten der Anlage dort und nicht bei `jnpt-dienst`. Das Upgrade der
-Dateien zieht sie nicht um. Vorher im alten Konto `jnpt backup` ausführen und den
-Master-Key getrennt verwahren, dann unter `jnpt-dienst` neu einrichten und die
-Sicherung zurückspielen. Erst wenn die Anlage unter `jnpt-dienst` läuft und die
-Rücksicherung geprüft ist, im alten Konto im alten Profilordner
-`docker compose down -v` ausführen. Sonst liegt dort weiter eine vollständige
-Anlage mit Tresor und Master-Key, und Docker Desktop startet sie beim Anmelden
-vielleicht wieder. Danach zeigt `docker volume ls` im alten Konto kein
-`jnpt-windows_*`-Volume mehr. Dieser Weg ist ein Schritt im Prüfstein B4.
-
-Das TLS-Zertifikat liegt im Volume `tls-leaf` der alten Engine. Beim
-Kontowechsel entsteht unter `jnpt-dienst` ein neues Zertifikat mit neuem
-Fingerprint. Nach B4-Schritt 2a müssen alle gekoppelten Desktop-Läufer mit
-neuem Kopplungscode und dem neuen, lokal vertrauenswürdig übermittelten
-Fingerprint erneut koppeln.
+Das TLS-Zertifikat liegt im gemeinsamen Volume `tls-leaf`. Ein Kontowechsel
+allein erzeugt kein neues Zertifikat und ändert den Fingerprint nicht.
+Nur nach einem bewussten Zertifikatswechsel die Desktop-Läufer mit neuem
+Kopplungscode und dem neuen, lokal vertrauenswürdig übermittelten Fingerprint
+erneut koppeln. Den Kontowechsel nach [B4, Schritt 2a](PRUEFSTEIN-B4.md) prüfen.
 
 ## Dienstbetrieb (B2)
 
 Admin-PowerShell, nur auf dem vorgesehenen Betriebsrechner: den vollständigen,
-geprüften Release `windows-v0.2.0` bereitstellen, im enthaltenen Ordner `windows`
+geprüften Release `windows-v0.3.0` bereitstellen, im enthaltenen Ordner `windows`
 `dienst-einrichten.ps1 -BackupTarget 'E:\JanuaPort-Backup'` ausführen. GATE
 veröffentlicht den Tag erst nach Prüfung; dieses Paket erzeugt keinen Tag.
 Das Skript prüft zuerst `SHA256SUMS`, legt `jnpt-dienst` an, nimmt ihn in
@@ -175,7 +172,7 @@ nichts. Erbende Dateien bleiben dadurch auch beim Wiederholen zugänglich.
 Erst danach werden Profildateien bereitgestellt. Für bereits von F5 betroffene
 Installationen beschreibt das [RUNBOOK](RUNBOOK.md#f5-reparatur-nach-entzogenen-dateirechten)
 die manuelle Reparatur.
-Vorhandene abweichende Dateien werden außerhalb des geprüften 0.1.0-Upgrades
+Vorhandene abweichende Dateien werden außerhalb der geprüften Upgrades aus 0.1.0 oder 0.2.0
 abgewiesen; `.env` und Secrets bleiben erhalten. Ein von B2
 bereitgestelltes Profil ohne `.env` wird bei der ersten Installation ergänzt.
 
@@ -245,13 +242,14 @@ Autologon und Sperre wieder gemeinsam eingerichtet. Dies gehört zur lokalen
 Erstinbetriebnahme vor produktiven Daten. Die Ersteinrichtung und
 Image-Abfrage führt der Betreiber in dieser Sitzung durch. Der Dienstleister
 arbeitet dort nicht. Danach ist „JanuaPort Anlage starten“ ohne Trigger für
-manuelle Starts vorhanden; die tägliche Sicherung läuft um 20:00 Uhr. Beide
-Aufgaben verwenden das interaktive Token von `jnpt-dienst`, ohne gespeichertes
+manuelle Starts vorhanden; die tägliche Sicherung läuft um 20:00 Uhr.
+„JanuaPort Update“ hat ebenfalls keinen Auslöser. Diese drei Aufgaben verwenden das interaktive Token von `jnpt-dienst`, ohne gespeichertes
 Aufgabenkennwort. Das Wartungskonto stößt nur an:
 
 ```powershell
 schtasks /run /tn "JanuaPort Anlage starten"
 schtasks /run /tn "JanuaPort Sicherung"
+schtasks /run /tn "JanuaPort Update"
 ```
 
 `docker-users` ist praktisch Admin des Rechners. Schutz der Konsole sind Sperre und Raumzutritt beim Betreiber.
@@ -261,12 +259,31 @@ Sperrbildschirms nach Neustart und die früheste Kennwortabfrage bei Tastendruck
 alle 5 Sekunden ab dem ersten Bild. Aufgabenresultat und Protokollzeit gehören
 zum Nachweis; ein Foto allein genügt nicht. Dieser Nachweis steht noch aus.
 
-Für das WSL-2-Backend bestätigt die [Docker-Doku zur Windows-Installation](https://docs.docker.com/desktop/setup/install/windows-install/),
-dass Container und Images nicht zwischen Konten geteilt werden können. Volumes
-werden dort nicht ausdrücklich benannt. „Engine und Volumes je Windows-Benutzer“
-ist deshalb als vollständiger Befund noch auf B4 zu prüfen; für andere Backends
-gilt diese Behauptung nicht pauschal. Installation, spätere Updates (B5) und
-Sicherung laufen durchgehend in `jnpt-dienst`.
+Es gibt eine Engine. Die Regel, dass das Wartungskonto nur Aufgaben anstößt
+(`schtasks /run`) und nie selbst `docker` aufruft, ist eine Betriebsregel,
+keine technische Trennung. Wer in `docker-users` ist, erreicht die Container.
+**Jedes lokale Admin-Konto, auch das Wartungskonto, erreicht Container,
+Datenvolume, Master-Key und `.env`**, unabhängig von `docker-users`: Admins lesen
+über die DACL des Profilordners (B-7) ohnehin Key und `.env`. Getragen wird die
+Regel von der TeamViewer-Annahme und dem AVV, nicht von der Technik.
+BOX hat auf VM `jnpt-b4` belegt, dass `docker ps` aus dem Wartungskonto dieselben
+`jnpt-windows-*`-Container zeigt (B5 @`a87f571`, Protokoll `c-6796028725`, #1246).
+
+In die Gruppe `docker-users` gehört für dieses Profil nur `jnpt-dienst`.
+`dienst-einrichten.ps1` fügt ausschließlich dieses fest benannte Konto hinzu;
+es fügt das Wartungskonto nicht hinzu und entfernt keine vorhandenen anderen
+Mitglieder. Die lokale IT prüft die Gruppe in einer administrativen PowerShell
+und bereinigt weitere Mitglieder ohne Admin-Rechte. Ein Admin aus der Gruppe zu
+nehmen schützt nichts (siehe oben). Das Betreiber-Konto bleibt Standardbenutzer
+und steht nicht in `docker-users`:
+
+```powershell
+Get-LocalGroupMember -Group 'docker-users'
+```
+
+Installation, Updates (B5) und Sicherung laufen durchgehend in `jnpt-dienst`.
+Der tatsächliche Zugriff des Wartungskontos ist kein Nachweis einer getrennten
+Engine und ersetzt diese Betriebsregel nicht.
 
 Docker Desktop ist für Unternehmen mit **weniger als 250 Mitarbeitern UND
 weniger als 10 Mio. USD Jahresumsatz** kostenlos, sonst ist für geschäftliche
@@ -541,9 +558,9 @@ Im internen Plugin-Netz `plugins` ist `jnpt` fest auf `172.21.0.2` im Subnetz
 `172.21.0.0/16` gesetzt; Beisteller erhalten Adressen ausschließlich dynamisch
 aus `172.21.128.0/17`, damit sie beim Neustart den Gateway-Platz freihalten (#1355).
 Alle Dauerdienste verwenden `restart: unless-stopped`, Init-Dienste `restart: "no"`.
-Beim Umstellen eines bestehenden Profils im Profilordner einmal
-`docker compose down` und danach `docker compose up -d` ausführen, damit das
-Netz mit der neuen IPAM-Konfiguration entsteht; die benannten Volumes erhalten.
+Compose legt das Netz beim Upgrade selbst neu an; nur wenn es mit
+„needs to be recreated“ abbricht, im Profilordner einmal `docker compose down`
+und danach `docker compose up -d` ausführen. Die benannten Volumes erhalten.
 
 Das interne Plugin-Netz begrenzt den Ausgang, sperrt aber nicht von selbst
 jeden Dienst des Windows-/WSL-Hosts. Die Linux-iptables-Anleitung in
@@ -571,18 +588,67 @@ Desktop-Paketabruf noch einen erfolgreichen Auftrag.
 Repository-Prüfungen (Python-Standardbibliothek, Docker erforderlich):
 `python -B -m unittest discover -s windows/test -v`.
 Zusätzlicher Rundlauf und Mutationen sind in [test/README.md](test/README.md)
-beschrieben. SHA256SUMS enthält Compose, Caddyfile, alle vier Skripte
-(`einrichten.ps1`, `dienst-einrichten.ps1`, `jnpt-sperren.ps1`, `jnpt-backup.ps1`), `.gitignore`,
-beide READMEs, Runbook und B4-Prüfstein sowie den externen Autologon-Pin; `.gitattributes`
+beschrieben. SHA256SUMS enthält Compose, Caddyfile, alle fünf Skripte
+(`einrichten.ps1`, `dienst-einrichten.ps1`, `jnpt-sperren.ps1`, `jnpt-backup.ps1`, `jnpt-update.ps1`), `.gitignore`,
+beide READMEs, Runbook und B4-/B5-Prüfstein sowie den externen Autologon-Pin; `.gitattributes`
 hält dafür auch im Windows-Checkout dieselben LF-Bytes wie im Download fest.
 
-## Update und Grenzen
+## Update (B5)
 
-B2 richtet Autologon und Dienstaufgaben ein, B3 die tägliche Sicherung. Das
-B5-Update-Skript folgt als eigenes Paket; kein automatisches Update. Docker
-Desktop läuft in der angemeldeten, gesperrten Sitzung von `jnpt-dienst`. Der
-Neustartnachweis ist im [Prüfstein B4](PRUEFSTEIN-B4.md) offen. Tailscale gehört
-nicht zu diesem Paket.
+`jnpt-update.ps1` führt ausschließlich den Plan des Kerns aus. Die Aufgabe
+„JanuaPort Update“ läuft als `jnpt-dienst`, Interactive/Limited mit `IgnoreNew`,
+ohne Auslöser. Freigabe in der lokalen Admin-GUI, dann im Wartungskonto:
+
+```powershell
+schtasks /run /tn "JanuaPort Update"
+Get-ScheduledTaskInfo -TaskName 'JanuaPort Update' | Select-Object LastRunTime,LastTaskResult
+Get-Content C:\JanuaPort\windows\log\update.log -Tail 100
+```
+
+`JNPT_UPDATE_MANIFEST_URL` und `JNPT_UPDATE_PUBLIC_KEYS` werden am Dienst
+`jnpt` aus `.env` durchgereicht. Fehlend oder leer bedeutet offline-first;
+der Kern liefert dann `action=none`. Nach einer Feed-Änderung im Profilordner
+`docker compose up -d --force-recreate jnpt` in `jnpt-dienst` ausführen.
+Signatur, Versionen, Migration und Freigabe beurteilt allein der Kern.
+`current`, `latest`, `on_failure` und `reason` begründen keine eigene Entscheidung
+im Host-Skript. Es führt weder Restore noch automatischen Rückweg aus.
+
+Der Ablauf ist Plan → geprüfte Sicherung als Kindprozess → Pull von
+`ghcr.io/januaport/januaport@<digest>` → alte zwei Image-Zeilen ins Log →
+atomarer Austausch ausschließlich dieser zwei `.env`-Zeilen (UTF-8 ohne BOM)
+→ `up -d` → Health am Host und TLS-Fingerprint → Ergebnis buchen.
+`latest` und `reason` liefern keine Image-Referenz. Der Digest muss exakt
+`sha256:` und 64 kleine Hex-Zeichen enthalten; Großschreibung, Zeilenumbrüche
+und zusätzliche Referenzbestandteile werden abgewiesen. Im Kern-Container
+läuft nur `/jnpt`; OpenSSL liest ausschließlich das Zertifikat in `cert-init`.
+Die `.env`-DACL bleibt beim Dateiaustausch erhalten; das Skript setzt keine ACL.
+
+| Exit | Bedeutung |
+|---|---|
+| 0 | `none` oder gesundes Update (`installed`) |
+| 1 | Falsche Sitzung oder unvollständiges Profil |
+| 2 | Plan nicht genau eine JSON-Zeile, Docker nicht bereit, ungültiger Digest oder `rollback` (RUNBOOK) |
+| 3 | Sicherung, Pull oder Dateiaustausch fehlgeschlagen; bei Sicherungs-/Pullfehler `.env` unverändert |
+| 6 | Start, Host-Health oder TLS rot; `failed` mit Digest, neuer Stand bleibt zur Diagnose |
+
+Ist das Ergebnis nicht buchbar, steht es nur im Log; der Exit-Code des Laufs
+bleibt erhalten. Bei „JanuaPort Update“ und „JanuaPort Sicherung“ entspricht
+`LastTaskResult` dem Exit-Code des Skripts. `LastTaskResult=0` deshalb zusammen
+mit Log und GUI prüfen.
+Native Ausgaben und Fehlermeldungsinhalte erscheinen weder auf der Konsole
+noch im Log. `log\update.log` hält höchstens 100 Zeilen ohne Benutzernamen.
+Die alten beiden Image-Werte stehen dort vor dem Austausch; vor einem späteren
+Lauf für den manuellen Rückweg lokal festhalten. Jeder Docker-Aufruf ist auf
+30 Sekunden begrenzt, die Sicherung auf 600 Sekunden. Nach Neustart ohne
+bereites Docker endet der Planversuch begrenzt mit fester Fehlermeldung und
+Exit 2; nach Bereitschaft erneut anstoßen. Host-Health wird höchstens 90-mal
+mit 3 Sekunden Anfragefrist und 2 Sekunden Pause geprüft, TLS höchstens
+30-mal mit 2 Sekunden Pause wie bei der Einrichtung.
+
+Rückweg von Hand und gleichzeitige tägliche Sicherung: [RUNBOOK](RUNBOOK.md#7-update-b5).
+Vor dem Tag `windows-v0.3.0` muss BOX den [Prüfstein B5](PRUEFSTEIN-B5.md)
+auf VM `jnpt-b4` abnehmen. Docker Desktop läuft weiterhin in der angemeldeten,
+gesperrten Sitzung von `jnpt-dienst`. Tailscale gehört nicht zu diesem Paket.
 
 ## Fernwartung
 

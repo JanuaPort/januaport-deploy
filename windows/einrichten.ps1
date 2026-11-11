@@ -9,12 +9,13 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 # Dieser Release-Tag muss vor dem veroeffentlichten Aufruf existieren und
 # unveraenderlich bleiben. Kein main/Branch als Downloadquelle.
-$ProfileRef = 'windows-v0.2.0'
+$ProfileRef = 'windows-v0.3.0'
 $ProfileBase = "https://raw.githubusercontent.com/JanuaPort/januaport-deploy/$ProfileRef/windows"
 $Repository = 'ghcr.io/januaport/januaport'
 $ProfileFiles = @('docker-compose.yml', 'Caddyfile', 'einrichten.ps1', '.gitignore',
     'README.md', 'README.en.md', 'RUNBOOK.md', 'dienst-einrichten.ps1',
-    'jnpt-backup.ps1', 'jnpt-sperren.ps1', 'PRUEFSTEIN-B4.md')
+    'jnpt-backup.ps1', 'jnpt-sperren.ps1', 'PRUEFSTEIN-B4.md',
+    'jnpt-update.ps1', 'PRUEFSTEIN-B5.md')
 
 function Invoke-Docker {
     param([string[]]$Arguments)
@@ -124,7 +125,8 @@ function Initialize-MailSecret {
 }
 
 function Test-LegacyProfile {
-    param([string]$Path)
+    param([string]$Path, [ref]$Modified)
+    if ($null -ne $Modified) { $Modified.Value = $false }
     # Exact published windows-v0.1.0 bytes, independent of an optional local
     # SHA256SUMS. An altered installation is not an automatic upgrade source.
     $legacy = @{
@@ -132,23 +134,63 @@ function Test-LegacyProfile {
         'Caddyfile' = 'd73ab75fd9ade61067160a660828effcb37dc3176816ace9ce826ae77d96355d'
         'einrichten.ps1' = '2a3671e5ccd5b9cc47ff0753594d712ea18119500b3c611fadd250587cbcbae3'
     }
-    if (-not (Test-Path -LiteralPath (Join-Path $Path '.env') -PathType Leaf)) { return $false }
-    foreach ($name in $legacy.Keys) {
-        $file = Join-Path $Path $name
-        if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { return $false }
-        if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -cne $legacy[$name]) { return $false }
+    # Exact published windows-v0.2.0 profile; never trust a local manifest.
+    $b4 = @{
+        'docker-compose.yml' = 'c11e624b04d83219fb183e3733703dbd6e780132beae57b4e8b6c145f7b70579'
+        'Caddyfile' = 'd73ab75fd9ade61067160a660828effcb37dc3176816ace9ce826ae77d96355d'
+        'einrichten.ps1' = '60e5eb50215dcdfee862050595b54afff252cf870230a4ddc3dc7004dcc2e623'
+        '.gitignore' = 'dbd933a653eb5a50f07b5112a5b118480787a2004238ef80f50d70d1a0d35285'
+        'README.md' = 'dd7a4471d8830ee204ea0f44be14b9a299561ea007d6c091ef9fd57757333959'
+        'README.en.md' = '014509b6427c62e3130b2c90e7a244b6367d10df1cdcc1ff0cd02545d4de236e'
+        'RUNBOOK.md' = 'b18cdef273861409c92f59ccd600b670a63fc85411954efff728fe0a8f5e46fd'
+        'dienst-einrichten.ps1' = 'e626262e3195c1b21b1ab14d28246089c03e5199932cc54654c6a4af5796c39a'
+        'jnpt-backup.ps1' = 'adf47b6b84444516c98efb0d03a86b4a24401cb2cb02e493b8898216ef4dd078'
+        'PRUEFSTEIN-B4.md' = 'c73af73f60f130fd58e5d13cbcdf38d5629cb07b190d2f5e359e5364d394dd5c'
+        'jnpt-sperren.ps1' = 'f19ae5e4e153b742a992a1d48c8cb80d03adae952f39cab0bf84be30559eefe4'
     }
-    return $true
+    if (-not (Test-Path -LiteralPath (Join-Path $Path '.env') -PathType Leaf)) { return $false }
+    $closestMatches = -1
+    $closestComplete = $false
+    foreach ($candidate in @($legacy, $b4)) {
+        $exact = $true
+        $complete = $true
+        $matching = 0
+        foreach ($name in $candidate.Keys) {
+            $file = Join-Path $Path $name
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+                $complete = $false
+                $exact = $false
+                continue
+            }
+            if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -cne $candidate[$name]) {
+                $exact = $false
+            } else { $matching++ }
+        }
+        if ($exact) { return $true }
+        # Diagnostic only: missing files of the closest source remain distinct
+        # from changed bytes. Acceptance still requires every pinned hash.
+        if ($matching -gt $closestMatches) {
+            $closestMatches = $matching
+            $closestComplete = $complete
+        }
+    }
+    if ($null -ne $Modified) { $Modified.Value = $closestComplete }
+    return $false
 }
 
 function Install-Profile {
     Assert-DienstSession
     Get-Command docker -ErrorAction Stop | Out-Null
     Invoke-Docker @('compose', 'version') | Out-Host
-    $upgrade = Test-LegacyProfile $Directory
+    $modifiedProfile = $false
+    $upgrade = Test-LegacyProfile $Directory ([ref]$modifiedProfile)
     if ((Test-Path -LiteralPath $Directory) -and -not $upgrade) {
         foreach ($name in (@('SHA256SUMS') + $ProfileFiles)) {
             if (-not (Test-Path -LiteralPath (Join-Path $Directory $name) -PathType Leaf)) {
+                if ($modifiedProfile) {
+                    # ASCII source also preserves the exact message in PS 5.1.
+                    throw ('Upgrade gesperrt: eine Profildatei weicht vom ausgelieferten Stand ab (SHA256SUMS). Datei pr{0}fen oder zur{0}cksetzen.' -f [char]0x00fc)
+                }
                 throw 'Ziel existiert bereits und ist kein vollstaendiges Profil.'
             }
         }

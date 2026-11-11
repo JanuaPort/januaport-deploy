@@ -5,22 +5,23 @@ Daten. Die Python-Fakes ersetzen diesen Nachweis nicht. Ergebnis, Windows- und
 Docker-Version, Backend, Uhrzeit und Nachweis je Schritt im Abnahmeprotokoll
 festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
 
-1. **Engine und Volumes je Benutzer (Hauptfund):** Docker Desktop mit WSL 2
-   in `jnpt-dienst` starten. Mit `docker context show`, `docker info --format
-   '{{.ID}}'` und `docker volume ls` Engine und synthetisches Test-Volume
-   identifizieren. Unter einem zweiten lokalen Konto separat prüfen, ob dieselbe
-   Engine und dasselbe Volume sichtbar sind. Nicht gleichzeitig konkurrierende
-   Docker-Desktop-Instanzen starten. Beide Ergebnisse dokumentieren. Die
-   [Docker-Doku](https://docs.docker.com/desktop/setup/install/windows-install/)
-   sagt ausdrücklich, dass Container und Images mit dem WSL-2-Backend nicht
-   zwischen Konten geteilt werden können; Volumes benennt diese Passage nicht.
-   Andere Backends dürfen aus diesem Befund nicht abgeleitet werden.
-2. **Upgrade 0.1.0 → 0.2.0 am Testrechner einmal gehen.** Von den drei
+1. **Gemeinsame Engine (N4, durch B5 korrigiert):** Es gibt eine Engine.
+   BOX hat auf VM `jnpt-b4` belegt, dass `docker ps` im Wartungskonto dieselben
+   `jnpt-windows-*`-Container zeigt (B5 @`a87f571`, Protokoll `c-6796028725`, #1246).
+   Wer in `docker-users` ist, erreicht die Container. Das Wartungskonto stößt
+   ausschließlich Aufgaben mit `schtasks /run` an und ruft nie selbst `docker`
+   auf; das ist eine Betriebsregel, keine technische Trennung. Die IT prüft
+   `docker-users` als Administrator gemäß README: hinein gehört nur `jnpt-dienst`.
+   `dienst-einrichten.ps1` fügt nur dieses Konto hinzu, bereinigt aber keine
+   vorhandenen weiteren Mitglieder. Die frühere Annahme getrennter Engines
+   und Volumes nach Windows-Konto ist widerlegt.
+
+2. **Upgrade 0.1.0 → 0.3.0 am Testrechner einmal gehen.** Von den drei
    Originaldateien plus `.env` ausgehen (alte Summenliste optional), neues
-   Einrichtungsskript verwenden. Vollständiges 0.2.0-Profil, unveränderte `.env`
+   Einrichtungsskript verwenden. Vollständiges 0.3.0-Profil, unveränderte `.env`
    und Secrets, bisheriges Kern-Image und Zertifikat prüfen; zweiter Lauf ohne
-   Download. Profilpfad und Windows-Konto separat prüfen: keine automatische
-   Migration einer Engine oder ihrer Volumes zwischen Konten.
+   Download. Profilpfad und ausführendes Windows-Konto separat prüfen;
+   dieselbe Engine und dieselben Volumes werden weiterverwendet.
 3. **B-7, Ordnerrechte:** Nach Diensteinrichtung `icacls C:\JanuaPort` und
    `icacls C:\JanuaPort\windows` prüfen, dazu `icacls C:\JanuaPort /t` für
    explizite Freigaben auf einzelnen Dateien darunter (SEC, nicht blockierend). Nur `jnpt-dienst`, Administratoren und
@@ -152,9 +153,18 @@ foreach ($rule in $inboundAllow) {
    ein Mensch beim Betreiber nimmt jede Sitzung an. Kein unbeaufsichtigter
    Fernzugriff, kein festes Fernwartungskennwort. Sperrbildschirm entsperrt der
    Betreiber vor Ort. Wartungskonto startet nur Aufgaben. B5-Update-Aufgabe
-   bleibt bis zu deren eigenem Paket offen. Docker-Desktop-Lizenz und
+   separat nach [PRUEFSTEIN-B5.md](PRUEFSTEIN-B5.md) abnehmen; sie ist ohne Auslöser. Docker-Desktop-Lizenz und
    unterstütztes Windows/ESU separat bestätigen.
-2a. **Kontowechsel der Daten:** Eine 0.1.0-Anlage, die unter einem persönlichen Konto lief, per `jnpt backup` sichern, unter `jnpt-dienst` neu einrichten und mit dem getrennt verwahrten Master-Key gemäß README zurückspielen. Das TLS-Zertifikat hängt am Volume `tls-leaf` der alten Engine; unter `jnpt-dienst` entsteht ein neues mit neuem Fingerprint. Alle gekoppelten Desktop-Läufer nach 2a mit neuem Code und neuem, lokal vertrauenswürdig übermitteltem Fingerprint erneut koppeln und prüfen. Danach Anmeldung und ein Lesewerkzeug grün. Dann im alten Konto `docker compose down -v`; `docker volume ls` im alten Konto zeigt kein `jnpt-windows_*`-Volume mehr (SEC E1).
+2a. **Ausführendes Konto wechseln:** Vorher die bestehende Anlage sichern und
+    den Master-Key getrennt verwahren. `jnpt-dienst` für das bestehende Profil
+    mit demselben Compose-Projektnamen und denselben Volumes einrichten.
+    Daten, Admin-Anmeldung und Lesezugriff sowie den unveränderten Fingerprint
+    prüfen. `tls-leaf` bleibt in der gemeinsamen Engine erhalten. Ein reiner
+    Kontowechsel erfordert weder Rücksicherung noch erneute Kopplung.
+    `docker compose down -v` im früheren Konto würde dieselben Anlagenvolumes
+    entfernen und ist kein Aufräumschritt für diesen Kontowechsel.
+    Das Wartungskonto verwendet anschließend ausschließlich `schtasks /run`.
+
 
 Abnahmestatus: **offen**. Auf dem Entwicklungsrechner wird keiner dieser
 Systemeingriffe ausgeführt.

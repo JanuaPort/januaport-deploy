@@ -15,6 +15,9 @@ services:
     # Zwei Pflichtwerte: Compose selbst verweigert einen fehlenden Digest.
     image: ${JANUAPORT_IMAGE:?Image-Repository oder Tag fehlt}@sha256:${JANUAPORT_IMAGE_DIGEST:?SHA-256-Digest fehlt}
     environment:
+      # Empty feed configuration keeps the core offline-first (plan: none).
+      JNPT_UPDATE_MANIFEST_URL: ${JNPT_UPDATE_MANIFEST_URL:-}
+      JNPT_UPDATE_PUBLIC_KEYS: ${JNPT_UPDATE_PUBLIC_KEYS:-}
       JNPT_SMTP_HOST: ${JNPT_SMTP_HOST:-}
       JNPT_SMTP_PORT: ${JNPT_SMTP_PORT:-}
       JNPT_SMTP_TLS: ${JNPT_SMTP_TLS:-}

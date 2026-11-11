@@ -107,7 +107,7 @@ class Dienst(unittest.TestCase):
         self.assertEqual(events.count('group:docker-users'), 1)
         self.assertEqual(events.count('group:Users'), 1)
         self.assertEqual(events.count('autologon'), 1)
-        self.assertEqual(len(tasks), 6)
+        self.assertEqual(len(tasks), 8)
         self.assertIn('memory=4GB', wsl)
         self.assertIn('screen:60', events)
         self.assertIn('power:/hibernate off', events)
@@ -120,6 +120,7 @@ class Dienst(unittest.TestCase):
         actions = ' '.join(self.task_command(t) for t in tasks)
         self.assertIn('jnpt-sperren.ps1', actions)
         self.assertIn('jnpt-backup.ps1', actions)
+        self.assertIn('jnpt-update.ps1', actions)
         self.assertIn('einrichten.ps1', actions)
         for task in tasks:
             if task['TaskName'] == 'JanuaPort Sperren bei Anmeldung':
@@ -144,7 +145,51 @@ class Dienst(unittest.TestCase):
                 result, tasks, _ = self.fake_setup(backup_target=target, repeat=False)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 backup = next(t for t in tasks if t['TaskName'] == 'JanuaPort Sicherung')
-                self.assertTrue(self.task_command(backup).endswith("-Target '" + target.replace("'", "''") + "'"))
+                self.assertTrue(self.task_command(backup).endswith("-Target '" + target.replace("'", "''") + "'; exit $LASTEXITCODE"))
+
+    def test_update_task_is_on_demand_interactive_limited_ignore_new_and_encoded(self):
+        for target in ['E:\\', "E:\\Back'up", r'\\backup-host\dedicated-share']:
+            with self.subTest(target=target):
+                result,tasks,_ = self.fake_setup(backup_target=target,repeat=False)
+                self.assertEqual(result.returncode,0,result.stderr)
+                update = [t for t in tasks if t['TaskName']=='JanuaPort Update']
+                self.assertEqual(len(update),1)
+                task=update[0]
+                self.assertIsNone(task['Trigger'])
+                self.assertEqual(task['Principal']['LogonType'],'Interactive')
+                self.assertEqual(task['Principal']['RunLevel'],'Limited')
+                self.assertTrue(task['Principal']['UserId'].endswith('\\jnpt-dienst'))
+                self.assertEqual(task['Settings']['MultipleInstances'],'IgnoreNew')
+                self.assertIn('-EncodedCommand ',task['Action']['Argument'])
+                command=self.task_command(task)
+                self.assertIn('jnpt-update.ps1',command)
+                self.assertTrue(command.endswith("-Target '"+target.replace("'","''")+"'; exit $LASTEXITCODE"),command)
+                self.assertTrue(task['Action']['WorkingDirectory'].endswith('profile'))
+
+    def test_backup_and_update_encoded_commands_propagate_script_exit_codes(self):
+        result,tasks,_ = self.fake_setup(repeat=False)
+        self.assertEqual(result.returncode,0,result.stderr)
+        for name in ['JanuaPort Sicherung', 'JanuaPort Update']:
+            task = next(t for t in tasks if t['TaskName'] == name)
+            command = self.task_command(task)
+            with self.subTest(task=name):
+                self.assertTrue(command.endswith('; exit $LASTEXITCODE'),command)
+                # Execute the registered command with only its script path rebased
+                # to an actual PS 5.1 child fixture; no real task is registered.
+                with tempfile.TemporaryDirectory(prefix='task-') as tmp:
+                    script_name = 'jnpt-backup.ps1' if name == 'JanuaPort Sicherung' else 'jnpt-update.ps1'
+                    fixture = Path(tmp) / script_name
+                    fixture.write_text('param($Target)\nexit ([int]$env:PROBE_EXIT)\n', encoding='utf-8')
+                    original = str(Path(task['Action']['WorkingDirectory']) / script_name)
+                    rebased = command.replace(original.replace("'", "''"), str(fixture).replace("'", "''"))
+                    self.assertNotEqual(rebased,command)
+                    encoded = base64.b64encode(rebased.encode('utf-16le')).decode('ascii')
+                    for code in [0,2,3,6]:
+                        with self.subTest(task=name,code=code):
+                            env = {k:v for k,v in os.environ.items() if k.lower() != 'psmodulepath'}
+                            env['PROBE_EXIT'] = str(code)
+                            child = run('powershell.exe','-NoProfile','-EncodedCommand',encoded,env=env,check=False)
+                            self.assertEqual(child.returncode,code,child.stdout+child.stderr)
 
     def test_setup_failure_never_prints_password(self):
         for mode in ['admin', 'privileged', 'disabled', 'root-acl', 'power', 'task']:

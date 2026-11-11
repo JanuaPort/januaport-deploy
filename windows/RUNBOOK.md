@@ -100,7 +100,11 @@ eine neue Sitzung nötig ist.
    Verfahren. Der Dienstleister verwendet ausschließlich das Wartungskonto und arbeitet nie als
    `jnpt-dienst`. Das Wartungskonto stößt nur Aufgaben mit `schtasks /run` an.
 4. Docker Desktop startet in `jnpt-dienst`; einige Minuten bis zur Bereitschaft berücksichtigen.
-   Engine und Volumes nicht aus dem Wartungskonto beurteilen. Maßgeblich ist der Aufgabenstatus.
+   Es gibt eine Engine. Wer in `docker-users` ist, erreicht die Container.
+   Dass das Wartungskonto nur `schtasks /run` und nie selbst `docker` aufruft,
+   ist eine Betriebsregel, keine technische Trennung. In `docker-users` gehört
+   nur `jnpt-dienst`; vorhandene weitere Mitglieder prüft und entfernt die IT
+   gemäß README. Das Skript fügt das Wartungskonto nicht hinzu.
    `jnpt` behält im Plugin-Netz `172.21.0.0/16` die feste Adresse `172.21.0.2` außerhalb der dynamischen Beisteller-Spanne `172.21.128.0/17`; zusammen mit `restart: unless-stopped` an allen Dauerdiensten bleibt sein Platz beim Neustart frei (#1355; Umstellung bestehender Netze siehe [README](README.md#sicherheits-defaults)).
 
 ### 3.4 Anlage einrichten
@@ -120,14 +124,15 @@ Allow-ACEs für die genannten SIDs, jeweils FullControl, ContainerInherit und
 ObjectInherit, ohne InheritOnly oder NoPropagate und ohne weitere explizite
 oder geerbte Allow-/Deny-ACEs bleibt ohne Schreibzugriff erhalten. Jede
 Abweichung wird ersetzt. Besitzer und andere Sicherheitsabschnitte bleiben unverändert.
-Bei einem Altprofil den [Upgrade-Weg 0.1.0 → 0.2.0](README.md#von-010-auf-020) und
+Bei einem Altprofil den [Upgrade-Weg 0.1.0 oder 0.2.0 → 0.3.0](README.md#von-010-oder-020-auf-030) und
 die zusätzliche Abnahme in B4 verwenden. Die
 Erstkonfiguration von Docker Desktop und die Schritte in [„Zwei Befehle“](README.md#zwei-befehle)
 führt der Betreiber in `jnpt-dienst` aus. Danach startet das Wartungskonto nur Aufgaben.
 Am Ende gibt `einrichten.ps1` den
 Zertifikats-Fingerprint aus. Ihn abschreiben und beim Dienstleister ablegen, nicht beim Kunden aushängen.
-Beim Kontowechsel verbleibt `tls-leaf` in der alten Engine. Nach B4-Schritt 2a
-alle Desktop-Läufer mit neuem Code und dem neuen Fingerprint erneut koppeln.
+Beim Kontowechsel bleibt `tls-leaf` in derselben Engine erhalten. Das allein
+ändert den Fingerprint nicht; erneute Kopplung ist erst bei einem bewussten
+Zertifikatswechsel nötig. B4-Schritt 2a verwendet die bestehenden Volumes weiter.
 
 Mail anschließend durch den Betreiber in `jnpt-dienst` gemäß [README, Abschnitt „Mail“](README.md#mail)
 einrichten. USB-Ziel und Marker vorbereiten, Aufgabe „JanuaPort Sicherung“ prüfen.
@@ -275,3 +280,100 @@ Daten des Kunden. Vor dem Start hakt die Person ab:
 | `docker version` zeigt keinen Server | Docker Desktop startet noch oder ist nicht angemeldet | einige Minuten warten; Docker Desktop startet nur in einer angemeldeten Sitzung |
 | `pair` scheitert ohne TLS-Fehler | Kopplung über HTTP an einen Container | immer über `https://` mit Fingerprint koppeln |
 | Läufer im Netz erreicht die Anlage nicht | Windows-Firewall oder falsche Adresse | Netzprofil Privat/Domäne und Regel „JanuaPort 443 LAN“ gemäß 3.5 prüfen (`LocalSubnet`, TCP 443) |
+
+
+## 7. Update (B5)
+
+### Freigabe, Anstoß und Ergebnis
+
+1. Auf VM `jnpt-b4` durch BOX zuerst [PRUEFSTEIN-B5.md](PRUEFSTEIN-B5.md)
+   vollständig abnehmen, bevor `windows-v0.3.0` getaggt wird. Ein unverändertes
+   0.2.0-Profil über den geprüften 0.3.0-Release aktualisieren; anschließend
+   `dienst-einrichten.ps1` als Administrator mit dem bisherigen `-BackupTarget`
+   wiederholen. Das legt die Aufgabe „JanuaPort Update“ an: `jnpt-dienst`,
+   Interactive/Limited, `IgnoreNew`, kein Auslöser.
+2. Feed: VENDOR-Feed oder ein öffentlich erreichbarer Test-Feed; private Ziele
+   (auch host.docker.internal) sperrt der SSRF-Schutz des Kerns.
+   Der Betreiber trägt `JNPT_UPDATE_MANIFEST_URL` und `JNPT_UPDATE_PUBLIC_KEYS`
+   in der lokalen `.env` ein und übernimmt sie in `jnpt-dienst` mit
+   `docker compose up -d --force-recreate jnpt`. Beide Werte werden nur an den
+   Kern durchgereicht. Fehlend oder leer = offline-first, Plan bleibt `none`.
+   In der lokalen Admin-GUI das angebotene Update prüfen und freigeben.
+3. Das Wartungskonto stößt die Aufgabe an und liest anschließend das Ergebnis:
+
+   ```powershell
+   schtasks /run /tn "JanuaPort Update"
+   Get-ScheduledTaskInfo -TaskName 'JanuaPort Update' | Select-Object LastRunTime,LastTaskResult
+   Get-Content C:\JanuaPort\windows\log\update.log -Tail 100
+   ```
+
+   `schtasks /run` bestätigt nur den Anstoß. Abschluss und `LastTaskResult`
+   abwarten; bei „JanuaPort Update“ und „JanuaPort Sicherung“ entspricht es dem
+   Exit-Code des Skripts. Das Log lesen und die GUI-Anzeige „installiert“ prüfen. Die tägliche
+   Sicherung um 20:00 und die Update-Sicherung sind getrennte Aufgaben.
+   `IgnoreNew` verhindert nur einen zweiten Lauf derselben Aufgabe. Der Betreiber
+   stimmt den Anstoß so ab, dass die tägliche Sicherung vorher beendet ist;
+   dieses Paket führt keine zusätzliche Sperre oder Zeitplanung ein.
+4. `none` bedeutet nur `record none`, Exit 0. Bei `approved` und `unattended`
+   folgt dieselbe technische Folge: Sicherung als Kindprozess (gleiches Ziel
+   wie täglich, höchstens 600 Sekunden), Pull der festen Repository-Konstante
+   `ghcr.io/januaport/januaport@<digest>`, alte zwei `.env`-Zeilen ins Log,
+   ausschließlich diese zwei Zeilen atomar ersetzen, `up -d`, Host-Health und
+   TLS-Fingerprint wie bei der Einrichtung, `record installed` oder `record failed`.
+   UTF-8 ohne BOM und die `.env`-DACL bleiben erhalten. Der Digest wird exakt
+   mit `-cmatch '\Asha256:[a-f0-9]{64}\z'` geprüft. Image-Referenzen stammen
+   weder aus `latest` noch aus `reason`. Im Kern-Container läuft nur `/jnpt`;
+   das Zertifikat wird separat mit OpenSSL in `cert-init` gelesen.
+
+Der Host trifft keine Versions-, Migrations-, Signatur- oder Freigabeentscheidung.
+`on_failure` und `reason` steuern keinen eigenen Rückweg. Der Kern-Vertrag lautet:
+
+- `/jnpt update plan --json` gibt genau eine JSON-Zeile mit den Feldern `current`, `latest`, `digest`, `action` (eins von `none`, `unattended`, `approved`, `rollback`), `on_failure`, `reason`.
+- `/jnpt update record --result=none|installed|failed --from=<current> --to=<latest> [--digest=<sha256:…>]` (bei installed/failed sind --from und --to Pflicht; `--backup` in v1 NICHT mitgeben).
+- Feed-Umgebung des Kerns: `JNPT_UPDATE_MANIFEST_URL`, `JNPT_UPDATE_PUBLIC_KEYS` (Box reicht beide aus `.env` durch; gleiches Muster im Windows-Compose am Dienst `jnpt`, leer = offline-first, Plan bleibt dann `none`).
+
+Die sechs gebrauchten Planfelder sind Pflicht und müssen jeweils Zeichenketten
+sein. Weitere Felder werden ohne Auswertung ignoriert, auch bei künftigen
+Erweiterungen des Kerns.
+
+### Fehler und begrenzter Abbruch
+
+| Exit | Reaktion |
+|---|---|
+| 1 | Sitzung von `jnpt-dienst` und vollständiges Profil prüfen |
+| 2 | Ungültiger Plan/Digest oder Docker nicht bereit: Log prüfen und nach Behebung erneut anstoßen; `rollback`: Rückweg von Hand |
+| 3 | Sicherung/USB/Marker, Pull oder Dateiaustausch prüfen; vor erfolgreicher Sicherung und Pull wird `.env` nicht ersetzt |
+| 6 | `record failed` mit Digest; neuer Stand bleibt, Diagnose und bewusster Rückweg von Hand |
+
+Das Skript setzt nichts automatisch zurück und führt kein Restore aus.
+Nicht buchbare Ergebnisse stehen ausschließlich in `log\update.log`, der
+Exit-Code bleibt wie im Lauf (auch 0 bzw. 6). Native Ausgaben und rohe
+Fehlermeldungen bleiben privat. Das Log hält höchstens 100 Zeilen ohne
+Benutzernamen. Die alten zwei Image-Zeilen vor einem späteren Lauf lokal
+festhalten; eine Logrotation ersetzt kein dauerhaftes Rückweg-Protokoll.
+Bei Neustart vor Docker-Bereitschaft ist jeder Docker-Aufruf auf 30 Sekunden
+begrenzt. Der Plan scheitert dann laut mit fester Meldung und Exit 2; es gibt
+keinen endlosen Bereitschaftslauf. Nach Bereitschaft erneut anstoßen.
+Health wird nur vom Host aus geprüft: maximal 90 Anfragen mit je 3 Sekunden
+Frist und 2 Sekunden Pause; TLS danach maximal 30 Versuche mit 2 Sekunden Pause.
+
+### Rückweg von Hand
+
+1. In der Sitzung von `jnpt-dienst` den Profilordner öffnen. Die beiden alten
+   Zeilen `JANUAPORT_IMAGE=...` und `JANUAPORT_IMAGE_DIGEST=...` aus dem lokalen
+   Rückweg-Protokoll bzw. `log\update.log` in `.env` zurückschreiben. Alle anderen
+   Zeilen erhalten. Dann `docker compose up -d` ausführen und Host-Health,
+   TLS-Fingerprint, Admin-Anmeldung und Lesezugriff prüfen.
+2. **Bei Migration genügt der Image-Wechsel nicht.** Anlage stoppen, Sicherung
+   von vor dem Update mit dem **alten Image** und getrennt verwahrtem Master-Key
+   nach [Rücksicherung (N4)](README.md#rücksicherung-in-eine-frische-installation-n4)
+   einspielen. Ziel-DB muss leer sein; vorhandene DB und Key bei gestoppter Anlage
+   beiseitelegen. Die zwei alten Image-Zeilen vor Restore setzen. Erst nach
+   erfolgreicher Rücksicherung `up -d`, Health, Anmeldung und Daten prüfen.
+   Den Ordner `/data/beiseite-<zeitstempel>` erst löschen, wenn die Rücksicherung geprüft ist (healthz, Anmeldung, Lesezugriff).
+   Wer den Block auf eine nicht frische Anlage anwendet, verliert sonst den alten Stand.
+3. Nach der Rücksicherung steht die Freigabe aus der Sicherung wieder in der
+   Datenbank. Der nächste Anstoß installiert dasselbe Update erneut. Vorher in
+   der Admin-GUI die Freigabe zurücknehmen. GUI-Zustand danach durch den
+   Betreiber prüfen. Das Host-Skript führt weder `update rollback` noch
+   `/jnpt restore` aus.

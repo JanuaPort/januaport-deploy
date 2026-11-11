@@ -232,11 +232,16 @@ function Register-DienstTasks {
     Register-ScheduledTask -TaskName 'JanuaPort Anlage starten' -Action $install -Principal $principal -Settings $settings -Force | Out-Null
     # EncodedCommand preserves roots ending in backslash and paths containing
     # apostrophes without Windows argv quoting changing the target.
-    $backupCommand = "& '" + $DienstDirectory + "\jnpt-backup.ps1' -Target '" + $BackupTarget.Replace("'", "''") + "'"
+    $backupCommand = "& '" + $DienstDirectory + "\jnpt-backup.ps1' -Target '" + $BackupTarget.Replace("'", "''") + "'; exit `$LASTEXITCODE"
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($backupCommand))
     $backup = New-ScheduledTaskAction -Execute $ps -WorkingDirectory $DienstDirectory -Argument ('-NoProfile -ExecutionPolicy Bypass -EncodedCommand ' + $encoded)
     $daily = New-ScheduledTaskTrigger -Daily -At '20:00'
     Register-ScheduledTask -TaskName 'JanuaPort Sicherung' -Action $backup -Trigger $daily -Principal $principal -Settings $settings -Force | Out-Null
+    $updateCommand = "& '" + $DienstDirectory + "\jnpt-update.ps1' -Target '" + $BackupTarget.Replace("'", "''") + "'; exit `$LASTEXITCODE"
+    $updateEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($updateCommand))
+    $update = New-ScheduledTaskAction -Execute $ps -WorkingDirectory $DienstDirectory -Argument ('-NoProfile -ExecutionPolicy Bypass -EncodedCommand ' + $updateEncoded)
+    # On demand only; the core's action is the sole update policy.
+    Register-ScheduledTask -TaskName 'JanuaPort Update' -Action $update -Principal $principal -Settings $settings -Force | Out-Null
 }
 
 function Initialize-Dienst {
