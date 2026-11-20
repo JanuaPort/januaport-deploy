@@ -119,11 +119,15 @@ Autologon wird alle 500 ms bis höchstens 10 Sekunden nachgeprüft. Neustarten.
 B-7: `icacls C:\JanuaPort` und `icacls C:\JanuaPort\windows` zeigen ausschließlich
 `jnpt-dienst`, Administratoren und SYSTEM. Vererbung vom Laufwerksstamm ist aus.
 F5: Die Einrichtung ersetzt die vollständige DACL in einem einzigen
-Access-Schreibaufruf. R4: Nur eine geschützte DACL mit genau drei expliziten
+Schreibaufruf einschließlich Besitzer. R4: Nur eine geschützte DACL mit genau drei expliziten
 Allow-ACEs für die genannten SIDs, jeweils FullControl, ContainerInherit und
 ObjectInherit, ohne InheritOnly oder NoPropagate und ohne weitere explizite
-oder geerbte Allow-/Deny-ACEs bleibt ohne Schreibzugriff erhalten. Jede
-Abweichung wird ersetzt. Besitzer und andere Sicherheitsabschnitte bleiben unverändert.
+oder geerbte Allow-/Deny-ACEs gilt als korrekt. Jede Abweichung wird ersetzt.
+Der Besitzer wird auch bei korrekter DACL immer auf `BUILTIN\Administrators`
+(BA) gesetzt, einschließlich aller Unterordner und Dateien unter `C:\JanuaPort`.
+Dateien bekommen ausschließlich die drei geerbten ACEs; Gruppe und Audit bleiben
+unverändert. Verknüpfungen im Baum sind unzulässig. Scheitert das Setzen von
+Besitzer oder Rechten, bricht die Einrichtung ab.
 Bei einem Altprofil den [Upgrade-Weg 0.1.0 oder 0.2.0 → 0.3.0](README.md#von-010-oder-020-auf-030) und
 die zusätzliche Abnahme in B4 verwenden. Die
 Erstkonfiguration von Docker Desktop und die Schritte in [„Zwei Befehle“](README.md#zwei-befehle)
@@ -166,9 +170,9 @@ DACL unlesbar sind, im geprüften **F5-Releaseordner** als Administrator
 ausführen; das Sicherungsziel anpassen. Die Reparatur ist ein manueller
 Wartungsschritt. Auf deutschem Windows ist `/d j` richtig (lokal mit
 `takeown /?` bestätigt), auf englischem Windows stattdessen `/d y` verwenden.
-Danach ist der angemeldete Administrator Besitzer; das ist in Ordnung.
-Die abschließende Diensteinrichtung setzt die B-7-DACL wieder auf genau die
-drei Prinzipale. Anschließend Lesbarkeit von `.env`, `secrets\` und
+Nach `takeown` ist vorübergehend der angemeldete Administrator Besitzer.
+Die abschließende Diensteinrichtung erzwingt BA als Besitzer aller Ordner und
+Dateien sowie die B-7-DACL mit genau den drei Prinzipalen. Anschließend Lesbarkeit von `.env`, `secrets\` und
 `log\sperren.log`, Anlagenstart und Sicherung erneut prüfen.
 
 <!-- F5 -->
@@ -351,8 +355,12 @@ Exit-Code bleibt wie im Lauf (auch 0 bzw. 6). Native Ausgaben und rohe
 Fehlermeldungen bleiben privat. Das Log hält höchstens 100 Zeilen ohne
 Benutzernamen. Die alten zwei Image-Zeilen vor einem späteren Lauf lokal
 festhalten; eine Logrotation ersetzt kein dauerhaftes Rückweg-Protokoll.
-Bei Neustart vor Docker-Bereitschaft ist jeder Docker-Aufruf auf 30 Sekunden
-begrenzt. Der Plan scheitert dann laut mit fester Meldung und Exit 2; es gibt
+Plan, Ergebnisbuchung und Zertifikatsabfrage haben 30 Sekunden Frist, die
+Sicherung 600 Sekunden. Pull und `compose up -d` warten dagegen bis zum
+Prozessende ohne feste Frist. Erst danach folgen Prüfungen und Ergebnisbuchung.
+Bei Fristablauf eines befristeten Schritts wird der ganze Prozessbaum mit
+`taskkill /T /F` beendet und dessen Ende abgewartet.
+Bei Neustart vor Docker-Bereitschaft scheitert der Plan laut mit fester Meldung und Exit 2; es gibt
 keinen endlosen Bereitschaftslauf. Nach Bereitschaft erneut anstoßen.
 Health wird nur vom Host aus geprüft: maximal 90 Anfragen mit je 3 Sekunden
 Frist und 2 Sekunden Pause; TLS danach maximal 30 Versuche mit 2 Sekunden Pause.

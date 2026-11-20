@@ -21,6 +21,7 @@ function Add-LocalGroupMember { param($Group,$Member) $script:events.Add('group:
 function Get-DienstProfilePath { param($User) Join-Path $env:PROBE_ROOT 'user' }
 function Protect-DienstRoot { param($SID) $script:events.Add('root-acl'); if ($env:PROBE_FAIL -eq 'root-acl') {throw 'DACL failed'} }
 function Protect-DienstDirectory { param($Path,$SID) $script:events.Add('acl') }
+function Protect-DienstTree { param($Path,$SID) $script:events.Add('tree-acl') }
 function Set-DienstScreenLock { param($ProfilePath,$SID) $script:events.Add('screen:60') }
 function powercfg.exe { $script:events.Add('power:' + ($args -join ' ')); $global:LASTEXITCODE=0; if ($env:PROBE_FAIL -eq 'power') {$global:LASTEXITCODE=1} }
 function Test-DockerDesktopSettings { param($ProfilePath) $script:events.Add('settings-read') }

@@ -80,28 +80,51 @@ function Protect-DienstDirectory {
         })
         if ($matching.Count -ne 1) { $exact = $false }
     }
-    if ($exact) { return }
-
-    # Build the complete Access section before a single native write. Never
-    # persist an empty DACL: children may be owned by the service account (F5).
-    # A fresh descriptor leaves Owner, Group and Audit sections unmodified.
-    $sec = New-Object Security.AccessControl.DirectorySecurity
-    $sec.SetAccessRuleProtection($true, $false)
-    foreach ($principal in $principals) {
-        $identity = New-Object Security.Principal.SecurityIdentifier($principal)
-        $rule = New-Object Security.AccessControl.FileSystemAccessRule($identity,
-            [Security.AccessControl.FileSystemRights]::FullControl, $inheritance,
-            [Security.AccessControl.PropagationFlags]::None, [Security.AccessControl.AccessControlType]::Allow)
-        $sec.AddAccessRule($rule)
+    # Always mark Owner for persistence, including an already exact DACL.
+    # SetOwner precedes the DACL replacement; Group and Audit stay untouched.
+    $sec = if ($exact) { $current } else { New-Object Security.AccessControl.DirectorySecurity }
+    $sec.SetOwner((New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')))
+    if (-not $exact) {
+        # Complete DACL in one native write, never an intermediate empty DACL (F5).
+        $sec.SetAccessRuleProtection($true, $false)
+        foreach ($principal in $principals) {
+            $identity = New-Object Security.Principal.SecurityIdentifier($principal)
+            $rule = New-Object Security.AccessControl.FileSystemAccessRule($identity,
+                [Security.AccessControl.FileSystemRights]::FullControl, $inheritance,
+                [Security.AccessControl.PropagationFlags]::None, [Security.AccessControl.AccessControlType]::Allow)
+            $sec.AddAccessRule($rule)
+        }
     }
     [IO.Directory]::SetAccessControl($Path, $sec)
+}
+
+function Protect-DienstFile {
+    param([string]$Path)
+    $sec = New-Object Security.AccessControl.FileSecurity
+    $sec.SetOwner((New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')))
+    # A fresh, unprotected Access section removes explicit grants and inherits
+    # only the protected parent's three ACEs. Content, Group and Audit survive.
+    $sec.SetAccessRuleProtection($false, $false)
+    [IO.File]::SetAccessControl($Path, $sec)
+}
+
+function Protect-DienstTree {
+    param([string]$Path, $SID)
+    $item = Get-Item -LiteralPath $Path -Force
+    # Never follow junctions/symlinks into another tree when applying ownership.
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Verknuepfung im Dienstprofil nicht erlaubt.' }
+    if (-not $item.PSIsContainer) { Protect-DienstFile $Path; return }
+    Protect-DienstDirectory $Path $SID
+    foreach ($child in Get-ChildItem -LiteralPath $Path -Force) {
+        Protect-DienstTree $child.FullName $SID
+    }
 }
 
 function Protect-DienstRoot {
     param($SID)
     $root = Split-Path -Path $DienstDirectory -Parent
     New-Item -ItemType Directory -Path $root -Force | Out-Null
-    Protect-DienstDirectory $root $SID
+    Protect-DienstTree $root $SID
 }
 
 function Set-DienstScreenLock {
@@ -290,6 +313,8 @@ function Initialize-Dienst {
             }
             if ($upgrade -or -not (Test-Path -LiteralPath $destination)) { Copy-Item -LiteralPath $source -Destination $destination }
         }
+        # Also secure newly staged scripts and pre-existing log/backup files.
+        Protect-DienstTree $DienstDirectory $user.SID
         Set-DienstScreenLock $profilePath $user.SID
         $wsl = Join-Path $profilePath '.wslconfig'
         $wslText = "[wsl2]`nmemory=4GB`n"

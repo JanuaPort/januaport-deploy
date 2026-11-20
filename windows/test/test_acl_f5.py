@@ -46,6 +46,8 @@ $DienstDirectory='C:\JanuaPort\windows'
 [F5AclBoundary]::Current.SetOwner((New-Object Security.Principal.SecurityIdentifier('S-1-5-21-100-100-100-1002')))
 function Protect-DienstTree {param($Path,$SID) Protect-DienstDirectory $Path $SID}
 Protect-DienstRoot 'S-1-5-21-100-100-100-1001'
+# A correct DACL with a foreign owner must also be repaired on repeat runs.
+[F5AclBoundary]::Current.SetOwner((New-Object Security.Principal.SecurityIdentifier('S-1-5-21-100-100-100-1002')))
 $acl=[F5AclBoundary]::Current
 if ($env:PROBE_REPAIR -eq 'unprotected') { $acl.SetAccessRuleProtection($false,$false) }
 elseif ($env:PROBE_REPAIR -in @('fourth','users','extra-deny')) {
@@ -101,7 +103,7 @@ $rules=@($acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier]
         Type=[int]$_.AccessControlType;Inherited=$_.IsInherited}
 })
 [pscustomobject]@{Writes=[F5AclBoundary]::Writes;Paths=@([F5AclBoundary]::Paths);
-    Protected=$acl.AreAccessRulesProtected;RawCount=$raw.DiscretionaryAcl.Count;Rules=$rules;Owner=[string]$acl.GetOwner([Security.Principal.SecurityIdentifier]);
+    Protected=$acl.AreAccessRulesProtected;RawCount=$raw.DiscretionaryAcl.Count;RawTypes=@($raw.DiscretionaryAcl | ForEach-Object {[int]$_.AceType});Rules=$rules;Owner=[string]$acl.GetOwner([Security.Principal.SecurityIdentifier]);
     Group=$acl.GetGroup([Security.Principal.SecurityIdentifier])} | ConvertTo-Json -Depth 5 -Compress
 '''
     return ps(command, ROOT / 'dienst-einrichten.ps1', dict(PROBE_FAIL='1' if fail else '0', PROBE_REPAIR=repair))
@@ -115,6 +117,7 @@ def assert_exact_rules(case, state, writes):
     case.assertIsNone(state['Group'])
     rules = state['Rules']
     case.assertEqual(state['RawCount'], 3)
+    case.assertEqual(state['RawTypes'], [0, 0, 0])
     case.assertEqual(len(rules), 3)
     case.assertEqual({r['SID'] for r in rules}, {'S-1-5-21-100-100-100-1001','S-1-5-32-544','S-1-5-18'})
     for rule in rules:
@@ -183,7 +186,7 @@ $legacy=@($ast.FindAll({param($n) ($n -is [Management.Automation.Language.Comman
 
     @unittest.skipUnless(os.environ.get('JNPT_OWNER_VM') == '1', 'Besitzwechsel nur auf expliziter NTFS-Test-VM')
     def test_real_ntfs_second_run_keeps_inherited_files_readable_and_owner(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             command = r'''
 $root=$env:PROBE_ROOT
 if ((New-Object IO.DriveInfo([IO.Path]::GetPathRoot($root))).DriveFormat -ne 'NTFS') {throw 'NTFS required'}

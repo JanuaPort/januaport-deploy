@@ -140,11 +140,15 @@ three explicit Allow rules: `jnpt-dienst`, Administrators and SYSTEM receive
 FullControl with ContainerInherit and ObjectInherit. R4 also requires
 Propagation None: no InheritOnly or NoPropagate and no additional ACEs,
 whether Allow or Deny, explicit or inherited. One
-`Directory.SetAccessControl` call replaces only the Access section, without
-clearing it first. Additional grants and inheritance from the parent are
-removed together; owner, group and audit remain unchanged. An already matching
-protected DACL is not written again, preserving access to inherited files on
-repeat runs. Profile files are staged afterwards. For installations already
+`Directory.SetAccessControl` call sets owner and the complete DACL without
+clearing it first. Additional grants and inheritance from the parent are removed
+together. **#1498:** Every run uses `SetOwner` to enforce `BUILTIN\Administrators`
+(BA), including an exact DACL and a foreign previous owner. Existing directories
+are accepted; failure to set ownership or permissions aborts setup. Every
+subdirectory and file under `C:\JanuaPort` is included. Files receive BA ownership
+and only the three inherited ACEs. Group and audit remain unchanged. Links in
+the tree are rejected. After staging, new scripts and log/backup directories are
+protected as well. Inherited files remain accessible on repeat runs. For installations already
 affected by F5, see the [manual RUNBOOK repair](RUNBOOK.md#f5-reparatur-nach-entzogenen-dateirechten).
 Different existing files are rejected outside the
 verified upgrades from 0.1.0 or 0.2.0; `.env` and secrets are preserved. Initial
@@ -484,9 +488,11 @@ completed job separately from pairing.
   the device pairing check under Docker Desktop NAT. Only `/api/device/v1/*`
   and exact `/healthz` are forwarded. Everything else returns 404, including
   the GUI, `/admin/mcp`, `/api/admin/*`, `/metrics` and `/mcp`. Port 8484 binds
-  to `127.0.0.1` only; Caddy's admin API is disabled. Enable the commented exact
-  `/mcp` block only when a LAN AI client needs it and after reviewing permissions
-  and route tests again.
+  to `127.0.0.1` only; Caddy's admin API is disabled. This Windows profile has
+  no LAN MCP switch. The former commented block has been removed (#1503);
+  keep the checksum-verified `Caddyfile` unchanged. If that old block was enabled,
+  restore the original file for the installed profile version before maintenance
+  or upgrade. Manual route changes still fail SHA-256 verification.
 - **W9:** Manually follow [LAN access during setup](#lan-access-during-setup-n5):
   Private or Domain profile, rule “JanuaPort 443 LAN”, TCP 443 from
   `LocalSubnet` only. Keep the default inbound firewall policy at Block.
@@ -583,7 +589,12 @@ script's exit code. Check `LastTaskResult=0` together with the log and GUI. Nati
 exception messages stay off the console and log. `log\update.log` retains
 at most 100 lines without usernames. It records the old two image values
 before replacement; retain them locally before a later run for manual recovery.
-Each Docker call is bounded to 30 seconds, backup to 600 seconds. If Docker
+Plan, result recording and certificate queries are bounded to 30 seconds,
+backup to 600 seconds. Pull and `compose up -d` wait for process completion
+without a fixed deadline, followed by health/TLS checks and result recording.
+A slow successful command therefore does not record a failed update. Timed
+commands use `taskkill /T /F` to terminate the entire process tree and wait for
+completion before reporting a timeout. If Docker
 is not ready after reboot, the plan attempt ends with a fixed error message
 and exit 2; trigger again once ready. Host health has at most 90 attempts,
 with a 3-second request timeout and 2-second pause; TLS has at most 30 attempts

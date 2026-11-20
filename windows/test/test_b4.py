@@ -13,7 +13,7 @@ MESSAGE = ('Docker Desktop einmal in jnpt-dienst starten und die Einstellungen '
 
 class B4(unittest.TestCase):
     def test_logon_task_has_no_delay_and_fixed_script(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             command = ". '" + str(Path(__file__).with_name('dienst_fakes.ps1')) + "'; "
             command += "$BackupTarget='E:\\Backup'; Register-DienstTasks"
             result = ps(command, ROOT / 'dienst-einrichten.ps1', dict(PROBE_ROOT=tmp))
@@ -33,7 +33,7 @@ class B4(unittest.TestCase):
     def lock_probe(self, explorer_after=0, locked_after=1, native_error=False, seed_log=False, log_failure=False):
         source = ROOT / 'jnpt-sperren.ps1'
         self.assertTrue(source.is_file(), 'lock script must be shipped')
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             # Managed native-boundary fake; production user32/wtsapi32 never load.
             bootstrap = r'''
@@ -142,7 +142,7 @@ function logoff.exe { Add-Content $env:PROBE_TRACE 'FORBIDDEN logoff'; throw 'FO
         self.assertNotEqual(result.returncode, 0)
 
     def test_setup_creates_log_directory_before_registering_task(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / 'user').mkdir()
             command = ". '" + str(Path(__file__).with_name('dienst_fakes.ps1')) + "'; "
@@ -199,7 +199,7 @@ private static bool WTSQuerySessionInformation(IntPtr server, int session, int i
         native = 'using System.IO;\n' + native
         for flags, mode, expected in [(0, 'ok', True), (1, 'ok', False), (-1, 'ok', False),
                                       (0, 'short', False), (0, 'level', False), (0, 'failed', False)]:
-            with self.subTest(flags=flags, mode=mode), tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            with self.subTest(flags=flags, mode=mode), tempfile.TemporaryDirectory() as tmp:
                 trace = Path(tmp) / 'trace'
                 command = "Add-Type -TypeDefinition @'\n" + native + "\n'@\n[Jnpt.SessionLock]::IsLocked()"
                 result = ps(command, ROOT / 'dienst-einrichten.ps1',
@@ -209,7 +209,7 @@ private static bool WTSQuerySessionInformation(IntPtr server, int session, int i
                 self.assertEqual(trace.read_text(), 'free')
 
     def autologon_probe(self, ready_after):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             binary = Path(tmp) / 'autologon.cmd'
             binary.write_text('@echo off\nexit /b 0\n')
             command = r'''
@@ -247,7 +247,7 @@ try {
         self.assertEqual(state['reads'], 21)
 
     def test_missing_settings_real_file_adapter_has_fixed_message_and_error_exit(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             result = ps("try { Test-DockerDesktopSettings '" + tmp +
                         "'; exit 0 } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }",
                         ROOT / 'dienst-einrichten.ps1')
@@ -259,7 +259,7 @@ try {
         good = dict(autoStart=True, exposeDockerAPIOnTCP2375=False, autoDownloadUpdates=False,
                     disableUpdate=True, silentModulesUpdate=False)
         for name in ['settings-store.json', 'settings.json']:
-            with self.subTest(name=name), tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
                 folder = Path(tmp) / 'AppData' / 'Roaming' / 'Docker'
                 folder.mkdir(parents=True)
                 file = folder / name

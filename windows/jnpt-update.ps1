@@ -28,7 +28,7 @@ function Write-UpdateLog {
 
 function Invoke-UpdateProcess {
     param([string]$Command, [int]$TimeoutSeconds)
-    # A separate PS 5.1 process bounds native calls even while Docker starts.
+    # Timeout 0 waits for completion (pull/up); short queries have a deadline.
     # EAP=Continue inside it: native stderr must not become a terminating error.
     $commandText = "`$ErrorActionPreference='Continue'; [Console]::OutputEncoding=New-Object Text.UTF8Encoding(`$false); " + $Command
     $start = New-Object Diagnostics.ProcessStartInfo
@@ -47,10 +47,30 @@ function Invoke-UpdateProcess {
         $process.Start() | Out-Null
         $stdout = $process.StandardOutput.ReadToEndAsync()
         $stderr = $process.StandardError.ReadToEndAsync()
-        if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
-            $process.Kill()
+        $waitMilliseconds = if ($TimeoutSeconds -eq 0) { -1 } else { $TimeoutSeconds * 1000 }
+        if (-not $process.WaitForExit($waitMilliseconds)) {
+            # PS 5.1's Process.Kill only kills the wrapper. taskkill /T also
+            # reaps docker.exe and native grandchildren before reporting failure.
+            $killStart = New-Object Diagnostics.ProcessStartInfo
+            $killStart.FileName = $env:SystemRoot + '\System32\taskkill.exe'
+            $killStart.Arguments = '/PID ' + $process.Id + ' /T /F'
+            $killStart.UseShellExecute = $false
+            $killStart.CreateNoWindow = $true
+            $killStart.RedirectStandardOutput = $true
+            $killStart.RedirectStandardError = $true
+            $killer = [Diagnostics.Process]::Start($killStart)
+            try {
+                $killOut = $killer.StandardOutput.ReadToEndAsync()
+                $killErr = $killer.StandardError.ReadToEndAsync()
+                $killer.WaitForExit()
+                $killOut.GetAwaiter().GetResult() | Out-Null
+                $killErr.GetAwaiter().GetResult() | Out-Null
+                # If taskkill fails, wait rather than book failure while work runs.
+                $process.WaitForExit()
+            } finally { $killer.Dispose() }
             throw 'Zeitlimit fuer Kindprozess erreicht.'
         }
+        $stderr.GetAwaiter().GetResult() | Out-Null
         return [pscustomobject]@{ExitCode=$process.ExitCode; Output=$stdout.GetAwaiter().GetResult()}
     } finally { $process.Dispose() }
 }
@@ -69,7 +89,8 @@ function Invoke-UpdateDocker {
     if (-not $allowed) { throw 'Docker-Aufruf ausserhalb des Update-Vertrags.' }
     $quoted = @($Arguments | ForEach-Object { "'" + $_.Replace("'", "''") + "'" })
     # Native output stays private; only LASTEXITCODE determines command success.
-    return Invoke-UpdateProcess ("& docker " + ($quoted -join ' ') + ' 2>$null; exit $LASTEXITCODE') 30
+    $timeout = if ($Arguments[0] -ceq 'pull' -or $command -ceq 'compose up -d') { 0 } else { 30 }
+    return Invoke-UpdateProcess ("& docker " + ($quoted -join ' ') + ' 2>$null; exit $LASTEXITCODE') $timeout
 }
 
 function Read-UpdatePlan {

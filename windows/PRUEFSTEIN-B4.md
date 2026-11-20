@@ -42,8 +42,15 @@ festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
    NoPropagate und ohne weitere explizite oder geerbte Allow-/Deny-ACEs.
    Zusätzliches Benutzer-Read-ACE und eine ACE ohne ObjectInherit getrennt
    ausprobieren: erneute Einrichtung muss beide Abweichungen entfernen.
-   Der Fall eines anderen Dateibesitzers ist im lokalen NTFS-Test nicht
-   nachgestellt und bleibt ausdrücklich BOX-Abnahme.
+   **#1498:** Vorher einen Ordner samt `jnpt-backup.ps1` durch ein fremdes
+   Standardkonto anlegen. Nach Einrichtung gehören `C:\JanuaPort`, alle
+   Unterordner und Dateien BA (`BUILTIN\Administrators`), Dateien tragen nur
+   die drei geerbten ACEs. Erneute Einrichtung muss BA auch bei schon korrekter
+   DACL erzwingen. `icacls /grant` durch das fremde Konto muss danach sowohl
+   am Ordner als auch an der Datei scheitern. Der automatisierte NTFS-Test
+   `test_audit_owner.Owner.test_foreign_ntfs_owner_cannot_grant_after_protection`
+   ist ausschließlich für eine Test-VM freigeschaltet. Lokal nicht ausgeführt;
+   der reale Fremdkonto-Nachweis und sein SetOwner-Mutant bleiben BOX-Abnahme.
 4. **W4/W5, B-3, Neustart:** `dienst-einrichten.ps1` auf dem Testrechner als
    Admin vorbereiten, Docker Desktop vor dem abschließenden Lauf einmal in
    `jnpt-dienst` starten und Einstellungen von Hand prüfen, mit `-KennwortNeu`

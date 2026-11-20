@@ -3,7 +3,6 @@ import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
 from pathlib import Path
-import re
 import socket
 import ssl
 import subprocess
@@ -47,13 +46,12 @@ class CaddyMaintenance(unittest.TestCase):
                 pass
 
         with tempfile.TemporaryDirectory() as tmp, ThreadingHTTPServer(('127.0.0.1', 0), Backend) as backend:
-            thread = threading.Thread(target=backend.serve_forever, daemon=True)
-            thread.start()
             root = Path(tmp)
             with socket.socket() as sock:
                 sock.bind(('127.0.0.1', 0))
                 port = sock.getsockname()[1]
-            subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+            (root / 'openssl.cnf').write_text('[req]\ndistinguished_name=dn\n[dn]\n')
+            subprocess.run(['openssl', 'req', '-config', str(root / 'openssl.cnf'), '-x509', '-newkey', 'rsa:2048', '-nodes',
                             '-keyout', str(root / 'key.pem'), '-out', str(root / 'cert.pem'),
                             '-days', '1', '-subj', '/CN=localhost'], check=True, capture_output=True)
             text = (ROOT / 'Caddyfile').read_text().replace(
@@ -63,8 +61,12 @@ class CaddyMaintenance(unittest.TestCase):
             config = root / 'Caddyfile'
             config.write_text(text)
             env = dict(os.environ, XDG_CONFIG_HOME=str(root / 'config'), XDG_DATA_HOME=str(root / 'data'))
+            log = (root / 'caddy.log').open('wb')
             process = subprocess.Popen([os.environ['JNPT_CADDY_EXE'], 'run', '--config', str(config), '--adapter', 'caddyfile'],
-                                       env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                       env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                                       creationflags=subprocess.CREATE_NO_WINDOW)
+            thread = threading.Thread(target=backend.serve_forever, daemon=True)
+            thread.start()
             def request(path, method='GET'):
                 conn = http.client.HTTPSConnection('127.0.0.1', port, context=ssl._create_unverified_context(), timeout=2)
                 try:
@@ -75,6 +77,8 @@ class CaddyMaintenance(unittest.TestCase):
                     conn.close()
             try:
                 for _ in range(80):
+                    if process.poll() is not None:
+                        raise RuntimeError('Caddy test adapter exited: ' + (root / 'caddy.log').read_text())
                     try:
                         if request('/healthz') == (200, b'upstream'):
                             break
@@ -88,4 +92,6 @@ class CaddyMaintenance(unittest.TestCase):
             finally:
                 process.terminate()
                 process.wait(timeout=10)
+                log.close()
                 backend.shutdown()
+                thread.join(timeout=5)

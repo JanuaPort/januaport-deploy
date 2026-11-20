@@ -35,7 +35,7 @@ if mode!='source-missing':
 
 class Backup(unittest.TestCase):
     def invoke(self, mode='', marker=True, identity=True, extra='', existing=False, target_value=None, profile_complete=True):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             target = root / 'usb'
             target.mkdir()
@@ -121,7 +121,7 @@ function Remove-Item { param($LiteralPath,[switch]$Force)
                 if mode != 'cleanup': self.assertEqual(self.staged, FOREIGN)
 
     def test_host_size_gate_at_real_file_adapter(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'probe'
             path.write_bytes(b'synthetic size probe')
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -168,7 +168,7 @@ function Register-DienstTasks {
 }
 ''')
         self.assertEqual(result.returncode, 0, result.stderr)
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             from test_profile import PROFILE_FILES
             target = Path(tmp)
             for name in ('SHA256SUMS', *PROFILE_FILES): shutil.copyfile(ROOT / name, target / name)

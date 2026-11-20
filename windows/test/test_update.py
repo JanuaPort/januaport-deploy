@@ -288,18 +288,25 @@ $code
 
 
 class UpdateAdapter(unittest.TestCase):
-    def test_slow_docker_finishes_before_result_is_recorded(self):
-        for mode, expected, record in [('slow-pull',0,'installed'), ('slow-up',0,'installed'), ('slow-up-fail',6,'failed')]:
-            with self.subTest(mode=mode):
-                probe=Update()
-                result,trace=probe.invoke(mode=mode)
-                self.assertEqual(result.returncode,expected,result.stderr)
-                done=['docker-finished',mode]
-                self.assertIn(done,trace)
-                records=probe.records(trace)
-                self.assertEqual(len(records),1)
-                self.assertIn('--result='+record,records[0])
-                self.assertLess(trace.index(done),trace.index(records[0]))
+    def slow_docker_finishes_before_record(self, mode, expected, record):
+        probe=Update()
+        result,trace=probe.invoke(mode=mode)
+        self.assertEqual(result.returncode,expected,result.stderr)
+        done=['docker-finished',mode]
+        self.assertIn(done,trace)
+        records=probe.records(trace)
+        self.assertEqual(len(records),1)
+        self.assertIn('--result='+record,records[0])
+        self.assertLess(trace.index(done),trace.index(records[0]))
+
+    def test_slow_pull_records_installed_after_completion(self):
+        self.slow_docker_finishes_before_record('slow-pull',0,'installed')
+
+    def test_slow_up_records_installed_after_completion(self):
+        self.slow_docker_finishes_before_record('slow-up',0,'installed')
+
+    def test_slow_up_failure_records_failed_after_completion(self):
+        self.slow_docker_finishes_before_record('slow-up-fail',6,'failed')
 
     def test_timeout_reaps_native_descendant_before_returning_failure(self):
         command="& '"+sys.executable.replace("'","''")+"' (Join-Path $env:PROBE_ROOT 'descendant.py')"

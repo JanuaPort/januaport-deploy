@@ -11,6 +11,44 @@ from test_acl_f5 import root_probe, assert_exact_rules
 
 
 class Owner(unittest.TestCase):
+    def test_file_descriptor_forces_ba_and_inheritance(self):
+        result=ps(r'''
+Add-Type -TypeDefinition @'
+using System.Security.AccessControl;
+public static class OwnerFileBoundary {
+    public static FileSecurity Written;
+    public static void SetAccessControl(string path, FileSecurity security) { Written=security; }
+}
+'@
+$body=(Get-Command Protect-DienstFile).ScriptBlock.ToString().Replace('[IO.File]', '[OwnerFileBoundary]')
+Set-Item Function:\Protect-DienstFile ([scriptblock]::Create($body))
+Protect-DienstFile 'unused native boundary'
+$sec=[OwnerFileBoundary]::Written
+@{Owner=[string]$sec.GetOwner([Security.Principal.SecurityIdentifier]);Protected=$sec.AreAccessRulesProtected;
+    Explicit=@($sec.GetAccessRules($true,$false,[Security.Principal.SecurityIdentifier])).Count} | ConvertTo-Json -Compress
+''',ROOT/'dienst-einrichten.ps1')
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(json.loads(result.stdout),dict(Owner='S-1-5-32-544',Protected=False,Explicit=0))
+
+    def test_junction_is_rejected_before_touching_target(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            (root/'outside').mkdir()
+            (root/'outside'/'probe').write_text('synthetic fixture')
+            result=ps(r'''
+$outside=Join-Path $env:PROBE_ROOT 'outside'
+$link=Join-Path $env:PROBE_ROOT 'link'
+New-Item -ItemType Junction -Path $link -Target $outside | Out-Null
+function Protect-DienstDirectory {param($Path,$SID) throw 'TARGET TOUCHED'}
+function Protect-DienstFile {param($Path) throw 'TARGET TOUCHED'}
+try { Protect-DienstTree $link 'S-1-5-21-100-100-100-1001'; throw 'junction accepted' }
+finally { [IO.Directory]::Delete($link) }
+''',ROOT/'dienst-einrichten.ps1',dict(PROBE_ROOT=tmp))
+            self.assertNotEqual(result.returncode,0)
+            self.assertIn('Verknuepfung im Dienstprofil nicht erlaubt',result.stderr)
+            self.assertNotIn('TARGET TOUCHED',result.stderr)
+            self.assertEqual((root/'outside'/'probe').read_text(),'synthetic fixture')
+
     def test_foreign_owner_replaced_even_when_dacl_already_matches(self):
         result = root_probe()
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -24,6 +62,7 @@ class Owner(unittest.TestCase):
                 (root / name).write_text('synthetic fixture')
             result = ps(r'''
 $script:seen=@()
+Set-ItemProperty -LiteralPath (Join-Path $env:PROBE_ROOT '.env') -Name Attributes -Value Hidden
 function Protect-DienstDirectory {param($Path,$SID) $script:seen+=('directory:'+ $Path)}
 function Protect-DienstFile {param($Path) $script:seen+=('file:'+ $Path)}
 Protect-DienstTree $env:PROBE_ROOT 'S-1-5-21-100-100-100-1001'
@@ -32,7 +71,10 @@ ConvertTo-Json -InputObject $script:seen -Compress
             self.assertEqual(result.returncode, 0, result.stderr)
             expected = ['directory:' + tmp] + [
                 ('directory:' if p.is_dir() else 'file:') + str(p) for p in root.rglob('*')]
-            self.assertCountEqual(json.loads(result.stdout), expected)
+            def canonical(entry):
+                kind, path = entry.split(':', 1)
+                return kind, Path(path).resolve()
+            self.assertCountEqual(map(canonical, json.loads(result.stdout)), map(canonical, expected))
 
     @unittest.skipUnless(os.environ.get('JNPT_OWNER_VM') == '1', 'Fremdes Konto und Besitzwechsel nur auf NTFS-Test-VM')
     def test_foreign_ntfs_owner_cannot_grant_after_protection(self):
@@ -61,7 +103,7 @@ foreach ($path in @($directory,$file)) {
     if ((Get-Acl -LiteralPath $path).GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $foreign.Value) {throw 'fixture must really have foreign owner'}
 }
 Protect-DienstTree $directory 'S-1-5-21-100-100-100-1001'
-$owners=@($directory,$file | ForEach-Object {(Get-Acl -LiteralPath $_).GetOwner([Security.Principal.SecurityIdentifier]).Value})
+$owners=@(@($directory,$file) | ForEach-Object {(Get-Acl -LiteralPath $_).GetOwner([Security.Principal.SecurityIdentifier]).Value})
 $grants=@()
 foreach ($path in @($directory,$file)) {
     $grants+=Invoke-ForeignProbe ("& icacls.exe '$path' /grant '*"+$foreign.Value+":F' *>`$null; exit `$LASTEXITCODE")

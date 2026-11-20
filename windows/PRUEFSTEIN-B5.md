@@ -78,12 +78,17 @@ Die Adaptertests ersetzen diese Abnahme nicht. B4 gilt ergänzend weiter.
   Großbuchstaben und abschließendem Zeilenumbruch ergeben Exit 2 vor Sicherung.
 - [ ] **Neustart vor Docker-Bereitschaft:** Neu starten und die Aufgabe
   unmittelbar vor bereiter Engine anstoßen. Begrenzter, lauter Abbruch mit
-  fester Fehlermeldung, Log und `LastTaskResult=2`; Docker-Aufruf höchstens
+  fester Fehlermeldung, Log und `LastTaskResult=2`; Plan-Aufruf höchstens
   30 Sekunden. Kein endloses Warten und keine Änderung an `.env`. Nach
   Bereitschaft erneut anstoßen und erfolgreichen Lauf belegen. B4-Sperre bleibt
   wirksam. Laufprotokoll höchstens 100 Zeilen ohne Benutzernamen, keine nativen
   Ausgaben und keine Secrets. Die alten zwei Zeilen für den Rückweg vor einem
   späteren Lauf separat lokal festhalten.
+- [ ] **#1499, langsames Docker:** Pull und `compose up -d` getrennt mit mehr
+  als 30 Sekunden Laufzeit nachstellen. Bis Prozessende keine Ergebnisbuchung;
+  Erfolg erst nach Health/TLS als `installed`, echter Startfehler nach dessen
+  Ende als `failed`. Bei einem befristeten Plan-Test muss auch der native
+  Nachfahre beendet sein. Lokale Shim-Regression ersetzt diese Docker-Abnahme nicht.
 
 Ergebnis und offene Abweichungen an GATE geben. Erst nach vollständiger Abnahme
 kann der Auftraggeber den Profil-Tag veröffentlichen. Dieses Paket erzeugt

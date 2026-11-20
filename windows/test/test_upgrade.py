@@ -17,7 +17,7 @@ UPGRADE_BLOCKED = 'Upgrade gesperrt: eine Profildatei weicht vom ausgelieferten 
 
 class Upgrade(unittest.TestCase):
     def exercise(self, mode='', manifest=False, release='windows-v0.1.0', altered='docker-compose.yml', capture_error=False):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             target = root / 'profile'
             target.mkdir()
@@ -131,7 +131,7 @@ Install-Profile
                 else: verify_sums(target)
 
     def test_local_dienst_staging_also_upgrades_legacy_files(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             target = root / 'profile'
             target.mkdir()
@@ -206,7 +206,7 @@ class ParentAcl(unittest.TestCase):
 
     @unittest.skipUnless(os.environ.get('JNPT_OWNER_VM') == '1', 'Besitzwechsel nur auf expliziter NTFS-Test-VM')
     def test_b7_real_temp_parent_removes_inherited_and_explicit_other_principals(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             command = r'''
 $broadSource=Join-Path $env:PROBE_ROOT 'broad-source'
 $parent=Join-Path $broadSource 'JanuaPort'

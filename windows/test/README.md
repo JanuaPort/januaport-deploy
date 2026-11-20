@@ -97,7 +97,7 @@ expliziten FullControl-Regeln (ContainerInherit, ObjectInherit, Propagation None
 Allow) fuer Dienst-SID, Administratoren und SYSTEM. Der Fake ersetzt nur die
 nativen Directory-Lese-/Schreibgrenzen; die echten Security-Descriptor-Klassen
 und der produktive Kontrollfluss bleiben erhalten. Der erste Lauf schreibt
-einmal, der identische zweite Lauf gar nicht. Fast passende DACLs mit vierter
+einmal; jeder weitere Lauf schreibt erneut den erzwungenen BA-Besitzer. Fast passende DACLs mit vierter
 Regel, fehlendem Schutz, anderen Rechten, Vererbungs-/Propagationsflags oder
 Deny werden ersetzt. Native Schreibfehler muessen abbrechen.
 R4 prueft jede Abweichung einzeln: zusaetzliches Users-Read-ACE,
@@ -112,11 +112,19 @@ alte Clear-/icacls-Adapter. Auf echtem NTFS unter dem Testordner werden nach
 der ersten Absicherung erbende `.env`-, Secret- und Logdateien angelegt und
 anschliessend manuell ein erbendes Users-Read-ACE hinzugefuegt und dann
 Eltern-/Profilordner erneut geschuetzt: Das Users-ACE verschwindet,
-Inhalt bleibt lesbar, Besitzer
-und SDDL bleiben gleich, alle Dateien tragen die drei geerbten ACEs. Breite
-geerbte und explizite Fremdrechte werden in den bestehenden Temp-ACL-Tests
-weiterhin am echten Adapter entfernt. Der Fall eines anderen Dateibesitzers
-bleibt BOX vorbehalten; der Test aendert keinen Kontobesitz.
+Inhalt bleibt lesbar, alle Dateien tragen BA als Besitzer und die drei geerbten
+ACEs. Diese NTFS-Besitzwechseltests laufen nur mit `JNPT_OWNER_VM=1` auf einer
+eigens vorgesehenen Test-VM, niemals auf dem Entwicklungsrechner. Der zusätzliche
+Test `test_audit_owner` prüft lokal mit echten Security-Deskriptoren den
+BA-Besitzer auch bei passender DACL und die Dateivererbung; native Schreibgrenzen
+sind ersetzt. Baumdurchlauf und Junction-Abweisung nutzen echte TEMP-Dateien.
+Für den echten Fremdkonto-Test auf der VM sind zusätzlich `JNPT_FOREIGN_USER`
+und `JNPT_FOREIGN_PASSWORD` eines vorhandenen Standard-Testkontos erforderlich.
+Er erstellt unter dessen Token Ordner und Datei, prüft den fremden Vorbesitzer,
+erzwingt BA und versucht `icacls /grant` erneut unter dem fremden Token:
+beide Freigaben müssen scheitern. Keine Konten oder Dienste werden angelegt.
+Für die Mutationsprobe auf derselben VM muss SetOwner für Ordner und Dateien
+entfernt werden; der Fremdkonto-Test muss rot sein. Lokal bleibt dieser Nachweis offen.
 
 ```powershell
 $env:PYTHONPATH = 'windows/test'
@@ -125,7 +133,7 @@ python -B windows/test/f5_mutations.py
 ```
 
 Die sechs F5-Mutationen entfernen den Schutz, ergaenzen eine vierte Regel,
-schreiben erst eine leere DACL und dann die Ziel-DACL, entfernen Idempotenz,
+schreiben erst eine leere DACL und dann die Ziel-DACL, entfernen SetOwner,
 erhalten alte explizite Freigaben oder ignorieren einen Schreibfehler. Sie
 sind auch in `dienst_mutations.py` integriert. Die manuelle Reparatur im
 RUNBOOK wird nur als Anleitung geprueft; takeown und icacls /reset werden
@@ -310,6 +318,37 @@ Der Logtest bietet den aktuellen Benutzernamen und einen Zeilenumbruch
 wirklich an und verlangt Redaktion bzw. Escaping. 105 vorgegebene Logzeilen
 müssen nach einem Lauf auf höchstens 100 begrenzt sein. Der Prozessadapter
 muss einen echten schlafenden Kindprozess am Zeitlimit beenden.
+
+**#1499:** Drei echte Docker-Shim-Prozesse schlafen jeweils 32 Sekunden:
+Pull/Start-Erfolg werden erst nach Prozessende als `installed` gebucht;
+ein tatsächlicher Startfehler wird danach als `failed` gebucht. Ein weiterer
+Test startet einen nativen Python-Nachfahren, belegt dessen Start und verlangt,
+dass er nach Ablauf der Frist keine Abschlussdatei mehr schreiben kann.
+Die Mutanten mit pauschalen 30 Sekunden und ohne `taskkill /T` müssen rot sein.
+
+**#1503:** Das Ticket erlaubt, den nicht unterstützten MCP-Schalter zu entfernen.
+`test_audit_caddy` hält diese Variante fest und versucht am echten Hashadapter
+eine manuelle MCP-Route. Der native HTTPS-Test startet ausschließlich einen
+temporären Caddy-Prozess und synthetischen Upstream auf Loopback, ohne Dienst,
+Container oder Truststore-Installation. Mit `JNPT_CADDY_EXE` auf ein vorhandenes
+Caddy-Binary werden MCP und fremde Routen per GET/POST tatsächlich versucht
+und müssen 404 liefern; ohne Binary wird dieser Test ausdrücklich übersprungen.
+`audit_mutations.py` öffnet die Route und entfernt separat den Hashwächter;
+beide Negativtests müssen rot werden. Die regulären Installer- und Upgrade-Tests
+prüfen weiterhin alle Wartungswege mit unveränderter Caddyfile.
+
+```powershell
+$env:PYTHONPATH = 'windows/test'
+$env:JNPT_CADDY_EXE = 'C:\Pfad\caddy.exe'
+python -B -m unittest test_audit_owner test_audit_caddy test_update -v
+python -B windows/test/audit_mutations.py
+```
+
+Lokal bleiben `JNPT_OWNER_VM` und die Fremdkonto-Variablen ungesetzt. Nur auf
+der separaten NTFS-Test-VM wird der Fremdkonto-Test in einer administrativen
+Testsitzung mit `JNPT_OWNER_VM=1` ausgeführt; die lokalen B2/B3-Tests laufen
+weiterhin ohne Erhöhung. Das Mutationsskript nimmt dort automatisch auch den
+echten Fremdkonto-Test ohne beide SetOwner-Aufrufe hinzu.
 
 Die sieben Pflichtmutationen werden einzeln in isolierten Kopien ausgeführt
 und nicht als veränderter Produktcode committed: Versionsvergleich einfügen,
