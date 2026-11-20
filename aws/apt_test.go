@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -12,6 +13,9 @@ import (
 )
 
 func TestDockerAptPinGerendert(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux-GPG-/Shell-Adapter erforderlich; unter Windows fehlt der kompatible gpg-agent-/Installationsweg")
+	}
 	path := "cloud-init.yaml"
 	if p := os.Getenv("JNPT_TEST_TEMPLATE"); p != "" {
 		path = p
@@ -41,6 +45,9 @@ func TestDockerAptPinGerendert(t *testing.T) {
 }
 
 func TestDockerAptPinMutation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux-GPG-/Shell-Adapter erforderlich; unter Windows fehlt der kompatible gpg-agent-/Installationsweg")
+	}
 	b, err := os.ReadFile("cloud-init.yaml")
 	if err != nil {
 		t.Fatal(err)

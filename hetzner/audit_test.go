@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -20,6 +21,9 @@ import (
 )
 
 func TestAptPinAmEchtenGPGAdapter(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux-GPG-/Shell-Adapter erforderlich; Windows-gpg-agent und Installationspfade sind inkompatibel")
+	}
 	_, cfg := render(t, nil)
 	helper := script(t, cfg, "/opt/jnpt/apt-schluessel.sh")
 	dir := t.TempDir()
@@ -91,6 +95,9 @@ func TestAptPinAmEchtenGPGAdapter(t *testing.T) {
 }
 
 func TestKonfigMitEchtemGit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux-Shell und POSIX-Pfade fuer den echten Git-/Installationshelfer erforderlich")
+	}
 	_, cfg := render(t, nil)
 	helper := script(t, cfg, "/opt/jnpt/config-holen.sh")
 	repo := t.TempDir()
@@ -175,6 +182,9 @@ func TestPluginRechteAmEchtenTmpfilesAdapter(t *testing.T) {
 }
 
 func TestStartMeldetFehlerUndBootstatus(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux-Starthelfer mit festen /etc- und /opt-Pfaden erforderlich")
+	}
 	_, cfg := render(t, nil)
 	start := fileContent(t, cfg, "/usr/local/sbin/jnpt-start")
 	if !strings.Contains(start, "/opt/jnpt/config-holen.sh") || strings.Contains(start, "git -c credential.helper= clone") {

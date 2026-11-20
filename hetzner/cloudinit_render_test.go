@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -132,15 +133,20 @@ func TestUserDataOhneGeheimnisse(t *testing.T) {
 
 func TestMetadatenUnitUndStartreihenfolge(t *testing.T) {
 	_, cfg := render(t, nil)
-	for _, f := range cfg.Files {
-		if strings.HasPrefix(f.Content, "#!/bin/sh\n") {
-			cmd := exec.Command("sh", "-n")
-			cmd.Stdin = strings.NewReader(f.Content)
-			if out, err := cmd.CombinedOutput(); err != nil {
-				t.Fatalf("Shell-Syntax %s: %v %s", f.Path, err, out)
+	t.Run("ShellSyntax", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Linux-Shell-Syntaxpruefung; Unit- und Startreihenfolge bleiben unter Windows aktiv")
+		}
+		for _, f := range cfg.Files {
+			if strings.HasPrefix(f.Content, "#!/bin/sh\n") {
+				cmd := exec.Command("sh", "-n")
+				cmd.Stdin = strings.NewReader(f.Content)
+				if out, err := cmd.CombinedOutput(); err != nil {
+					t.Fatalf("Shell-Syntax %s: %v %s", f.Path, err, out)
+				}
 			}
 		}
-	}
+	})
 	unit := fileContent(t, cfg, "/etc/systemd/system/jnpt-metadata-guard.service")
 	for _, line := range []string{"After=docker.service", "Requires=docker.service", "PartOf=docker.service", "Type=oneshot", "RemainAfterExit=yes", "ExecStart=/usr/local/sbin/jnpt-metadata-guard.sh", "WantedBy=multi-user.target docker.service"} {
 		if !strings.Contains(unit, line) {
@@ -177,6 +183,9 @@ func TestMetadatenUnitUndStartreihenfolge(t *testing.T) {
 
 func adapterTests(t *testing.T) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux-Adapter mit systemd-tmpfiles, strace und Netzwerk-Namespaces erforderlich; isolierten Testcontainer verwenden")
+	}
 	if os.Getenv("JNPT_ADAPTER_TESTS") != "1" {
 		t.Skip("echte Adapter: hetzner/test.Dockerfile, isolierter privilegierter Testcontainer")
 	}

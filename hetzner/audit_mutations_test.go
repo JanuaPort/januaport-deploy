@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -18,6 +19,9 @@ func TestAuditMutationen(t *testing.T) {
 		{"Privater_Default_ohne_Token", "cloud-init.yaml.tftpl", `[ -f /etc/jnpt-bootstrap/git_token ] || fail`, `true || fail`, "TestKonfigMitEchtemGit"},
 	} {
 		t.Run(m.name, func(t *testing.T) {
+			if runtime.GOOS == "windows" && (m.test == "TestAptPinAmEchtenGPGAdapter" || m.test == "TestKonfigMitEchtemGit") {
+				t.Skip("Mutation braucht den Linux-GPG-/Shell-Adapter ihres Zieltests")
+			}
 			root := t.TempDir()
 			dir := filepath.Join(root, "hetzner")
 			os.MkdirAll(dir, 0755)
