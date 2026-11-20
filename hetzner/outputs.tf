@@ -13,7 +13,7 @@ output "server_ipv6" {
 
 output "dns_hint" {
   description = "Nächster Schritt: DNS-A-Record setzen, damit Caddy ein TLS-Zertifikat ausstellen kann."
-  value       = "DNS setzen: A-Record  ${var.domain}  ->  ${hcloud_server.jnpt.ipv4_address}  (und optional AAAA -> ${hcloud_server.jnpt.ipv6_address}). Danach holt Caddy automatisch das Let's-Encrypt-Zertifikat."
+  value       = "DNS setzen: A-Record  ${var.domain}  ->  ${hcloud_server.jnpt.ipv4_address}  (und optional AAAA -> ${hcloud_server.jnpt.ipv6_address}). Danach Geheimnisse gemäß hetzner/README.md ablegen und als root /usr/local/sbin/jnpt-start aufrufen (#1497); dann holt Caddy das Let's-Encrypt-Zertifikat."
 }
 
 output "admin_access_hint" {

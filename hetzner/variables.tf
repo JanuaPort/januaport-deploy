@@ -1,10 +1,9 @@
 # Eingabevariablen für das Hetzner-Single-Node-Deployment (JanuaPort/januaport#776,
 # generisch abgeleitet aus deploy/hetzner/ im Produkt-Repo, #107).
 #
-# Secrets sind als `sensitive = true` markiert (kein Klartext im Plan/Output).
-# Echte Werte gehören in eine *.tfvars-Datei (gitignored) oder in
-# TF_VAR_*-Umgebungsvariablen — NIE in dieses Repo. Vorlage:
-# terraform.tfvars.example.
+# Der API-Token bleibt sensitive und außerhalb des Repos. Laufzeitgeheimnisse
+# werden nach apply als Dateien abgelegt; die vier alten Eingaben unten sind
+# ausschließlich Migrationssperren (#1497), keine verwendeten Konfigurationen.
 
 # ── Secrets ──────────────────────────────────────────────────────────────────
 
@@ -15,28 +14,28 @@ variable "hcloud_token" {
 }
 
 variable "tailscale_authkey" {
-  description = <<-EOT
-    Tailscale-Auth-Key (Tailscale-Admin-Konsole → Settings → Keys).
-    Empfehlung: ephemeral=false (persistenter Knoten), reusable nach Bedarf,
-    ein passendes ACL-Tag. Wird per cloud-init als Docker-Secret abgelegt.
-  EOT
+  description = "NICHT MEHR VERWENDET (#1497): nach apply als root:root/0600-Datei /etc/jnpt-bootstrap/tailscale_authkey ablegen (README)."
   type        = string
   sensitive   = true
+  default     = ""
+  nullable    = false
+
+  validation {
+    condition     = var.tailscale_authkey == ""
+    error_message = "tailscale_authkey wird seit #1497 nicht mehr über Terraform verwendet. Eintrag aus tfvars/TF_VAR entfernen; nach apply als 0600-Datei auf der VM ablegen, siehe hetzner/README.md."
+  }
 }
 
 variable "jnpt_master_key" {
-  description = <<-EOT
-    JanuaPort-Vault-Master-Key als 64 Hex-Zeichen (= 32 Byte). Erzeugen mit
-    `openssl rand -hex 32`. Wird per cloud-init als Docker-Secret abgelegt
-    (JNPT_MASTER_KEY_FILE). ACHTUNG: Verlust = die verschlüsselten Credentials
-    sind unwiederbringlich. GETRENNT vom Server sichern.
-  EOT
+  description = "NICHT MEHR VERWENDET (#1497): nach apply als root:root/0600-Datei /etc/jnpt-bootstrap/jnpt_master_key ablegen (README)."
   type        = string
   sensitive   = true
+  default     = ""
+  nullable    = false
 
   validation {
-    condition     = can(regex("^[0-9a-fA-F]{64}$", var.jnpt_master_key))
-    error_message = "jnpt_master_key muss exakt 64 Hex-Zeichen sein (openssl rand -hex 32)."
+    condition     = var.jnpt_master_key == ""
+    error_message = "jnpt_master_key wird seit #1497 nicht mehr über Terraform verwendet. Eintrag aus tfvars/TF_VAR entfernen; nach apply als 0600-Datei auf der VM ablegen, siehe hetzner/README.md."
   }
 }
 
@@ -111,7 +110,7 @@ variable "name" {
 
 # ── Image-Quelle (Prebuilt-Image aus einer Container-Registry) ──────────────
 
-# WARNUNG (wie bei git_*): Eine Änderung von image_ref/registry_token ändert die
+# WARNUNG (wie bei git_*): Eine Änderung von image_ref ändert die
 # cloud-init/user_data der VM. Ein `terraform apply` gegen eine BESTEHENDE VM
 # triggert bei hcloud deshalb ein VM-REPLACEMENT (die user_data ist Teil des
 # Server-Ressourcen-Fingerprints) — der neue Wert greift erst beim nächsten
@@ -123,31 +122,23 @@ variable "image_ref" {
     Gepinnter Image-Tag, den die VM aus der Registry zieht, z. B.
     ghcr.io/januaport/januaport:0.59.0. PFLICHT (kein Default): bewusst KEIN
     `latest`, damit der Deploy reproduzierbar auf einem festen Tag steht.
-    cloud-init schreibt den Wert als JANUAPORT_IMAGE in die .env neben der
-    Prod-Compose; `docker compose pull` holt das Image.
+    cloud-init bereitet die öffentliche .env mit JANUAPORT_IMAGE vor;
+    jnpt-start installiert sie nach der Dateiablage neben der Prod-Compose.
   EOT
   type        = string
 }
 
 variable "registry_token" {
-  description = <<-EOT
-    OPTIONAL: GitHub-PAT für `docker login ghcr.io`, um das Image aus einem
-    PRIVATEN GHCR-Package zu ziehen. WICHTIG: GHCR akzeptiert an der Container-
-    Registry NUR classic PATs mit der EINEN Berechtigung `read:packages` —
-    fein-granulare PATs funktionieren dort NICHT. Leer lassen, sobald das
-    Package public ist (dann ist kein Login nötig).
-
-    Sicherheit/Trade-off (ehrlich): Der Token landet — wie die anderen Secrets —
-    im Terraform-State und in der cloud-init-user_data im KLARTEXT (State ist
-    deshalb gitignored, lokal halten). Auf der VM reicht cloud-init ihn NUR über
-    `docker login --password-stdin` (nie in der Prozessliste/im Log/in einer
-    URL). Dass `docker login` die Auth danach in /root/.docker/config.json
-    persistiert, ist akzeptiert. Verlust unkritisch: read-only, package-scoped,
-    jederzeit in GitHub rotierbar.
-  EOT
+  description = "NICHT MEHR VERWENDET (#1497): bei privatem GHCR nach apply als root:root/0600-Datei /etc/jnpt-bootstrap/registry_token ablegen (README)."
   type        = string
   sensitive   = true
   default     = ""
+  nullable    = false
+
+  validation {
+    condition     = var.registry_token == ""
+    error_message = "registry_token wird seit #1497 nicht mehr über Terraform verwendet. Eintrag aus tfvars/TF_VAR entfernen; nach apply als 0600-Datei auf der VM ablegen, siehe hetzner/README.md."
+  }
 }
 
 # ── Versions-Check (optional, offline-first) ─────────────────────────────────
@@ -204,8 +195,8 @@ variable "updater_image_repo" {
     des Gesundheits-Rundlaufs ist dagegen eines — er wird deshalb NICHT über
     Terraform gesetzt, sondern von Hand auf der VM abgelegt
     (`/etc/jnpt-updater.token`, 0600). Über `user_data` läge er im
-    Terraform-State. Ohne ihn ist der Aktuator inert, und genau das ist der
-    gewollte Zustand direkt nach der Provisionierung.
+    Terraform-State und am Metadaten-Dienst. Ohne ihn ist der Aktuator inert;
+    das ist der gewollte Zustand direkt nach der Provisionierung.
   EOT
   type        = string
   default     = "ghcr.io/januaport/januaport"
@@ -219,12 +210,12 @@ variable "updater_image_repo" {
 # Fingerprints) — der neue Wert greift erst beim nächsten bewussten Neuaufbau.
 variable "git_repo" {
   description = <<-EOT
-    Git-Repository (HTTPS), das cloud-init auf der VM klont — NUR für die
+    Git-Repository (HTTPS), das jnpt-start nach der Dateiablage klont — NUR für die
     Konfig-Dateien (docker/docker-compose.prod.yml, docker/Caddyfile,
     docker/tailscale-serve.json aus dem JanuaPort-Produkt-Repo). Das Image wird
     NICHT on-VM gebaut, sondern als Prebuilt-Image aus der Registry gezogen
-    (siehe `image_ref`). Für ein PRIVATES Repo zusätzlich `git_token` setzen
-    (authentifizierter Klon — der Token wird NICHT in die URL geschrieben).
+    (siehe `image_ref`). Für ein PRIVATES Repo nach apply die Datei
+    /etc/jnpt-bootstrap/git_token ablegen (README, #1497).
   EOT
   type        = string
   default     = "https://github.com/JanuaPort/januaport.git"
@@ -237,30 +228,16 @@ variable "git_ref" {
 }
 
 variable "git_token" {
-  description = <<-EOT
-    OPTIONAL: GitHub-PAT für den authentifizierten Klon eines PRIVATEN Repos —
-    NUR für die Konfig-Dateien (die VM baut nichts, sie zieht das Prebuilt-Image
-    via `image_ref`/`registry_token`). Leer lassen für ein öffentliches Repo
-    (anonymer HTTPS-Klon).
-
-    Zweck: cloud-init klont `git_repo` damit über HTTPS. Empfehlung:
-    fein-granularer, READ-ONLY PAT mit Geltung NUR für dieses eine Repo und
-    NUR der Berechtigung "Contents: read-only". Mehr braucht der Klon nicht.
-    (Hinweis: für das GHCR-Image-Pull braucht es dagegen ein classic PAT
-    `read:packages` — `registry_token` —, GHCR unterstützt keine
-    fein-granularen PATs dafür.)
-
-    Sicherheit/Trade-off (ehrlich): Der Token landet — wie die anderen Secrets
-    — im Terraform-State und in der cloud-init-user_data im KLARTEXT (State ist
-    deshalb gitignored, lokal halten). Auf der VM wird der Token NICHT
-    persistiert: kein Eintrag in der `git remote`-URL bzw. `.git/config`, kein
-    Logging; cloud-init reicht ihn nur kurzlebig per GIT_ASKPASS an `git clone`
-    und scrubbt ihn danach. Verlust ist unkritisch: read-only, repo-scoped,
-    jederzeit in GitHub rotierbar.
-  EOT
+  description = "NICHT MEHR VERWENDET (#1497): bei privatem Konfig-Repo nach apply als root:root/0600-Datei /etc/jnpt-bootstrap/git_token ablegen (README)."
   type        = string
   sensitive   = true
   default     = ""
+  nullable    = false
+
+  validation {
+    condition     = var.git_token == ""
+    error_message = "git_token wird seit #1497 nicht mehr über Terraform verwendet. Eintrag aus tfvars/TF_VAR entfernen; nach apply als 0600-Datei auf der VM ablegen, siehe hetzner/README.md."
+  }
 }
 
 # ── SSH-Zugang ───────────────────────────────────────────────────────────────
@@ -281,7 +258,8 @@ variable "ssh_allowed_cidr" {
     keine stille Vorgabe. Für den Zugang die eigene IP setzen (z. B.
     ["203.0.113.4/32"]). Bewusst NICHT 0.0.0.0/0. Wer wirklich kein SSH von
     außen will, trägt explizit eine leere Liste `[]` ein.
-    Hinweis: Verwaltung läuft ohnehin primär über das Tailnet.
+    Für die Dateiablage nach apply ist ein erreichbarer SSH-Zugang nötig;
+    Tailscale startet erst danach (README, #1497).
   EOT
   type        = list(string)
 }

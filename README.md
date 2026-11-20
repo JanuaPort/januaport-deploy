@@ -42,6 +42,9 @@ contributions ([`CONTRIBUTING.md`](CONTRIBUTING.md)).
 
 JanuaPort itself stays self-hosted and runs without any activation by us. This repository only provides
 the deployment layer (Compose templates, infrastructure automation). Everything **after** "the container
-is running" (first access, master key, admin password, first admin token, teams, SSO, integrations) is
+is running" (first access, admin password, first admin token, teams, SSO, integrations) is
 described in the setup guide of the product (`docs/inbetriebnahme.md`, product documentation, not
 public). Every guide here points there at the right step.
+
+For Hetzner, the master key and other runtime secrets must be placed on the VM manually before
+starting the containers; see [`hetzner/README.md`](hetzner/README.md) (#1497).

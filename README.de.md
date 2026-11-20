@@ -42,6 +42,9 @@ Beiträge willkommen ([`CONTRIBUTING.md`](CONTRIBUTING.md)).
 
 JanuaPort selbst bleibt self-hosted und läuft ohne Freischaltung durch uns. Dieses Repository liefert nur die
 Deploy-Schicht (Compose-Vorlagen, Infrastruktur-Automatik). Alles **nach** „Container läuft“ (Erstzugang,
-Master-Schlüssel, Admin-Passwort, erster Admin-Token, Teams, SSO, Integrationen) steht in der
+Admin-Passwort, erster Admin-Token, Teams, SSO, Integrationen) steht in der
 Inbetriebnahme-Anleitung des Produkts (`docs/inbetriebnahme.md`, Produkt-Doku, nicht öffentlich). Jede
 Anleitung hier verweist an der passenden Stelle dorthin.
+
+Bei Hetzner werden Master-Key und weitere Laufzeitgeheimnisse vor dem Containerstart von Hand auf
+der VM abgelegt; siehe [`hetzner/README.md`](hetzner/README.md) (#1497).

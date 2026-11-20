@@ -3,7 +3,7 @@
 #
 # Legt an: SSH-Key, Firewall (default NUR optionales SSH — s. u.), persistentes
 # Volume für /data, und den Server mit cloud-init, das Docker installiert und
-# die Prod-Compose (drei Container) hochbringt.
+# den manuellen Start der Prod-Compose vorbereitet (#1497).
 #
 # WICHTIG: Es wird KEIN Port 8484 geöffnet — JanuaPort ist von außen nicht direkt
 # erreichbar. Die öffentliche Web-Fläche (80/443) ist standardmäßig ZU
@@ -89,8 +89,9 @@ resource "hcloud_volume_attachment" "data" {
   automount = false
 }
 
-# Der Server. cloud-init (user_data) installiert Docker + Compose und bringt die
-# Prod-Compose hoch. Das Volume wird automatisch attached; den stabilen
+# Der Server. cloud-init (user_data) installiert Docker + Compose und den
+# Metadaten-Guard. Der Betreiber legt Geheimnisse ab und startet danach mit
+# jnpt-start (#1497). Das Volume wird automatisch attached; den stabilen
 # Geräte-Pfad reichen wir ins Template (Hetzner: /dev/disk/by-id/scsi-0HC_Volume_<id>).
 resource "hcloud_server" "jnpt" {
   name        = var.name
@@ -102,18 +103,14 @@ resource "hcloud_server" "jnpt" {
   firewall_ids = [hcloud_firewall.jnpt.id]
 
   user_data = templatefile("${path.module}/cloud-init.yaml.tftpl", {
-    domain            = var.domain
-    acme_email        = var.acme_email
-    ts_hostname       = var.ts_hostname
-    master_key        = var.jnpt_master_key
-    tailscale_authkey = var.tailscale_authkey
-    git_repo          = var.git_repo
-    git_ref           = var.git_ref
-    git_token         = var.git_token
-    # Prebuilt-Image aus einer Container-Registry: gepinnter Tag + optionaler
-    # read:packages-PAT für ein privates Package.
-    image_ref      = var.image_ref
-    registry_token = var.registry_token
+    domain      = var.domain
+    acme_email  = var.acme_email
+    ts_hostname = var.ts_hostname
+    git_repo    = var.git_repo
+    git_ref     = var.git_ref
+    # Ausschließlich öffentliche Konfiguration. Alle vier Laufzeitgeheimnisse
+    # kommen nach apply als Dateien auf die VM, niemals in templatefile.
+    image_ref = var.image_ref
     # Versions-Check (optional): beide leer = Check aus (offline-first). Der
     # Public Key ist kein Geheimnis (s. variables.tf).
     update_manifest_url = var.update_manifest_url
