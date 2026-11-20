@@ -1,5 +1,6 @@
 """F5: real security descriptors, fake native boundary, and real temporary NTFS."""
 import json
+import os
 from pathlib import Path
 import re
 import tempfile
@@ -26,6 +27,8 @@ public static class F5AclBoundary {
     public static void SetAccessControl(string path, DirectorySecurity security) {
         if (path != @"C:\JanuaPort") throw new Exception("wrong ACL write");
         if (Environment.GetEnvironmentVariable("PROBE_FAIL") == "1") throw new UnauthorizedAccessException("DACL write failed");
+        if (security.GetOwner(typeof(System.Security.Principal.SecurityIdentifier)) == null)
+            security.SetOwner(Current.GetOwner(typeof(System.Security.Principal.SecurityIdentifier)));
         Writes++; Paths.Add(path); Current = security;
     }
 }
@@ -40,6 +43,8 @@ function New-Item {param($Path,$ItemType,[switch]$Force)
     if ($Path -cne 'C:\JanuaPort') {throw 'unexpected real root creation'}
 }
 $DienstDirectory='C:\JanuaPort\windows'
+[F5AclBoundary]::Current.SetOwner((New-Object Security.Principal.SecurityIdentifier('S-1-5-21-100-100-100-1002')))
+function Protect-DienstTree {param($Path,$SID) Protect-DienstDirectory $Path $SID}
 Protect-DienstRoot 'S-1-5-21-100-100-100-1001'
 $acl=[F5AclBoundary]::Current
 if ($env:PROBE_REPAIR -eq 'unprotected') { $acl.SetAccessRuleProtection($false,$false) }
@@ -96,7 +101,7 @@ $rules=@($acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier]
         Type=[int]$_.AccessControlType;Inherited=$_.IsInherited}
 })
 [pscustomobject]@{Writes=[F5AclBoundary]::Writes;Paths=@([F5AclBoundary]::Paths);
-    Protected=$acl.AreAccessRulesProtected;RawCount=$raw.DiscretionaryAcl.Count;Rules=$rules;Owner=$acl.GetOwner([Security.Principal.SecurityIdentifier]);
+    Protected=$acl.AreAccessRulesProtected;RawCount=$raw.DiscretionaryAcl.Count;Rules=$rules;Owner=[string]$acl.GetOwner([Security.Principal.SecurityIdentifier]);
     Group=$acl.GetGroup([Security.Principal.SecurityIdentifier])} | ConvertTo-Json -Depth 5 -Compress
 '''
     return ps(command, ROOT / 'dienst-einrichten.ps1', dict(PROBE_FAIL='1' if fail else '0', PROBE_REPAIR=repair))
@@ -106,7 +111,7 @@ def assert_exact_rules(case, state, writes):
     case.assertEqual(state['Writes'], writes)
     case.assertTrue(state['Protected'])
     case.assertEqual(state['Paths'], ['C:\\JanuaPort'] * writes)
-    case.assertIsNone(state['Owner'])
+    case.assertEqual(state['Owner'], 'S-1-5-32-544')
     case.assertIsNone(state['Group'])
     rules = state['Rules']
     case.assertEqual(state['RawCount'], 3)
@@ -130,12 +135,12 @@ $legacy=@($ast.FindAll({param($n) ($n -is [Management.Automation.Language.Comman
 '''
         result = ps(command, extra_env=dict(PROBE_SOURCE=str(ROOT / 'dienst-einrichten.ps1')))
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout), dict(allWrites=1,writes=1,legacy=0,parseErrors=0))
+        self.assertEqual(json.loads(result.stdout), dict(allWrites=2,writes=1,legacy=0,parseErrors=0))
 
     def check_rewrite(self, repair):
         result = root_probe(repair=repair)
         self.assertEqual(result.returncode, 0, result.stderr)
-        assert_exact_rules(self, json.loads(result.stdout), writes=2)
+        assert_exact_rules(self, json.loads(result.stdout), writes=3)
 
     def test_extra_users_read_ace_requires_rewrite(self):
         self.check_rewrite('users')
@@ -176,6 +181,7 @@ $legacy=@($ast.FindAll({param($n) ($n -is [Management.Automation.Language.Comman
     def test_callback_instead_of_plain_allow_requires_rewrite(self):
         self.check_rewrite('callback')
 
+    @unittest.skipUnless(os.environ.get('JNPT_OWNER_VM') == '1', 'Besitzwechsel nur auf expliziter NTFS-Test-VM')
     def test_real_ntfs_second_run_keeps_inherited_files_readable_and_owner(self):
         with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
             command = r'''
@@ -228,9 +234,9 @@ foreach ($relative in $before.Keys) {
             self.assertTrue(state['ParentSame']); self.assertTrue(state['ProfileSame'])
             self.assertEqual(len(state['Files']), 3)
             for file in state['Files']:
-                self.assertTrue(file['Readable']); self.assertTrue(file['Same'])
+                self.assertTrue(file['Readable'])
                 self.assertNotEqual(file['Sddl'], 'D:AI')
-                self.assertEqual(file['Owner'], state['User'])
+                self.assertEqual(file['Owner'], 'S-1-5-32-544')
                 self.assertEqual(len(file['Rules']), 3)
                 self.assertEqual({r['SID'] for r in file['Rules']}, {state['User'],'S-1-5-18','S-1-5-32-544'})
                 for rule in file['Rules']:

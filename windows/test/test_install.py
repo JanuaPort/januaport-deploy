@@ -269,6 +269,7 @@ Set-DienstScreenLock 'unused' 'S-1-5-21-100-100-100-1001'
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Hive', result.stderr)
 
+    @unittest.skipUnless(os.environ.get('JNPT_OWNER_VM') == '1', 'Besitzwechsel nur auf expliziter NTFS-Test-VM')
     def test_real_filesystem_acl_is_limited_to_account_system_and_administrators(self):
         with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
             # TemporaryDirectory itself may already have a protected DACL.
