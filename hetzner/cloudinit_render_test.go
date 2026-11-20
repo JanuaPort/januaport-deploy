@@ -29,7 +29,7 @@ func render(t *testing.T, extra map[string]cty.Value) (string, cloudConfig) {
 	for k, v := range map[string]string{
 		"domain": "mcp.example.com", "acme_email": "admin@example.com", "ts_hostname": "jnpt",
 		"image_ref": "ghcr.io/januaport/januaport:0.59.0", "git_repo": "https://github.com/JanuaPort/januaport.git", "git_ref": "main",
-		"update_manifest_url": "", "update_public_keys": "", "updater_image_repo": "ghcr.io/januaport/januaport",
+		"update_manifest_url": "", "update_plugins_url": "", "update_public_keys": "", "updater_image_repo": "ghcr.io/januaport/januaport",
 		"volume_device": "/dev/disk/by-id/scsi-0HC_Volume_123", "master_key": "", "tailscale_authkey": "", "git_token": "", "registry_token": "",
 	} {
 		vars[k] = cty.StringVal(v)
