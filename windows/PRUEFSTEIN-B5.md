@@ -3,6 +3,12 @@
 **Abnahmestatus: GRÜN @`a87f571` — BOX auf VM `jnpt-b4`, Protokoll
 `c-6796028725` auf #1246.** Der Tag `windows-v0.3.0` ist veröffentlicht. Die folgende Checkliste gilt
 auch für weitere Abnahmen des Profils.
+**Audit-Nachzug, SEC B1:** #1498 ist **gebaut, nicht an NTFS belegt**;
+für #1499 ist die **Abnahme mit echtem Docker Desktop offen**. Die frühere
+grüne B5-Abnahme gilt für den veröffentlichten Stand, nicht für diese Fixes.
+Kein neuer `windows-v*`-Tag, bevor der Fremdbesitzer-NTFS-Prüfstein aus B4
+(Ordner und Datei → BA; fremdes `icacls /grant` scheitert) und der langsame
+Pull-/Start-Prüfstein für #1499 unten auf der Test-VM grün sind.
 Nur synthetische Daten. Feed: VENDOR-Feed oder ein öffentlich erreichbarer
 Test-Feed; private Ziele (auch host.docker.internal) sperrt der SSRF-Schutz des Kerns.
 Keine Geheimnisse,

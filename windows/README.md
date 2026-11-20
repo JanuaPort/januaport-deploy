@@ -172,6 +172,10 @@ Fehler beim Setzen der Rechte oder des Besitzers brechen die Einrichtung ab.
 Alle Unterordner und Dateien unter `C:\JanuaPort` werden einbezogen;
 Dateien erhalten BA als Besitzer und ausschließlich die drei geerbten ACEs.
 Gruppe und Audit bleiben erhalten. Verknüpfungen im Baum werden abgewiesen.
+**SEC H1:** Dateien mit mehr als einem Hardlink werden ebenfalls abgewiesen.
+Der gesamte Baum wird vor jedem ACL-Schreiben geprüft, damit Vererbung keine
+Rechte einer außerhalb liegenden Hardlink-Datei verändert. Die Linkanzahl wird
+über `GetFileInformationByHandle` gelesen; ein Lesefehler bricht die Einrichtung ab.
 Nach dem Bereitstellen werden auch neue Skripte, Log- und Backupordner geschützt.
 Erbende Dateien bleiben beim Wiederholen zugänglich. Für bereits von F5 betroffene
 Installationen beschreibt das [RUNBOOK](RUNBOOK.md#f5-reparatur-nach-entzogenen-dateirechten)
@@ -179,6 +183,14 @@ die manuelle Reparatur.
 Vorhandene abweichende Dateien werden außerhalb der geprüften Upgrades aus 0.1.0 oder 0.2.0
 abgewiesen; `.env` und Secrets bleiben erhalten. Ein von B2
 bereitgestelltes Profil ohne `.env` wird bei der ersten Installation ergänzt.
+
+**SEC B1, Abnahmestatus:** #1498 ist **gebaut, nicht an NTFS belegt**.
+Ein neuer `windows-v*`-Tag darf erst veröffentlicht werden, wenn der echte
+NTFS-Prüfstein auf der Test-VM grün ist: fremder Besitzer an Ordner und Datei
+wird BA, anschließend scheitert `icacls /grant` unter dem fremden Konto.
+Für #1499 ist die **Abnahme mit echtem Docker Desktop offen**; auch dieser
+Nachweis muss vor dem neuen Tag grün sein. Die frühere B4/B5-Abnahme des bereits
+veröffentlichten `windows-v0.3.0` belegt diese beiden Audit-Fixes nicht.
 
 Das Konto erhält ein Zufallskennwort, das nicht angezeigt oder in Dateien
 abgelegt wird. Bei Wiederholung bleibt es erhalten. `-KennwortNeu` erzeugt
@@ -660,7 +672,9 @@ mit 3 Sekunden Anfragefrist und 2 Sekunden Pause geprüft, TLS höchstens
 Rückweg von Hand und gleichzeitige tägliche Sicherung: [RUNBOOK](RUNBOOK.md#7-update-b5).
 BOX hat den [Prüfstein B5](PRUEFSTEIN-B5.md) auf VM `jnpt-b4` abgenommen
 (Abnahmestatus GRÜN, Protokoll `c-6796028725`); `windows-v0.3.0` ist veröffentlicht. Docker Desktop läuft weiterhin in der angemeldeten,
-gesperrten Sitzung von `jnpt-dienst`. Tailscale gehört nicht zu diesem Paket.
+gesperrten Sitzung von `jnpt-dienst`. Diese historische Abnahme umfasst #1498
+und #1499 nicht; deren SEC-B1-Prüfsteine oben sind weiterhin offen.
+Tailscale gehört nicht zu diesem Paket.
 
 ## Fernwartung
 

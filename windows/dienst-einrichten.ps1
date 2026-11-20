@@ -98,8 +98,57 @@ function Protect-DienstDirectory {
     [IO.Directory]::SetAccessControl($Path, $sec)
 }
 
+function Get-DienstFileLinkCount {
+    param([string]$Path)
+    if (-not ('Jnpt.FileLinks' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.IO;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+namespace Jnpt {
+    public static class FileLinks {
+        [StructLayout(LayoutKind.Sequential)]
+        private struct FileInformation {
+            public uint Attributes;
+            public System.Runtime.InteropServices.ComTypes.FILETIME Creation, Access, Write;
+            public uint VolumeSerial, SizeHigh, SizeLow, NumberOfLinks, IndexHigh, IndexLow;
+        }
+        [DllImport("kernel32.dll", EntryPoint="CreateFileW", CharSet=CharSet.Unicode, SetLastError=true)]
+        private static extern SafeFileHandle OpenFile(string path, uint access, FileShare share,
+            IntPtr security, FileMode mode, uint flags, IntPtr template);
+        [DllImport("kernel32.dll", SetLastError=true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetFileInformationByHandle(SafeFileHandle file, out FileInformation info);
+        public static uint Count(string path) {
+            // Metadata only: no data access, no elevation, no following reparse points.
+            using (SafeFileHandle file = OpenFile(path, 0, FileShare.ReadWrite | FileShare.Delete,
+                    IntPtr.Zero, FileMode.Open, 0x00200000, IntPtr.Zero)) {
+                if (file.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+                FileInformation info;
+                if (!GetFileInformationByHandle(file, out info))
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                return info.NumberOfLinks;
+            }
+        }
+    }
+}
+'@
+    }
+    return [Jnpt.FileLinks]::Count($Path)
+}
+
+function Assert-DienstSingleLink {
+    param([string]$Path)
+    # Security descriptors belong to the file, so another hardlink would also
+    # change ownership/permissions outside this tree. Fail before the ACL write.
+    if ((Get-DienstFileLinkCount $Path) -gt 1) { throw 'Mehrere Hardlinks im Dienstprofil nicht erlaubt.' }
+}
+
 function Protect-DienstFile {
     param([string]$Path)
+    Assert-DienstSingleLink $Path
     $sec = New-Object Security.AccessControl.FileSecurity
     $sec.SetOwner((New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')))
     # A fresh, unprotected Access section removes explicit grants and inherits
@@ -108,15 +157,28 @@ function Protect-DienstFile {
     [IO.File]::SetAccessControl($Path, $sec)
 }
 
-function Protect-DienstTree {
-    param([string]$Path, $SID)
+function Get-DienstTreeItem {
+    param([string]$Path)
     $item = Get-Item -LiteralPath $Path -Force
     # Never follow junctions/symlinks into another tree when applying ownership.
     if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Verknuepfung im Dienstprofil nicht erlaubt.' }
-    if (-not $item.PSIsContainer) { Protect-DienstFile $Path; return }
-    Protect-DienstDirectory $Path $SID
-    foreach ($child in Get-ChildItem -LiteralPath $Path -Force) {
-        Protect-DienstTree $child.FullName $SID
+    if (-not $item.PSIsContainer) { Assert-DienstSingleLink $Path }
+    $item
+    if ($item.PSIsContainer) {
+        foreach ($child in Get-ChildItem -LiteralPath $Path -Force) {
+            Get-DienstTreeItem $child.FullName
+        }
+    }
+}
+
+function Protect-DienstTree {
+    param([string]$Path, $SID)
+    # Preflight the complete tree before even directory ACLs can propagate to
+    # a hardlinked file outside it. Array capture must finish before any writes.
+    $items = @(Get-DienstTreeItem $Path)
+    foreach ($item in $items) {
+        if ($item.PSIsContainer) { Protect-DienstDirectory $item.FullName $SID }
+        else { Protect-DienstFile $item.FullName }
     }
 }
 

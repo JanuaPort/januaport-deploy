@@ -5,6 +5,10 @@ und Docker Desktop (Linux/amd64). Kein Python-Paket und kein PowerShell-Modul
 muss installiert werden. Die beiden Image-Digests der Beisteller werden aus
 dem echten `docker compose config` gelesen. Fehlendes Docker ist ein Fehler.
 
+`go test ./...` überspringt unter Windows gezielt Linux-GPG-/Shell-/POSIX-Adapter
+und ihre Mutationen mit `runtime.GOOS == "windows"`; HCL-, Drift- und Doku-Tests
+bleiben aktiv. Vollständiger Linux-Lauf: Testcontainer aus `hetzner/audit-test.Dockerfile`.
+
 ```powershell
 python -B -m unittest discover -s windows/test -v
 python -B windows/test/live.py
@@ -125,6 +129,16 @@ erzwingt BA und versucht `icacls /grant` erneut unter dem fremden Token:
 beide Freigaben müssen scheitern. Keine Konten oder Dienste werden angelegt.
 Für die Mutationsprobe auf derselben VM muss SetOwner für Ordner und Dateien
 entfernt werden; der Fremdkonto-Test muss rot sein. Lokal bleibt dieser Nachweis offen.
+
+**SEC H1:** `python -B -m unittest test_hardlinks -v` erstellt echte Hardlinks
+unter TEMP und liest `nNumberOfLinks` über den produktiven Win32-Adapter ohne
+Adminrechte. Nur ACL-Schreibgrenzen sind ersetzt. Der Negativfall muss den ganzen
+Baum vor dem ersten Ordner- oder Datei-ACL-Schreiben abweisen; die außenliegende
+Datei behält Inhalt und SDDL. Ein fehlender Pfad muss beim Metadatenlesen scheitern.
+`python -B windows/test/h1_mutations.py` entfernt die Hardlink-Sperre in einer
+Wegwerfkopie und verlangt einen Assertion-Fehler. Diese lokale H1-Prüfung ersetzt
+die weiterhin offene #1498-Fremdbesitzer-Abnahme auf der Test-VM nicht; vor neuem
+`windows-v*`-Tag müssen sie und die echte Docker-Desktop-Abnahme für #1499 grün sein.
 
 ```powershell
 $env:PYTHONPATH = 'windows/test'

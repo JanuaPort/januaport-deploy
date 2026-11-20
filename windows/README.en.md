@@ -147,12 +147,23 @@ together. **#1498:** Every run uses `SetOwner` to enforce `BUILTIN\Administrator
 are accepted; failure to set ownership or permissions aborts setup. Every
 subdirectory and file under `C:\JanuaPort` is included. Files receive BA ownership
 and only the three inherited ACEs. Group and audit remain unchanged. Links in
-the tree are rejected. After staging, new scripts and log/backup directories are
+the tree are rejected. **SEC H1:** Files with multiple hardlinks are rejected
+as well. The complete tree is checked before any ACL writes, so inheritance
+cannot alter permissions through an outside hardlink. Link counts come from
+`GetFileInformationByHandle`; metadata read errors abort setup.
+After staging, new scripts and log/backup directories are
 protected as well. Inherited files remain accessible on repeat runs. For installations already
 affected by F5, see the [manual RUNBOOK repair](RUNBOOK.md#f5-reparatur-nach-entzogenen-dateirechten).
 Different existing files are rejected outside the
 verified upgrades from 0.1.0 or 0.2.0; `.env` and secrets are preserved. Initial
 installation adds `.env` to a verified B2 profile that does not yet have one.
+
+**SEC B1, acceptance status:** #1498 is **built, not proven on NTFS**.
+A new `windows-v*` tag must wait until the real NTFS test passes on the test VM:
+foreign ownership of both directory and file becomes BA, and `icacls /grant`
+subsequently fails under that foreign account. For #1499, **acceptance with real
+Docker Desktop remains open** and must also pass before the new tag. The earlier
+B4/B5 acceptance of the published `windows-v0.3.0` does not prove these audit fixes.
 
 A random password is never displayed or saved to a password file. Repeated runs
 keep it; `-KennwortNeu` deliberately resets it and reconfigures autologon,
@@ -603,7 +614,8 @@ with a 2-second pause, as in setup.
 Manual recovery and concurrent daily backups: [RUNBOOK](RUNBOOK.md#7-update-b5).
 BOX completed [B5](PRUEFSTEIN-B5.md) on VM `jnpt-b4` (acceptance GREEN,
 record `c-6796028725`); `windows-v0.3.0` is published. Docker Desktop continues to run in the logged-in, locked
-`jnpt-dienst` session. Tailscale is outside this package.
+`jnpt-dienst` session. That historical acceptance does not cover #1498 or #1499;
+their SEC B1 checks above remain open. Tailscale is outside this package.
 
 
 ## Remote maintenance

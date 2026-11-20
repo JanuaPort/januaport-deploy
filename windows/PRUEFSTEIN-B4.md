@@ -5,6 +5,12 @@ Daten. Die Python-Fakes ersetzen diesen Nachweis nicht. Ergebnis, Windows- und
 Docker-Version, Backend, Uhrzeit und Nachweis je Schritt im Abnahmeprotokoll
 festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
 
+**SEC B1:** #1498 ist **gebaut, nicht an NTFS belegt**. Kein neuer
+`windows-v*`-Tag, bevor der echte Fremdbesitzer-Prüfstein unten auf der Test-VM
+grün ist: Ordner und Datei werden BA, `icacls /grant` des fremden Kontos scheitert.
+Für #1499 ist die **Abnahme mit echtem Docker Desktop offen**; sie muss gemäß
+[Prüfstein B5](PRUEFSTEIN-B5.md) ebenfalls vor einem neuen Tag grün sein.
+
 1. **Gemeinsame Engine (N4, durch B5 korrigiert):** Es gibt eine Engine.
    BOX hat auf VM `jnpt-b4` belegt, dass `docker ps` im Wartungskonto dieselben
    `jnpt-windows-*`-Container zeigt (B5 @`a87f571`, Protokoll `c-6796028725`, #1246).
@@ -51,6 +57,9 @@ festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
    `test_audit_owner.Owner.test_foreign_ntfs_owner_cannot_grant_after_protection`
    ist ausschließlich für eine Test-VM freigeschaltet. Lokal nicht ausgeführt;
    der reale Fremdkonto-Nachweis und sein SetOwner-Mutant bleiben BOX-Abnahme.
+   **SEC H1:** Eine Datei im Baum mit zweitem Hardlink außerhalb anlegen.
+   Die Einrichtung muss vor jeder Ordner-/Datei-ACL-Änderung abbrechen;
+   Rechte, Besitzer und Inhalt der außenliegenden Datei bleiben erhalten.
 4. **W4/W5, B-3, Neustart:** `dienst-einrichten.ps1` auf dem Testrechner als
    Admin vorbereiten, Docker Desktop vor dem abschließenden Lauf einmal in
    `jnpt-dienst` starten und Einstellungen von Hand prüfen, mit `-KennwortNeu`

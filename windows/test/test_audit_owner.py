@@ -22,6 +22,7 @@ public static class OwnerFileBoundary {
 '@
 $body=(Get-Command Protect-DienstFile).ScriptBlock.ToString().Replace('[IO.File]', '[OwnerFileBoundary]')
 Set-Item Function:\Protect-DienstFile ([scriptblock]::Create($body))
+function Get-DienstFileLinkCount {param($Path) 1}
 Protect-DienstFile 'unused native boundary'
 $sec=[OwnerFileBoundary]::Written
 @{Owner=[string]$sec.GetOwner([Security.Principal.SecurityIdentifier]);Protected=$sec.AreAccessRulesProtected;

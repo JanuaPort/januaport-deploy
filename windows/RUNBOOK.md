@@ -128,6 +128,11 @@ Der Besitzer wird auch bei korrekter DACL immer auf `BUILTIN\Administrators`
 Dateien bekommen ausschließlich die drei geerbten ACEs; Gruppe und Audit bleiben
 unverändert. Verknüpfungen im Baum sind unzulässig. Scheitert das Setzen von
 Besitzer oder Rechten, bricht die Einrichtung ab.
+SEC H1 weist Dateien mit mehr als einem Hardlink vor allen ACL-Schreibzugriffen
+am gesamten Baum ab; auch ein Fehler beim Lesen der Linkanzahl führt zum Abbruch.
+SEC B1: #1498 ist gebaut, nicht an NTFS belegt; die Abnahme mit echtem Docker
+Desktop für #1499 ist offen. Ein neuer `windows-v*`-Tag wartet auf beide grünen
+VM-Prüfsteine aus [B4](PRUEFSTEIN-B4.md) und [B5](PRUEFSTEIN-B5.md).
 Bei einem Altprofil den [Upgrade-Weg 0.1.0 oder 0.2.0 → 0.3.0](README.md#von-010-oder-020-auf-030) und
 die zusätzliche Abnahme in B4 verwenden. Die
 Erstkonfiguration von Docker Desktop und die Schritte in [„Zwei Befehle“](README.md#zwei-befehle)
@@ -295,7 +300,8 @@ Daten des Kunden. Vor dem Start hakt die Person ab:
    0.2.0-Profil über den geprüften 0.3.0-Release aktualisieren; anschließend
    `dienst-einrichten.ps1` als Administrator mit dem bisherigen `-BackupTarget`
    wiederholen. Das legt die Aufgabe „JanuaPort Update“ an: `jnpt-dienst`,
-   Interactive/Limited, `IgnoreNew`, kein Auslöser.
+   Interactive/Limited, `IgnoreNew`, kein Auslöser. Diese historische Abnahme
+   umfasst die noch offenen SEC-B1-Prüfsteine für #1498 und #1499 nicht.
 2. Feed: VENDOR-Feed oder ein öffentlich erreichbarer Test-Feed; private Ziele
    (auch host.docker.internal) sperrt der SSRF-Schutz des Kerns.
    Der Betreiber trägt `JNPT_UPDATE_MANIFEST_URL` und `JNPT_UPDATE_PUBLIC_KEYS`
