@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/ext/tryfunc"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
@@ -232,6 +233,11 @@ func TestSSHAllnetzeMitEchtemHCLAusdruck(t *testing.T) {
 			}{
 				{nil, true}, {[]string{"203.0.113.4/32", "2001:db8::/64"}, true},
 				{[]string{"0.0.0.0/0"}, false}, {[]string{"::/0"}, false}, {[]string{"203.0.113.4/32", "::/0"}, false},
+				{[]string{"10.0.0.0/7"}, false}, {[]string{"2000::/15"}, false},
+				{[]string{"10.0.0.0/8", "2001::/16"}, true},
+				{[]string{"203.0.113.4/32", "2000::/15"}, false},
+				{[]string{"10.0.0.0/7", "2001:db8::/64"}, false},
+				{[]string{"203.0.113.4/32", "2001:db8::1/128"}, true},
 			} {
 				values := []cty.Value{}
 				for _, s := range tc.values {
@@ -241,10 +247,13 @@ func TestSSHAllnetzeMitEchtemHCLAusdruck(t *testing.T) {
 				if len(values) > 0 {
 					list = cty.ListVal(values)
 				}
-				ctx := &hcl.EvalContext{Variables: map[string]cty.Value{"var": cty.ObjectVal(map[string]cty.Value{"ssh_allowed_cidr": list})}, Functions: map[string]function.Function{"contains": stdlib.ContainsFunc}}
+				ctx := &hcl.EvalContext{Variables: map[string]cty.Value{"var": cty.ObjectVal(map[string]cty.Value{"ssh_allowed_cidr": list})}, Functions: map[string]function.Function{
+					"contains": stdlib.ContainsFunc, "length": stdlib.LengthFunc, "split": stdlib.SplitFunc,
+					"tonumber": stdlib.MakeToFunc(cty.Number), "regexall": stdlib.RegexAllFunc, "try": tryfunc.TryFunc,
+				}}
 				got, d := v.Body.Attributes["condition"].Expr.Value(ctx)
 				if d.HasErrors() || got.Type() != cty.Bool || got.True() != tc.accepted {
-					t.Fatalf("CIDR %v: %s %s", tc.values, got.GoString(), d.Error())
+					t.Errorf("CIDR %v: %s %s", tc.values, got.GoString(), d.Error())
 				}
 			}
 			return

@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -26,10 +27,18 @@ func TestAuditMutationen(t *testing.T) {
 					t.Fatal(err)
 				}
 				if name == m.file {
-					if !strings.Contains(string(b), m.old) {
-						t.Fatalf("Mutationsziel fehlt: %s", m.old)
+					if m.name == "SSH_Allnetzsperre_entfernt" {
+						re := regexp.MustCompile(`(?s)(variable "ssh_allowed_cidr".*?validation \{\s*condition\s*=\s*)(.*?)(\s+error_message)`)
+						if !re.Match(b) {
+							t.Fatal("CIDR-Mutationsziel fehlt")
+						}
+						b = re.ReplaceAll(b, []byte("${1}true${3}"))
+					} else {
+						if !strings.Contains(string(b), m.old) {
+							t.Fatalf("Mutationsziel fehlt: %s", m.old)
+						}
+						b = []byte(strings.ReplaceAll(string(b), m.old, m.replacement))
 					}
-					b = []byte(strings.ReplaceAll(string(b), m.old, m.replacement))
 				}
 				p := filepath.Join(dir, name)
 				os.MkdirAll(filepath.Dir(p), 0755)
