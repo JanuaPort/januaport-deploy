@@ -14,6 +14,7 @@ func TestAuditMutationen(t *testing.T) {
 		{"SSH_Allnetzsperre_entfernt", "variables.tf", `!contains(var.ssh_allowed_cidr, "0.0.0.0/0") && !contains(var.ssh_allowed_cidr, "::/0")`, "true", "TestSSHAllnetzeMitEchtemHCLAusdruck"},
 		{"Checkout_Pin_entfernt", "../.github/workflows/secret-scan.yml", "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5", "actions/checkout@v4", "TestCheckoutMitCommitPin"},
 		{"Konfig_Dateipruefung_entfernt", "cloud-init.yaml.tftpl", `[ -f "$pruef/$datei" ] || fail`, `true || fail`, "TestKonfigMitEchtemGit"},
+		{"Privater_Default_ohne_Token", "cloud-init.yaml.tftpl", `[ -f /etc/jnpt-bootstrap/git_token ] || fail`, `true || fail`, "TestKonfigMitEchtemGit"},
 	} {
 		t.Run(m.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -43,4 +44,21 @@ func TestAuditMutationen(t *testing.T) {
 			t.Logf("Rot belegt: %s\n%s", m.test, out)
 		})
 	}
+}
+
+func TestPluginRechteMutation(t *testing.T) {
+	adapterTests(t)
+	dir := t.TempDir()
+	b, err := os.ReadFile("cloud-init.yaml.tftpl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(dir, "cloud-init.yaml.tftpl"), []byte(strings.ReplaceAll(string(b), "d /run/jnpt/plugins 0755 root root -", "d /run/jnpt/plugins 0755 65532 65532 -")), 0600)
+	cmd := exec.Command(os.Args[0], "-test.run=^TestPluginRechteAmEchtenTmpfilesAdapter$", "-test.v")
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "Kern kann fremde Plugin-Stelle anlegen") {
+		t.Fatalf("Plugin-Mutant nicht gezielt rot: %v %s", err, out)
+	}
+	t.Logf("Rot belegt: %s", out)
 }

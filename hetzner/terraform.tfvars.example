@@ -30,7 +30,7 @@ ssh_allowed_cidr = ["203.0.113.4/32"]
 # public_web_enabled = true
 
 # Pflicht: gepinnter Image-Tag (kein latest), Prebuilt statt Build auf der VM.
-image_ref = "ghcr.io/januaport/januaport:0.59.0"
+image_ref = "ghcr.io/januaport/januaport:0.87.1"
 # Privates GHCR: classic PAT mit read:packages manuell als registry_token-Datei.
 
 # Versions-Check: beide leer = AUS (offline-first). Öffentliche URL/PUBLIC-Key,
@@ -46,6 +46,10 @@ image_ref = "ghcr.io/januaport/januaport:0.59.0"
 
 # Konfig-Quelle: nur Compose/Caddy/Tailscale-Dateien, kein Build auf der VM.
 # git_repo = "https://github.com/JanuaPort/januaport.git"
-# git_ref  = "main"
-# Privates Repo: fein-granularen PAT (nur dieses Repo, Contents:read) manuell
+# git_ref  = "v0.87.1"  # Release-Tag passend zum image_ref; auch voller Commit-SHA möglich.
+# Das Default-Produkt-Repo ist PRIVAT: fein-granularen PAT (nur dieses Repo, Contents:read) manuell
 # als git_token-Datei ablegen. jnpt-start verwendet dann GIT_ASKPASS.
+
+# Optionaler signierter Plugin-Katalog, leer = kein Katalog (offline-first).
+# update_plugins_url = "https://updates.example.org/plugins.json"
+# SSH-Allnetze 0.0.0.0/0 und ::/0 werden von der Validierung abgewiesen.

@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -68,7 +71,7 @@ func checkDrift(m driftManifest, deploy map[string]string) error {
 	for name := range names {
 		core, local := m.CoreSections[name], deploy[name]
 		if e, ok := m.Exceptions[name]; ok {
-			if e.Reason == "" || e.Core != core || e.Deploy != local || core == local {
+			if e.Reason == "" || strings.Contains(e.Reason, "PRUEFEN:") || e.Core != core || e.Deploy != local || core == local {
 				return fmt.Errorf("Ausnahme veraltet/unbegruendet: %s", name)
 			}
 		} else if core != local {
@@ -76,6 +79,17 @@ func checkDrift(m driftManifest, deploy map[string]string) error {
 		}
 	}
 	return nil
+}
+
+func TestDriftLehntVeraendertenKernExportAb(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "core.tftpl")
+	os.WriteFile(path, []byte("# Neue SEC-Haertung in aktueller Kern-Vorlage\n"), 0600)
+	cmd := exec.Command(os.Args[0], "-test.run=^TestHerkunftsDrift$", "-test.v")
+	cmd.Env = append(os.Environ(), "JNPT_CORE_TEMPLATE="+path)
+	out, err := cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "Kern-Vorlage geaendert") {
+		t.Fatalf("aktuelle Herkunftsdrift nicht abgewiesen: %v %s", err, out)
+	}
 }
 
 func TestHerkunftsDrift(t *testing.T) {

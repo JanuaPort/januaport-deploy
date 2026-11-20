@@ -81,7 +81,8 @@ resource "hcloud_volume" "data" {
 }
 
 # Volume an den Server hängen. automount=false → cloud-init formatiert/mountet
-# selbst (idempotent, overwrite:false), damit ein Re-Deploy die bestehende DB
+# selbst (blkid vor mkfs: nur ohne erkanntes Dateisystem), damit ein Re-Deploy
+# die bestehende DB
 # nicht überschreibt.
 resource "hcloud_volume_attachment" "data" {
   volume_id = hcloud_volume.data.id
@@ -114,6 +115,7 @@ resource "hcloud_server" "jnpt" {
     # Versions-Check (optional): beide leer = Check aus (offline-first). Der
     # Public Key ist kein Geheimnis (s. variables.tf).
     update_manifest_url = var.update_manifest_url
+    update_plugins_url  = var.update_plugins_url
     update_public_keys  = var.update_public_keys
     # Host-Aktuator: die Repository-Allowlist der Vertrauensgrenze. Der
     # Prüf-Token wird NICHT hier gereicht — er käme sonst in den State.

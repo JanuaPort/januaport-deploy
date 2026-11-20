@@ -56,3 +56,23 @@ freigegebener Umgebung. `secret_transport_test.go` prüft Dateiweg/Git-Askpass
 mit echten execve-Traces; `mutations_test.go` entfernt Sperren in Wegwerfkopien.
 Aufrufe siehe README. Bei Änderungen an einer Sperre
 auch das Verbotene auslösen und die Mutationsprobe mit entfernter Sperre prüfen.
+
+## Audit-Nachzug (#1500, #1501, #1512 Punkte 2/10)
+
+Docker-APT: unveränderter Kern-Helfer apt-schluessel.sh mit Pin
+9DC858229FC7DD38854AE2D88D81803C0EBFCD88; Quelle nur hinter erfolgreichem `&&`.
+Plugin-tmpfiles vor Handstart und bei Boot; Eltern root:root/0755,
+tunnel-admin 65532:65532/0750. Plugin-Feed als öffentliche Variable bis `.env`.
+
+Das private Default-Repo braucht vor dem Klon die Git-Token-Datei. Der separate
+config-holen.sh akzeptiert Branch/Tag/Commit-SHA, prüft Stack-/Aktuator-Dateien
+und übernimmt erst den vollständigen Klon. Default-Ref v0.87.1 zum Beispiel-Image
+0.87.1. Startfehler und ungestartete Anlage erscheinen in Ausgabe/MOTD.
+SSH-Eingabe weist beide Allnetze 0.0.0.0/0 und ::/0 ab; [] bleibt bewusst möglich.
+
+Der Drift-Wächter friert alle gerenderten Felder mit benannten Ausnahmen samt
+Grund und beidseitigem Hash ein. Jeder Kern-Nachzug verlangt zusätzlich den
+frischen Export via JNPT_CORE_TEMPLATE; dessen kompletter Hash erfasst auch
+optionale Skript-Läufer-Blöcke. Baseline/Update-Anleitung: README.
+Audit-Tests/Mutanten verwenden echte GPG-, Git-, HCL-, tmpfiles- und
+Dateisystemadapter im Wegwerfcontainer; audit-test.Dockerfile braucht kein Terraform.

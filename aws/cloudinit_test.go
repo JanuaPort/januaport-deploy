@@ -30,6 +30,9 @@ func TestEnvModusUndMetadaten(t *testing.T) {
 	if err := os.Chmod(dir, 0755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Chmod(filepath.Dir(dir), 0755); err != nil {
+		t.Fatal(err)
+	}
 	var install string
 	for _, f := range cfg.Files {
 		if f.Path == "/opt/jnpt/.env.example" {
@@ -62,6 +65,9 @@ func TestEnvModusUndMetadaten(t *testing.T) {
 		t.Fatalf(".env-Modus %04o statt 0600", info.Mode().Perm())
 	}
 	// Wirklicher Dateisystemzugriff eines unprivilegierten Kontos, kein Mock.
+	if out, err := exec.Command("setpriv", "--reuid=65532", "--regid=65532", "--clear-groups", "cat", filepath.Join(dir, ".env.example")).CombinedOutput(); err != nil {
+		t.Fatalf("Kontroll-Datei fuer unprivilegiertes Konto nicht lesbar: %v %s", err, out)
+	}
 	if out, err := exec.Command("setpriv", "--reuid=65532", "--regid=65532", "--clear-groups", "cat", target).CombinedOutput(); err == nil || !strings.Contains(string(out), "Permission denied") {
 		t.Fatalf("unprivilegiertes Lesen nicht abgewiesen: %v %s", err, out)
 	}

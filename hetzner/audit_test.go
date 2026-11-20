@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -34,6 +35,8 @@ func TestAptPinAmEchtenGPGAdapter(t *testing.T) {
 	if fingerprint == "" {
 		t.Fatal("kein Test-Fingerabdruck")
 	}
+	command(t, "gpg", "--homedir", dir, "--batch", "--passphrase", "", "--quick-gen-key", "Zweiter Audit <apt2@example.org>", "ed25519", "sign", "0")
+	multiple := command(t, "gpg", "--homedir", dir, "--armor", "--export")
 	body := key
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(body)) }))
 	defer srv.Close()
@@ -47,6 +50,7 @@ func TestAptPinAmEchtenGPGAdapter(t *testing.T) {
 		{"passend", key, fingerprint, true},
 		{"fremder_Schluessel", key, "9DC858229FC7DD38854AE2D88D81803C0EBFCD88", false},
 		{"kaputt", "keine Schluesseldaten", fingerprint, false},
+		{"zwei_Hauptschluessel", multiple, fingerprint, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			body = tc.data
@@ -110,13 +114,29 @@ func TestKonfigMitEchtemGit(t *testing.T) {
 		}
 		command(t, "sh", helper, repo, ref, dest) // Wiederholung
 	}
+	for _, missing := range []string{"docker/docker-compose.prod.yml", "docker/Caddyfile", "docker/tailscale-serve.json", "deploy/updater/jnpt-updater.sh", "deploy/updater/jnpt-updater.service", "deploy/updater/jnpt-updater.timer"} {
+		t.Run("bestehender_Klon_ohne_"+missing, func(t *testing.T) {
+			dest := filepath.Join(t.TempDir(), "repo")
+			command(t, "sh", helper, repo, "v0.87.1", dest)
+			if err := os.Remove(filepath.Join(dest, missing)); err != nil {
+				t.Fatal(err)
+			}
+			if out, err := exec.Command("sh", helper, repo, "v0.87.1", dest).CombinedOutput(); err == nil || !strings.Contains(string(out), "Konfig-Datei fehlt: "+missing) {
+				t.Fatalf("fehlende Konfig-Datei nicht abgewiesen: %v %s", err, out)
+			}
+		})
+	}
 	for _, tc := range []struct{ name, repo, ref string }{
 		{"privat_ohne_Token", "https://github.com/JanuaPort/januaport.git", "v0.87.1"},
 		{"Ref_fehlt", repo, "nicht-vorhanden"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dest := filepath.Join(t.TempDir(), "repo")
-			out, err := exec.Command("sh", helper, tc.repo, tc.ref, dest).CombinedOutput()
+			cmd := exec.Command("sh", helper, tc.repo, tc.ref, dest)
+			// Falls die Tokensperre mutiert wird, bleibt auch der verbotene
+			// Default-Klon lokal: echtes Git-URL-Rewriting, kein Netzwerk/Mock.
+			cmd.Env = append(os.Environ(), "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=url."+repo+".insteadOf", "GIT_CONFIG_VALUE_0=https://github.com/JanuaPort/januaport.git")
+			out, err := cmd.CombinedOutput()
 			if err == nil || !strings.Contains(string(out), "Keine Anlage gestartet") {
 				t.Fatalf("stiller/erfolgreicher Fehler: %v %s", err, out)
 			}
@@ -131,6 +151,25 @@ func TestKonfigMitEchtemGit(t *testing.T) {
 	dest := filepath.Join(t.TempDir(), "repo")
 	if out, err := exec.Command("sh", helper, repo, "main", dest).CombinedOutput(); err == nil || !strings.Contains(string(out), "Keine Anlage gestartet") {
 		t.Fatalf("fehlende Compose nicht abgewiesen: %v %s", err, out)
+	}
+}
+
+func TestPluginRechteAmEchtenTmpfilesAdapter(t *testing.T) {
+	adapterTests(t)
+	_, cfg := render(t, nil)
+	root := t.TempDir()
+	os.Chmod(root, 0755)
+	os.Chmod(filepath.Dir(root), 0755)
+	etc := filepath.Join(root, "etc")
+	os.MkdirAll(filepath.Join(etc, "tmpfiles.d"), 0755)
+	os.WriteFile(filepath.Join(etc, "passwd"), []byte("root:x:0:0:root:/root:/bin/sh\n"), 0644)
+	os.WriteFile(filepath.Join(etc, "group"), []byte("root:x:0:\n"), 0644)
+	os.WriteFile(filepath.Join(etc, "tmpfiles.d/jnpt-plugins.conf"), []byte(fileContent(t, cfg, "/etc/tmpfiles.d/jnpt-plugins.conf")), 0644)
+	command(t, "systemd-tmpfiles", "--root="+root, "--create", filepath.Join(etc, "tmpfiles.d/jnpt-plugins.conf"))
+	parent := filepath.Join(root, "run/jnpt/plugins")
+	command(t, "setpriv", "--reuid=65532", "--regid=65532", "--clear-groups", "touch", filepath.Join(parent, "tunnel-admin/runtime-test"))
+	if out, err := exec.Command("setpriv", "--reuid=65532", "--regid=65532", "--clear-groups", "mkdir", filepath.Join(parent, "unerlaubt")).CombinedOutput(); err == nil || !strings.Contains(string(out), "Permission denied") {
+		t.Fatalf("Kern kann fremde Plugin-Stelle anlegen: %v %s", err, out)
 	}
 }
 
@@ -165,7 +204,7 @@ func TestPluginVerzeichnisUndFeed(t *testing.T) {
 		}
 	}
 	main, _ := os.ReadFile("main.tf")
-	if !strings.Contains(string(main), "update_plugins_url = var.update_plugins_url") {
+	if !regexp.MustCompile(`update_plugins_url\s*=\s*var\.update_plugins_url`).Match(main) {
 		t.Fatal("Feed-Komposition fehlt")
 	}
 }

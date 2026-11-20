@@ -68,3 +68,11 @@ cd /opt/jnpt && sudo docker compose --env-file .env pull && sudo docker compose 
   dieser minimalen Vorlage.
 - Secrets kommen ausschließlich aus `/opt/jnpt/.env` — nie in die
   `docker-compose.yml`, nie ins Repo.
+
+Die Vorlage legt `/opt/jnpt/.env` mit `install -m 0600` als root an.
+**Bestehende Anlagen:** vor dem Eintragen weiterer Werte einmal
+`sudo chmod 600 /opt/jnpt/.env` ausführen.
+Laufzeitgeheimnisse erst nach dem Boot in dieser Datei eintragen, niemals in
+EC2 `user_data` (auch IMDSv1) oder die hochgeladene `cloud-init.yaml` (#1497).
+Die mitgelieferte Vorlage enthält nur öffentliche Konfiguration und einen leeren
+`JNPT_MASTER_KEY`; Platzhalter nicht vor dem Upload mit Geheimnissen füllen.
