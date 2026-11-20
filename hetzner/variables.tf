@@ -262,16 +262,20 @@ variable "ssh_allowed_cidr" {
   description = <<-EOT
     CIDR-Liste, die SSH (Port 22) erreichen darf. PFLICHT, kein Default — bewusst
     keine stille Vorgabe. Für den Zugang die eigene IP setzen (z. B.
-    ["203.0.113.4/32"]). 0.0.0.0/0 und ::/0 werden abgewiesen. Wer wirklich kein SSH von
-    außen will, trägt explizit eine leere Liste `[]` ein.
+    ["203.0.113.4/32"]). IPv4-Präfixe kürzer als /8 und IPv6-Präfixe kürzer
+    als /16 werden abgewiesen, einschließlich 0.0.0.0/0 und ::/0. Wer wirklich
+    kein SSH von außen will, trägt explizit eine leere Liste `[]` ein.
     Für die Dateiablage nach apply ist ein erreichbarer SSH-Zugang nötig;
     Tailscale startet erst danach (README, #1497).
   EOT
   type        = list(string)
 
   validation {
-    condition     = !contains(var.ssh_allowed_cidr, "0.0.0.0/0") && !contains(var.ssh_allowed_cidr, "::/0")
-    error_message = "ssh_allowed_cidr darf weder 0.0.0.0/0 noch ::/0 enthalten. Eigene CIDRs oder bewusst [] wählen."
+    condition = length([
+      for cidr in var.ssh_allowed_cidr : cidr
+      if !try(tonumber(split("/", cidr)[1]) >= (length(regexall(":", cidr)) > 0 ? 16 : 8), false)
+    ]) == 0
+    error_message = "ssh_allowed_cidr braucht IPv4-Präfixe ab /8 und IPv6-Präfixe ab /16; 0.0.0.0/0 und ::/0 sind damit ebenfalls ausgeschlossen. Eigene CIDRs oder bewusst [] wählen."
   }
 }
 

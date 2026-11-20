@@ -238,6 +238,7 @@ func TestSSHAllnetzeMitEchtemHCLAusdruck(t *testing.T) {
 				{[]string{"203.0.113.4/32", "2000::/15"}, false},
 				{[]string{"10.0.0.0/7", "2001:db8::/64"}, false},
 				{[]string{"203.0.113.4/32", "2001:db8::1/128"}, true},
+				{[]string{"203.0.113.4"}, false}, {[]string{"2001:db8::/ungueltig"}, false},
 			} {
 				values := []cty.Value{}
 				for _, s := range tc.values {

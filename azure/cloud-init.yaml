@@ -21,6 +21,27 @@ packages:
   - gnupg
 
 write_files:
+  # Docker-APT: identischer Pruefhelfer wie Hetzner (#1500, SEC R4 B1).
+  - path: /opt/jnpt/apt-schluessel.sh
+    permissions: "0700"
+    owner: root:root
+    content: |
+      #!/bin/sh
+      # Aufruf: apt-schluessel.sh <https-url> <fingerabdruck, 40 Hex> <ziel>
+      set -eu
+      url=$1
+      soll=$2
+      ziel=$3
+      arbeit=$(mktemp -d)
+      trap 'rm -rf "$arbeit"' EXIT
+      curl -fsSL --proto '=https' -o "$arbeit/schluessel" "$url"
+      ist=$(GNUPGHOME="$arbeit" gpg --batch --show-keys --with-colons "$arbeit/schluessel" | awk -F: '$1 == "pub" { p = 1; next } p && $1 == "fpr" { print $10; p = 0 }')
+      if [ "$ist" != "$soll" ]; then
+        echo "apt-schluessel: $url hat [$ist], erwartet [$soll] - nicht vertraut" >&2
+        exit 1
+      fi
+      install -m 0644 "$arbeit/schluessel" "$ziel"
+
   # Minimaler Ein-Container-Stack, bewusst identisch zu compose/docker-compose.yml
   # im Repo-Root (Loopback-Bind, Pflicht-Image-Tag, kein Healthcheck — Begründung
   # dort). Wer mehr Betreiber-Envs braucht (SSO, Anbindungsweg, …), ersetzt diese
@@ -56,9 +77,7 @@ write_files:
 runcmd:
   # --- Docker Engine + Compose-Plugin (offizielles Repo) ---------------------
   - install -m 0755 -d /etc/apt/keyrings
-  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-  - chmod a+r /etc/apt/keyrings/docker.asc
-  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+  - /opt/jnpt/apt-schluessel.sh https://download.docker.com/linux/ubuntu/gpg 9DC858229FC7DD38854AE2D88D81803C0EBFCD88 /etc/apt/keyrings/docker.asc && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
   - apt-get update
   - DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   - systemctl enable --now docker

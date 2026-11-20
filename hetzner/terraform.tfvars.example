@@ -52,4 +52,5 @@ image_ref = "ghcr.io/januaport/januaport:0.87.1"
 
 # Optionaler signierter Plugin-Katalog, leer = kein Katalog (offline-first).
 # update_plugins_url = "https://updates.example.org/plugins.json"
-# SSH-Allnetze 0.0.0.0/0 und ::/0 werden von der Validierung abgewiesen.
+# SSH: IPv4 mindestens /8, IPv6 mindestens /16; breitere Netze einschließlich
+# 0.0.0.0/0 und ::/0 werden von der Validierung abgewiesen.

@@ -57,6 +57,11 @@ cd /opt/jnpt && sudo docker compose --env-file .env pull && sudo docker compose 
 
 ## Sicherheits-Defaults
 
+- Docker-APT verwendet denselben Prüfhelfer wie Hetzner (#1500, SEC R4 B1),
+  mit festem Fingerabdruck `9DC858229FC7DD38854AE2D88D81803C0EBFCD88`.
+  Fremde, ungültige oder mehrere Hauptschlüssel werden vor Schlüsselinstallation
+  und Quelleintrag abgewiesen; `signed-by` bindet den Schlüssel an Docker.
+
 - Die Security-Group-Regel oben öffnet **nur SSH von der eigenen IP** — kein
   `0.0.0.0/0`.
 - Port 8484 ist nur an Loopback gebunden, nicht öffentlich erreichbar.

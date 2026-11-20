@@ -68,7 +68,8 @@ Das private Default-Repo braucht vor dem Klon die Git-Token-Datei. Der separate
 config-holen.sh akzeptiert Branch/Tag/Commit-SHA, prüft Stack-/Aktuator-Dateien
 und übernimmt erst den vollständigen Klon. Default-Ref v0.87.1 zum Beispiel-Image
 0.87.1. Startfehler und ungestartete Anlage erscheinen in Ausgabe/MOTD.
-SSH-Eingabe weist beide Allnetze 0.0.0.0/0 und ::/0 ab; [] bleibt bewusst möglich.
+SSH-Eingabe weist IPv4-Präfixe kürzer als /8 und IPv6-Präfixe kürzer als /16
+einschließlich 0.0.0.0/0 und ::/0 ab; [] bleibt bewusst möglich.
 
 Der Drift-Wächter friert alle gerenderten Felder mit benannten Ausnahmen samt
 Grund und beidseitigem Hash ein. Jeder Kern-Nachzug verlangt zusätzlich den

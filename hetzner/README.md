@@ -145,7 +145,7 @@ Ein erfolgreiches `terraform apply` allein bedeutet weiterhin keine gestartete A
 | `ts_hostname` | — | `jnpt` | Tailnet-Hostname (Admin-URL) |
 | `server_type` / `location` | — | `cpx22` / `nbg1` | Server-Typ/Standort (Verfügbarkeit vor `apply` prüfen) |
 | `ssh_public_key` | — | — | Admin-SSH-Key |
-| `ssh_allowed_cidr` | — | **Pflicht, kein Default** | SSH-Quellen; `0.0.0.0/0` und `::/0` werden abgewiesen; `[]` bleibt möglich |
+| `ssh_allowed_cidr` | — | **Pflicht, kein Default** | SSH-Quellen; IPv4 ab `/8`, IPv6 ab `/16`; breitere Netze einschließlich `0.0.0.0/0` und `::/0` werden abgewiesen; `[]` bleibt möglich |
 | `public_web_enabled` | — | `false` | öffnet 80/443 in der Firewall |
 | `image_ref` | — | Pflicht | gepinnter Registry-Tag, den die VM zieht |
 | `git_repo` / `git_ref` | — | privates Produkt-Repo / `v0.87.1` | Konfiguration und Aktuator; Default braucht `git_token`-Datei; Branch/Tag/Commit-SHA |
