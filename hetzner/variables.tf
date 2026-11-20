@@ -120,7 +120,7 @@ variable "name" {
 variable "image_ref" {
   description = <<-EOT
     Gepinnter Image-Tag, den die VM aus der Registry zieht, z. B.
-    ghcr.io/januaport/januaport:0.59.0. PFLICHT (kein Default): bewusst KEIN
+    ghcr.io/januaport/januaport:0.87.1. PFLICHT (kein Default): bewusst KEIN
     `latest`, damit der Deploy reproduzierbar auf einem festen Tag steht.
     cloud-init bereitet die öffentliche .env mit JANUAPORT_IMAGE vor;
     jnpt-start installiert sie nach der Dateiablage neben der Prod-Compose.
@@ -158,6 +158,12 @@ variable "update_manifest_url" {
 
     NICHT `sensitive`: eine öffentliche Abruf-Adresse, kein Geheimnis.
   EOT
+  type        = string
+  default     = ""
+}
+
+variable "update_plugins_url" {
+  description = "OPTIONAL: öffentliche URL des signierten Plugin-Katalogs (JNPT_UPDATE_PLUGINS_URL). Leer = kein Katalog, offline-first. Nutzt denselben Ticker, gehärteten Client und Schlüsselring wie das Manifest. Änderungen an user_data ersetzen die VM; auf laufenden Anlagen die .env gemäß README ändern."
   type        = string
   default     = ""
 }
@@ -222,9 +228,9 @@ variable "git_repo" {
 }
 
 variable "git_ref" {
-  description = "Branch/Tag/Commit, der auf der VM ausgecheckt wird."
+  description = "Branch/Tag/Commit-SHA der Konfig-Dateien. Default v0.87.1 passend zum Beispiel-Image; für reproduzierbare Deploys Release-Tag oder vollständigen Commit-SHA wählen. Bestehende Arbeitskopien bleiben bei erneutem Start erhalten."
   type        = string
-  default     = "main"
+  default     = "v0.87.1"
 }
 
 variable "git_token" {
@@ -256,12 +262,21 @@ variable "ssh_allowed_cidr" {
   description = <<-EOT
     CIDR-Liste, die SSH (Port 22) erreichen darf. PFLICHT, kein Default — bewusst
     keine stille Vorgabe. Für den Zugang die eigene IP setzen (z. B.
-    ["203.0.113.4/32"]). Bewusst NICHT 0.0.0.0/0. Wer wirklich kein SSH von
-    außen will, trägt explizit eine leere Liste `[]` ein.
+    ["203.0.113.4/32"]). IPv4-Präfixe kürzer als /8 und IPv6-Präfixe kürzer
+    als /16 werden abgewiesen, einschließlich 0.0.0.0/0 und ::/0. Wer wirklich
+    kein SSH von außen will, trägt explizit eine leere Liste `[]` ein.
     Für die Dateiablage nach apply ist ein erreichbarer SSH-Zugang nötig;
     Tailscale startet erst danach (README, #1497).
   EOT
   type        = list(string)
+
+  validation {
+    condition = length([
+      for cidr in var.ssh_allowed_cidr : cidr
+      if !try(tonumber(split("/", cidr)[1]) >= (length(regexall(":", cidr)) > 0 ? 16 : 8), false)
+    ]) == 0
+    error_message = "ssh_allowed_cidr braucht IPv4-Präfixe ab /8 und IPv6-Präfixe ab /16; 0.0.0.0/0 und ::/0 sind damit ebenfalls ausgeschlossen. Eigene CIDRs oder bewusst [] wählen."
+  }
 }
 
 # ── Öffentliche Web-Fläche ────────────────────────────────────────────────────

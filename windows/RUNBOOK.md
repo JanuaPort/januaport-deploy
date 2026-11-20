@@ -286,8 +286,8 @@ Daten des Kunden. Vor dem Start hakt die Person ab:
 
 ### Freigabe, Anstoß und Ergebnis
 
-1. Auf VM `jnpt-b4` durch BOX zuerst [PRUEFSTEIN-B5.md](PRUEFSTEIN-B5.md)
-   vollständig abnehmen, bevor `windows-v0.3.0` getaggt wird. Ein unverändertes
+1. [PRUEFSTEIN-B5.md](PRUEFSTEIN-B5.md) ist durch BOX auf VM `jnpt-b4`
+   GRÜN abgenommen (`c-6796028725`); `windows-v0.3.0` ist veröffentlicht. Ein unverändertes
    0.2.0-Profil über den geprüften 0.3.0-Release aktualisieren; anschließend
    `dienst-einrichten.ps1` als Administrator mit dem bisherigen `-BackupTarget`
    wiederholen. Das legt die Aufgabe „JanuaPort Update“ an: `jnpt-dienst`,

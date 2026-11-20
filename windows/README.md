@@ -47,9 +47,8 @@ Arbeitsplatz im lokalen Subnetz prüfen. Der Admin-Port 8484 bleibt auf Loopback
 
 ## Zwei Befehle
 
-Der Herausgeber muss zuerst den unveränderlichen Profil-Tag `windows-v0.3.0`
-auf dem geprüften Commit dieses Repos veröffentlichen. **Bis dahin ist die URL
-noch nicht nutzbar.** `<tag>` in eigenen Verteilanweisungen steht für diesen
+Der unveränderliche Profil-Tag `windows-v0.3.0` ist veröffentlicht; die URL
+unten ist nutzbar. `<tag>` in eigenen Verteilanweisungen steht für diesen
 Profil-Release, nicht für einen JanuaPort-Image-Tag und nicht für `main`.
 Das Skript lädt alle Dateien und `SHA256SUMS` genau von diesem festen Tag.
 Bei einem neuen Profil-Release werden Skript-Referenz und Summen gemeinsam
@@ -646,8 +645,8 @@ mit 3 Sekunden Anfragefrist und 2 Sekunden Pause geprüft, TLS höchstens
 30-mal mit 2 Sekunden Pause wie bei der Einrichtung.
 
 Rückweg von Hand und gleichzeitige tägliche Sicherung: [RUNBOOK](RUNBOOK.md#7-update-b5).
-Vor dem Tag `windows-v0.3.0` muss BOX den [Prüfstein B5](PRUEFSTEIN-B5.md)
-auf VM `jnpt-b4` abnehmen. Docker Desktop läuft weiterhin in der angemeldeten,
+BOX hat den [Prüfstein B5](PRUEFSTEIN-B5.md) auf VM `jnpt-b4` abgenommen
+(Abnahmestatus GRÜN, Protokoll `c-6796028725`); `windows-v0.3.0` ist veröffentlicht. Docker Desktop läuft weiterhin in der angemeldeten,
 gesperrten Sitzung von `jnpt-dienst`. Tailscale gehört nicht zu diesem Paket.
 
 ## Fernwartung

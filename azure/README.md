@@ -61,6 +61,11 @@ cd /opt/jnpt && sudo docker compose --env-file .env pull && sudo docker compose 
 
 ## Sicherheits-Defaults
 
+- Docker-APT verwendet denselben Prüfhelfer wie Hetzner (#1500, SEC R4 B1),
+  mit festem Fingerabdruck `9DC858229FC7DD38854AE2D88D81803C0EBFCD88`.
+  Fremde, ungültige oder mehrere Hauptschlüssel werden vor Schlüsselinstallation
+  und Quelleintrag abgewiesen; `signed-by` bindet den Schlüssel an Docker.
+
 - Die NSG-Regel oben öffnet **nur SSH von der eigenen IP** — kein `0.0.0.0/0`.
 - Port 8484 ist nur an Loopback gebunden, nicht öffentlich erreichbar.
 - Wer eine öffentliche Fläche braucht: eigenen Reverse-Proxy mit TLS ergänzen
@@ -71,3 +76,11 @@ cd /opt/jnpt && sudo docker compose --env-file .env pull && sudo docker compose 
   Teil dieser minimalen Vorlage.
 - Secrets kommen ausschließlich aus `/opt/jnpt/.env` — nie in die
   `docker-compose.yml`, nie ins Repo.
+
+Die Vorlage legt `/opt/jnpt/.env` mit `install -m 0600` als root an.
+**Bestehende Anlagen:** vor dem Eintragen weiterer Werte einmal
+`sudo chmod 600 /opt/jnpt/.env` ausführen.
+Laufzeitgeheimnisse erst nach dem Boot in dieser Datei eintragen, niemals in
+Azure `custom_data`/Metadaten oder die hochgeladene `cloud-init.yaml` (#1497).
+Die mitgelieferte Vorlage enthält nur öffentliche Konfiguration und einen leeren
+`JNPT_MASTER_KEY`; Platzhalter nicht vor dem Upload mit Geheimnissen füllen.

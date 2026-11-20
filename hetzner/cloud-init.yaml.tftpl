@@ -26,6 +26,7 @@ write_files:
       TS_HOSTNAME=${ts_hostname}
       JANUAPORT_IMAGE=${image_ref}
       JNPT_UPDATE_MANIFEST_URL=${update_manifest_url}
+      JNPT_UPDATE_PLUGINS_URL=${update_plugins_url}
       JNPT_UPDATE_PUBLIC_KEYS=${update_public_keys}
 
   # Prüf-Token wie alle Laufzeitgeheimnisse manuell ablegen; ohne ihn inert.
@@ -47,6 +48,87 @@ write_files:
     owner: root:root
     content: |
       d /run/jnpt/tunnel 0750 65532 65532 -
+
+  # Elternordner root, beanspruchte Plugin-Stelle fuer den nonroot-Kern.
+  - path: /etc/tmpfiles.d/jnpt-plugins.conf
+    permissions: "0644"
+    owner: root:root
+    content: |
+      d /run/jnpt/plugins 0755 root root -
+      d /run/jnpt/plugins/tunnel-admin 0750 65532 65532 -
+
+  - path: /opt/jnpt/apt-schluessel.sh
+    permissions: "0700"
+    owner: root:root
+    content: |
+      #!/bin/sh
+      # Aufruf: apt-schluessel.sh <https-url> <fingerabdruck, 40 Hex> <ziel>
+      set -eu
+      url=$1
+      soll=$2
+      ziel=$3
+      arbeit=$(mktemp -d)
+      trap 'rm -rf "$arbeit"' EXIT
+      curl -fsSL --proto '=https' -o "$arbeit/schluessel" "$url"
+      ist=$(GNUPGHOME="$arbeit" gpg --batch --show-keys --with-colons "$arbeit/schluessel" | awk -F: '$1 == "pub" { p = 1; next } p && $1 == "fpr" { print $10; p = 0 }')
+      if [ "$ist" != "$soll" ]; then
+        echo "apt-schluessel: $url hat [$ist], erwartet [$soll] - nicht vertraut" >&2
+        exit 1
+      fi
+      install -m 0644 "$arbeit/schluessel" "$ziel"
+
+
+  # Branch, Tag und Commit-SHA ueber denselben Fetch-/Checkout-Weg.
+  # Arbeitskopie erst nach vollstaendigem Klon und Dateipruefung veroeffentlichen.
+  - path: /opt/jnpt/config-holen.sh
+    permissions: "0700"
+    owner: root:root
+    content: |
+      #!/bin/sh
+      set -eu
+      repo=$1
+      ref=$2
+      ziel=$3
+      arbeit=
+      fertig=0
+      aufraeumen() {
+        code=$?
+        [ -z "$arbeit" ] || rm -rf "$arbeit"
+        if [ "$fertig" != 1 ]; then
+          printf '%s\n' 'Keine Anlage gestartet: Konfig-Klon/Ref/Dateien pruefen; privates Produkt-Repo braucht /etc/jnpt-bootstrap/git_token (README).' >&2
+        fi
+        exit "$code"
+      }
+      trap aufraeumen EXIT
+      fail() { printf '%s\n' "$*" >&2; exit 1; }
+      if [ -d "$ziel" ] && git -C "$ziel" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        pruef=$ziel
+      else
+        case "$repo" in
+          https://github.com/JanuaPort/januaport|https://github.com/JanuaPort/januaport.git)
+            [ -f /etc/jnpt-bootstrap/git_token ] || fail 'Privates Produkt-Repo: git_token vor dem Klon ablegen.' ;;
+        esac
+        export GIT_TERMINAL_PROMPT=0
+        if [ -f /etc/jnpt-bootstrap/git_token ]; then
+          GIT_ASKPASS=/opt/jnpt/askpass.sh
+          export GIT_ASKPASS
+        fi
+        arbeit=$(mktemp -d "$ziel.neu.XXXXXX")
+        git -c credential.helper= init -q "$arbeit"
+        git -C "$arbeit" remote add origin "$repo"
+        git -C "$arbeit" -c credential.helper= fetch --depth 1 origin "$ref"
+        git -C "$arbeit" -c credential.helper= checkout --detach FETCH_HEAD
+        pruef=$arbeit
+      fi
+      for datei in docker/docker-compose.prod.yml docker/Caddyfile docker/tailscale-serve.json deploy/updater/jnpt-updater.sh deploy/updater/jnpt-updater.service deploy/updater/jnpt-updater.timer; do
+        [ -f "$pruef/$datei" ] || fail "Konfig-Datei fehlt: $datei"
+      done
+      if [ -n "$arbeit" ]; then
+        [ ! -e "$ziel" ] || fail 'Konfig-Ziel existiert ohne gueltiges Repo; Betreiber muss es pruefen.'
+        mv "$arbeit" "$ziel"
+        arbeit=
+      fi
+      fertig=1
 
   # Eigene Unit nach dem Muster des Plugin-Netz-Guards (README).
   # DOCKER-USER gilt für weitergeleiteten Bridge-Verkehr, nicht Host-Netzwerk.
@@ -100,6 +182,7 @@ write_files:
       #!/bin/sh
       set -eu
       umask 077
+      trap 'code=$?; if [ "$code" -ne 0 ]; then printf "%s\n" "Keine Anlage gestartet bzw. Start unvollstaendig. jnpt-start fehlgeschlagen; Ausgabe pruefen und erneut aufrufen (README)." | tee /etc/motd >&2; fi' EXIT
       fail() { printf '%s\n' "$*" >&2; exit 1; }
       [ "$(id -u)" = 0 ] || fail 'jnpt-start als root aufrufen.'
       for name in jnpt_master_key tailscale_authkey git_token registry_token; do
@@ -117,15 +200,10 @@ write_files:
       flock -n 9 || fail 'jnpt-start laeuft bereits.'
       systemctl restart jnpt-metadata-guard.service
       systemd-tmpfiles --create /etc/tmpfiles.d/jnpt-tunnel.conf
+      systemd-tmpfiles --create /etc/tmpfiles.d/jnpt-plugins.conf
 
-      # Ausschließlich Konfiguration klonen, kein Build auf der VM.
-      if [ ! -d /opt/jnpt/repo/.git ]; then
-        if [ -f /etc/jnpt-bootstrap/git_token ]; then
-          GIT_ASKPASS=/opt/jnpt/askpass.sh GIT_TERMINAL_PROMPT=0 git -c credential.helper= clone --branch '${git_ref}' --depth 1 '${git_repo}' /opt/jnpt/repo
-        else
-          GIT_TERMINAL_PROMPT=0 git -c credential.helper= clone --branch '${git_ref}' --depth 1 '${git_repo}' /opt/jnpt/repo
-        fi
-      fi
+      # Ausschliesslich Konfiguration klonen, kein Build auf der VM.
+      /opt/jnpt/config-holen.sh '${git_repo}' '${git_ref}' /opt/jnpt/repo
       # Bei erneutem Start bestehende Betreiber-Konfiguration erhalten.
       if [ ! -f /opt/jnpt/repo/docker/.env ]; then
         install -m 0600 -o root -g root /opt/jnpt/staging/.env /opt/jnpt/repo/docker/.env
@@ -150,13 +228,12 @@ write_files:
       # PAT-Quelldateien erst nach Erfolg löschen, damit ein Fehlversuch
       # wiederholt werden kann. Registry-Auth bleibt in /root/.docker/config.json.
       rm -f /etc/jnpt-bootstrap/git_token /etc/jnpt-bootstrap/registry_token
+      printf '%s\n' 'JanuaPort: Compose-Start abgeschlossen. Health/MCP-Rundlauf gemaess README pruefen.' > /etc/motd
 
 runcmd:
   # Docker Engine + Compose-Plugin (offizielles Repo).
   - install -m 0755 -d /etc/apt/keyrings
-  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-  - chmod a+r /etc/apt/keyrings/docker.asc
-  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+  - /opt/jnpt/apt-schluessel.sh https://download.docker.com/linux/ubuntu/gpg 9DC858229FC7DD38854AE2D88D81803C0EBFCD88 /etc/apt/keyrings/docker.asc && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
   - apt-get update
   - DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   - systemctl enable --now docker
@@ -178,4 +255,5 @@ runcmd:
   - docker volume create --driver local --opt type=none --opt o=bind --opt device=/mnt/jnpt-data/caddy-config jnpt_caddy-config
   - docker volume create --driver local --opt type=none --opt o=bind --opt device=/mnt/jnpt-data/tailscale-state jnpt_tailscale-state
   - systemd-tmpfiles --create /etc/tmpfiles.d/jnpt-tunnel.conf
-  - 'echo "JanuaPort bereit zur Dateiablage. Danach als root /usr/local/sbin/jnpt-start aufrufen (hetzner/README.md, #1497)." > /etc/motd'
+  - systemd-tmpfiles --create /etc/tmpfiles.d/jnpt-plugins.conf
+  - 'echo "Keine Anlage gestartet. JanuaPort bereit zur Dateiablage. Danach als root /usr/local/sbin/jnpt-start aufrufen (hetzner/README.md, #1497)." > /etc/motd'

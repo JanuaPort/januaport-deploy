@@ -1,0 +1,61 @@
+{
+  "SourceCommit": "ceba172a54bd01fa4f8200daba06823232f5d3c7",
+  "CoreTemplateSHA256": "31ae81ae8eedfc55536277a425c8fac2d093b6f143be6bb34a5508dc6f8b0fd8",
+  "CoreSections": {
+    "package_update": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+    "package_upgrade": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+    "packages": "d60dbf77556643d3aa499c2304565de9509afcb8e411a937076e9a2fcdaa92e0",
+    "runcmd": "fda83d6e1dc2a46b395cbef413ff42a86c6079e7fb0a47581bcc6058c69ede52",
+    "write_files:/etc/jnpt-updater.conf": "eca600baf53c432d02baf3d6838eb6502a8c56a9d425e1a7c843c85e4eb1ffff",
+    "write_files:/etc/systemd/system/jnpt-metadata-guard.service": "d13676886c70493ad1ceb86c3b3c2de8169caf492c09173eee2756080a8598e9",
+    "write_files:/etc/tmpfiles.d/jnpt-plugins.conf": "1ce41f070c5ce66cf5534731b012b42c53939f22b1ba8f9409e2d610e40a3370",
+    "write_files:/etc/tmpfiles.d/jnpt-tunnel.conf": "fc85d922efdb696503eb71cd00a6c07ede818572d59e4743c133b945152c7780",
+    "write_files:/opt/jnpt/apt-schluessel.sh": "85409c54933071f7ff9752f64756965785cb6557a36a2ff57c0371adbc1a9435",
+    "write_files:/opt/jnpt/askpass.sh": "c92ea750312bd736249194e897acf9efa7f77b7cd1d465b33a2447542ddc9bc9",
+    "write_files:/opt/jnpt/bootstrap.sh": "f664350f6d7ad06772b941bedf5a567e047eeb4b3ca3e769f9677b18a288de44",
+    "write_files:/opt/jnpt/metadata-guard.sh": "e7beeb89c673b9f84ba6c350351b21c8924688e931bba4a49a01089d707ac136",
+    "write_files:/opt/jnpt/staging/.env": "8103f404881582bf0715f5211d7ac2c13b7612ae7149f8185f9b28c538e6999c"
+  },
+  "Exceptions": {
+    "runcmd": {
+      "Core": "fda83d6e1dc2a46b395cbef413ff42a86c6079e7fb0a47581bcc6058c69ede52",
+      "Deploy": "f34bd985f024c16596ccd3d018b43db94c5761b2fb6905fea519a56dad8246de",
+      "Reason": "Generische VM ohne optionale Skript-Laeufer-Provisionierung; bestehender #1497-Guard unter /usr/local/sbin, bewusster Betreiberstart und MOTD. Docker-Pin, Volume-Ablauf und tmpfiles wie Kern; SEC-Haertungen separat getestet."
+    },
+    "write_files:/etc/systemd/system/jnpt-metadata-guard.service": {
+      "Core": "d13676886c70493ad1ceb86c3b3c2de8169caf492c09173eee2756080a8598e9",
+      "Deploy": "b96ddda72a4bf435d47b033a4bdbda5f88b561706bf65da66c74e6c7f2579713",
+      "Reason": "#1497 verwendet /usr/local/sbin/jnpt-metadata-guard.sh und eigene Description. After/Requires/PartOf/RemainAfterExit/WantedBy gleich; echte Netz- und Reihenfolgetests."
+    },
+    "write_files:/opt/jnpt/askpass.sh": {
+      "Core": "c92ea750312bd736249194e897acf9efa7f77b7cd1d465b33a2447542ddc9bc9",
+      "Deploy": "650eeef9245a93e0534e1e6cf91e6ee57987af05ab0f011a1ff5adde6ede410f",
+      "Reason": "Nur Kommentare und Shell-Leerraum verschieden; gleicher 0600-Quelldateiweg, Username und Passwort ueber Askpass. Echter Git-Credential-/execve-Test aus #1497."
+    },
+    "write_files:/opt/jnpt/bootstrap.sh": {
+      "Core": "f664350f6d7ad06772b941bedf5a567e047eeb4b3ca3e769f9677b18a288de44",
+      "Deploy": "",
+      "Reason": "Ersetzt durch /usr/local/sbin/jnpt-start und config-holen.sh (#1497/#1501): strengere Dateipruefung, flock, gepruefter Konfig-Klon, PAT-Loeschung erst nach Erfolg. BOX-Beilage des Herkunftsmoduls gehoert nicht zur generischen VM."
+    },
+    "write_files:/opt/jnpt/config-holen.sh": {
+      "Core": "",
+      "Deploy": "bef5d78bf963069b296ae3283c6f1269a99e18fe5d63aeb079ddf78a6b6d4582",
+      "Reason": "Zusaetzlicher #1501-Adapter: privates Default-Repo vor Klon ohne Token abweisen, Branch/Tag/Commit-SHA, Dateipruefung und atomare Uebernahme. Echte Git-Tests inklusive Negativfaellen."
+    },
+    "write_files:/opt/jnpt/metadata-guard.sh": {
+      "Core": "e7beeb89c673b9f84ba6c350351b21c8924688e931bba4a49a01089d707ac136",
+      "Deploy": "",
+      "Reason": "Bestehender #1497-Guard hier stattdessen unter /usr/local/sbin; gleiche Link-Local-Grenze und DROP an Position 1. Kern bereinigt zusaetzlich Duplikate; lokale Sicherheitswirkung durch echte Netztests belegt."
+    },
+    "write_files:/usr/local/sbin/jnpt-metadata-guard.sh": {
+      "Core": "",
+      "Deploy": "e550ab9b230ae2395fe7f3e8300ee2e6f0a0b2655728769db7d98a03acc27103",
+      "Reason": "Lokaler #1497-Guard statt /opt/jnpt/metadata-guard.sh: gleicher DROP fuer 169.254.0.0/16 an Position 1. Abweichende Duplikatbereinigung ist kein geoeffneter Netzweg; Unit/Restart/HTTP getestet."
+    },
+    "write_files:/usr/local/sbin/jnpt-start": {
+      "Core": "",
+      "Deploy": "6ea862d2803e8a0605daa1c7cc6d397d2b0bedf72c1809b6837f4883b68ebb5c",
+      "Reason": "Bewusster Betreiberstart aus #1497 statt bootstrap.sh; strengere Modus-/Eigentuemer-/Symlink-/Einzeilenpruefung, root/flock, PAT-Erhalt bei Fehler und bestehende .env erhalten. #1501 ergaenzt geprueften Klon und laute Fehler/MOTD."
+    }
+  }
+}

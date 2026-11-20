@@ -35,9 +35,8 @@ from a workstation in the local subnet afterwards. Admin port 8484 stays on loop
 
 ## Two commands
 
-The publisher must first publish the immutable **profile release tag**
-`windows-v0.3.0` at the reviewed commit. The following URL works only after
-publication. `<tag>` in distribution instructions means this profile release,
+The immutable **profile release tag** `windows-v0.3.0` is published. The
+following URL is available. `<tag>` in distribution instructions means this profile release,
 not the core image tag or `main`. The installer downloads the profile and its
 checksum manifest from this fixed tag. New profile releases must update the
 embedded reference and checksums together. The initial script download trusts
@@ -591,8 +590,8 @@ with a 3-second request timeout and 2-second pause; TLS has at most 30 attempts
 with a 2-second pause, as in setup.
 
 Manual recovery and concurrent daily backups: [RUNBOOK](RUNBOOK.md#7-update-b5).
-BOX must complete [B5](PRUEFSTEIN-B5.md) on VM `jnpt-b4` before tagging
-`windows-v0.3.0`. Docker Desktop continues to run in the logged-in, locked
+BOX completed [B5](PRUEFSTEIN-B5.md) on VM `jnpt-b4` (acceptance GREEN,
+record `c-6796028725`); `windows-v0.3.0` is published. Docker Desktop continues to run in the logged-in, locked
 `jnpt-dienst` session. Tailscale is outside this package.
 
 

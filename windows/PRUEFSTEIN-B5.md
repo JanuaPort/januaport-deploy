@@ -1,8 +1,8 @@
 # Prüfstein B5: Update unter Windows
 
 **Abnahmestatus: GRÜN @`a87f571` — BOX auf VM `jnpt-b4`, Protokoll
-`c-6796028725` auf #1246.** Die folgende Checkliste gilt auch für weitere Abnahmen
-vor dem Tag `windows-v0.3.0`.
+`c-6796028725` auf #1246.** Der Tag `windows-v0.3.0` ist veröffentlicht. Die folgende Checkliste gilt
+auch für weitere Abnahmen des Profils.
 Nur synthetische Daten. Feed: VENDOR-Feed oder ein öffentlich erreichbarer
 Test-Feed; private Ziele (auch host.docker.internal) sperrt der SSRF-Schutz des Kerns.
 Keine Geheimnisse,
