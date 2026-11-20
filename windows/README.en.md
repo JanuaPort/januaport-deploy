@@ -57,7 +57,7 @@ and mandatory `JANUAPORT_IMAGE_DIGEST`; Compose combines them into a digest
 reference. Caddy, OpenSSL and script-runner images are already pinned. A complete
 existing profile is verified and started again, preserving its files, `.env`,
 certificate and key, without downloading files or prompting for an image again.
-Unmodified 0.1.0 and 0.2.0 profiles use the [upgrade path](#from-010-or-020-to-030); other
+Unmodified 0.1.0, 0.2.0 and 0.3.0 profiles use the [upgrade path](#profile-upgrade-from-010-020-or-030); other
 incomplete target directories are still rejected. Use
 `-Directory <profile-directory>` for another directory; service tasks always
 use `C:\JanuaPort\windows`.
@@ -76,7 +76,7 @@ The GUI output is exactly `Admin-GUI: http://127.0.0.1:8484`. Follow the product
 `docs/inbetriebnahme.md`: secure the master key, set the admin password and
 create the first admin token.
 
-## From 0.1.0 or 0.2.0 to 0.3.0
+## Profile upgrade from 0.1.0, 0.2.0 or 0.3.0
 
 After GATE publishes the tag, download the **new** `einrichten.ps1` (see “Two
 commands”) and run it in `jnpt-dienst` with the existing profile directory:
@@ -89,7 +89,10 @@ The script recognizes the three unchanged original `windows-v0.1.0` files
 (`docker-compose.yml`, `Caddyfile`, `einrichten.ps1`) by their fixed SHA-256 hashes.
 For `windows-v0.2.0`, all eleven release-managed original files must be
 present unchanged; their published hashes are also embedded in the installer.
-Any changed file blocks automatic upgrade.
+For `windows-v0.3.0`, all 13 profile files from the published tag must match.
+`Autologon64.exe` is excluded from profile comparison: service setup downloads
+it separately, so it may be absent from an old profile.
+Any changed profile file blocks automatic upgrade.
 `.env` must exist; the old `SHA256SUMS` may be present or absent. It downloads the
 complete profile and manifest only from `windows-v0.3.0` into a temporary directory
 and verifies everything before writing to the target. It then replaces the
@@ -104,7 +107,7 @@ existing files unchanged. A second successful run downloads nothing.
 Missing mail secret files are created empty as before. There is no image prompt
 or change to the saved core image. Without `-NeuesZertifikat`, the certificate
 and key remain unchanged. Local staging by `dienst-einrichten.ps1` recognizes
-the same 0.1.0 or 0.2.0 original files and uses its verified release directory.
+the same 0.1.0, 0.2.0 or 0.3.0 original files and uses its verified release directory.
 After the 0.2.0 → 0.3.0 file upgrade, rerun `dienst-einrichten.ps1` as
 administrator from the verified 0.3.0 release with the previous `-BackupTarget`
 to register “JanuaPort Update”. This file upgrade preserves the core image.
@@ -155,7 +158,7 @@ After staging, new scripts and log/backup directories are
 protected as well. Inherited files remain accessible on repeat runs. For installations already
 affected by F5, see the [manual RUNBOOK repair](RUNBOOK.md#f5-reparatur-nach-entzogenen-dateirechten).
 Different existing files are rejected outside the
-verified upgrades from 0.1.0 or 0.2.0; `.env` and secrets are preserved. Initial
+verified upgrades from 0.1.0, 0.2.0 or 0.3.0; `.env` and secrets are preserved. Initial
 installation adds `.env` to a verified B2 profile that does not yet have one.
 
 **SEC B1, acceptance status:** #1498 is **built, not proven on NTFS**.
@@ -600,8 +603,9 @@ script's exit code. Check `LastTaskResult=0` together with the log and GUI. Nati
 exception messages stay off the console and log. `log\update.log` retains
 at most 100 lines without usernames. It records the old two image values
 before replacement; retain them locally before a later run for manual recovery.
-Plan, result recording and certificate queries are bounded to 30 seconds,
-backup to 600 seconds. Pull and `compose up -d` wait for process completion
+Plan and result recording are bounded to 30 seconds, the certificate query via
+`compose run` to 300 seconds (BOX measured 37–48 seconds on a slow connection,
+usually about 1 second), and backup to 600 seconds. Pull and `compose up -d` wait for process completion
 without a fixed deadline, followed by health/TLS checks and result recording.
 A slow successful command therefore does not record a failed update. Timed
 commands use `taskkill /T /F` to terminate the entire process tree and wait for

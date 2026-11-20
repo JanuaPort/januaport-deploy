@@ -148,10 +148,28 @@ function Test-LegacyProfile {
         'PRUEFSTEIN-B4.md' = 'c73af73f60f130fd58e5d13cbcdf38d5629cb07b190d2f5e359e5364d394dd5c'
         'jnpt-sperren.ps1' = 'f19ae5e4e153b742a992a1d48c8cb80d03adae952f39cab0bf84be30559eefe4'
     }
+    # Exact windows-v0.3.0:windows/SHA256SUMS, checked against the tag's file bytes.
+    # These are its 13 ProfileFiles, also used by the download loop. Autologon64.exe
+    # is only an external pin: service setup downloads it separately; it may be absent.
+    $v030 = @{
+        'docker-compose.yml' = '3bfe523ad036074860ba612ebec9802f8dcd2193b2404a12b34c46c9fa8881fd'
+        'Caddyfile' = 'd73ab75fd9ade61067160a660828effcb37dc3176816ace9ce826ae77d96355d'
+        'einrichten.ps1' = '7a797277cbd8ce5c53127585508d0892cf2f3cf5cb8febca29c1cc014b025781'
+        '.gitignore' = 'dbd933a653eb5a50f07b5112a5b118480787a2004238ef80f50d70d1a0d35285'
+        'README.md' = '094a4e599cb16e3084ded18e9b259e88341ca0fcc9df123566d9a0c3c5990b3e'
+        'README.en.md' = 'a507cea1981e275c2f20f48846178f21ba9961fa0cd1c2e75686ca4593a11dda'
+        'RUNBOOK.md' = '02d6f681898c17fe0e0f2b9d44bb0c9b160b5d99ef4b17323e495e1ddc8bea44'
+        'dienst-einrichten.ps1' = 'd93ce3df184eeb62bc5408c46e09d3c97c5f4ec6535b9b284fb4fc2dffa5a4a0'
+        'jnpt-backup.ps1' = 'adf47b6b84444516c98efb0d03a86b4a24401cb2cb02e493b8898216ef4dd078'
+        'jnpt-sperren.ps1' = 'f19ae5e4e153b742a992a1d48c8cb80d03adae952f39cab0bf84be30559eefe4'
+        'PRUEFSTEIN-B4.md' = 'cfe9720123173fb4799e336b96f89b71defb4eff0c3cbeeafd4c2277435add8d'
+        'jnpt-update.ps1' = '6bfa5ef9ade5119a6a87c8b420b3056cc5ca6ea6a033641854b4ee13a9d5a25a'
+        'PRUEFSTEIN-B5.md' = '168532e3b44816c7229ab575100d2f9df78388f36b85f0b3afbeecefc19977f4'
+    }
     if (-not (Test-Path -LiteralPath (Join-Path $Path '.env') -PathType Leaf)) { return $false }
     $closestMatches = -1
     $closestComplete = $false
-    foreach ($candidate in @($legacy, $b4)) {
+    foreach ($candidate in @($legacy, $b4, $v030)) {
         $exact = $true
         $complete = $true
         $matching = 0
@@ -185,16 +203,20 @@ function Install-Profile {
     $modifiedProfile = $false
     $upgrade = Test-LegacyProfile $Directory ([ref]$modifiedProfile)
     if ((Test-Path -LiteralPath $Directory) -and -not $upgrade) {
-        foreach ($name in (@('SHA256SUMS') + $ProfileFiles)) {
-            if (-not (Test-Path -LiteralPath (Join-Path $Directory $name) -PathType Leaf)) {
-                if ($modifiedProfile) {
-                    # ASCII source also preserves the exact message in PS 5.1.
-                    throw ('Upgrade gesperrt: eine Profildatei weicht vom ausgelieferten Stand ab (SHA256SUMS). Datei pr{0}fen oder zur{0}cksetzen.' -f [char]0x00fc)
+        try {
+            foreach ($name in (@('SHA256SUMS') + $ProfileFiles)) {
+                if (-not (Test-Path -LiteralPath (Join-Path $Directory $name) -PathType Leaf)) {
+                    throw 'Ziel existiert bereits und ist kein vollstaendiges Profil.'
                 }
-                throw 'Ziel existiert bereits und ist kein vollstaendiges Profil.'
             }
+            Test-ProfileFiles $Directory
+        } catch {
+            if ($modifiedProfile) {
+                # Same diagnostic for changed legacy bytes, also with a complete manifest.
+                throw ('Upgrade gesperrt: eine Profildatei weicht vom ausgelieferten Stand ab (SHA256SUMS). Datei pr{0}fen oder zur{0}cksetzen.' -f [char]0x00fc)
+            }
+            throw
         }
-        Test-ProfileFiles $Directory
         # B2 stages a verified profile before the first interactive installation.
         if (-not (Test-Path -LiteralPath (Join-Path $Directory '.env'))) {
             $image = Resolve-CoreImage (Read-Host 'JanuaPort Image-Tag (z.B. 0.87.1) oder sha256:Digest')

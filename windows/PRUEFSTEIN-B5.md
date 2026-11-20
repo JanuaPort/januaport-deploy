@@ -8,7 +8,7 @@ für #1499 ist die **Abnahme mit echtem Docker Desktop offen**. Die frühere
 grüne B5-Abnahme gilt für den veröffentlichten Stand, nicht für diese Fixes.
 Kein neuer `windows-v*`-Tag, bevor der Fremdbesitzer-NTFS-Prüfstein aus B4
 (Ordner und Datei → BA; fremdes `icacls /grant` scheitert) und der langsame
-Pull-/Start-Prüfstein für #1499 unten auf der Test-VM grün sind.
+Pull-/Start- und Zertifikatsabfrage-Prüfstein für #1499 unten auf der Test-VM grün sind.
 Nur synthetische Daten. Feed: VENDOR-Feed oder ein öffentlich erreichbarer
 Test-Feed; private Ziele (auch host.docker.internal) sperrt der SSRF-Schutz des Kerns.
 Keine Geheimnisse,
@@ -16,13 +16,14 @@ Benutzernamen oder Daten des Betreibers im Bericht. Zeitpunkt, Windows-/Docker-
 Version, Backend, Profil-Commit und Nachweis je Schritt lokal festhalten.
 Die Adaptertests ersetzen diese Abnahme nicht. B4 gilt ergänzend weiter.
 
-- [ ] **Profil 0.2.0 → 0.3.0:** Mit dem unveränderten veröffentlichten
-  `windows-v0.2.0`-Profil und gefüllten synthetischen `.env`-/Secret-Dateien
-  beginnen. Neues `einrichten.ps1` in `jnpt-dienst` ausführen; vollständiges
-  0.3.0-Profil, unveränderte `.env` und Secrets, altes Kern-Image und Zertifikat
+- [ ] **Profil-Upgrade:** Mit den unveränderten veröffentlichten Profilen
+  `windows-v0.2.0` (elf Profil-Dateien) und `windows-v0.3.0` (13 Profil-Dateien)
+  getrennt beginnen, jeweils mit gefüllten synthetischen `.env`-/Secret-Dateien.
+  Neues `einrichten.ps1` in `jnpt-dienst` ausführen; vollständiges Zielprofil
+  des geprüften Release, unveränderte `.env` und Secrets, altes Kern-Image und Zertifikat
   belegen. Zweiter Lauf ohne Download. Eine geänderte Originaldatei muss das
   automatische Upgrade sperren. `dienst-einrichten.ps1` aus dem geprüften
-  0.3.0-Release als Admin mit bisherigem `-BackupTarget` wiederholen.
+  Zielrelease als Admin mit bisherigem `-BackupTarget` wiederholen.
   „JanuaPort Update“ hat `jnpt-dienst`, Interactive/Limited, `IgnoreNew`,
   keinen Auslöser und ein `EncodedCommand` mit genau diesem Sicherungsziel.
 - [ ] **Feed und Freigabe:** Zunächst leere/fehlende Werte für
@@ -95,6 +96,12 @@ Die Adaptertests ersetzen diese Abnahme nicht. B4 gilt ergänzend weiter.
   Erfolg erst nach Health/TLS als `installed`, echter Startfehler nach dessen
   Ende als `failed`. Bei einem befristeten Plan-Test muss auch der native
   Nachfahre beendet sein. Lokale Shim-Regression ersetzt diese Docker-Abnahme nicht.
+- [ ] **#1499, langsame Zertifikatsabfrage:** Den exakten `compose run --rm
+  --no-deps --entrypoint openssl cert-init x509 …`-Aufruf bei schlechter Leitung
+  prüfen (BOX: 37–48 Sekunden, sonst rund 1 Sekunde). Seine Frist beträgt
+  300 Sekunden; Plan und Ergebnisbuchung bleiben bei 30 Sekunden. Ein gesundes
+  Update muss anschließend `installed` liefern. Bei Fristablauf muss der ganze
+  Prozessbaum per `taskkill /T /F` beendet sein, bevor der Fehler gebucht wird.
 
 Ergebnis und offene Abweichungen an GATE geben. Erst nach vollständiger Abnahme
 kann der Auftraggeber den Profil-Tag veröffentlichen. Dieses Paket erzeugt
