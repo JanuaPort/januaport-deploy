@@ -19,9 +19,9 @@ COMPOSE = ['-m', 'unittest', 'test_profile.Profile.test_compose', '-v']
 CHECKSUM = ['-m', 'unittest', 'test_install.Installer.test_real_checksum_adapter_rejects_corruption', '-v']
 
 
-def mutant(label, file=None, old=None, new=None, command=None, extra_env=None):
+def mutant(label, file=None, old=None, new=None, command=None, extra_env=None, occurrences=1):
     originals = {path: path.read_bytes() for path in ROOT.rglob('*') if path.is_file()}
-    with tempfile.TemporaryDirectory(prefix='mutation-', dir=TESTS) as tmp:
+    with tempfile.TemporaryDirectory(prefix='mutation-') as tmp:
         target = Path(tmp)
         for name in ('SHA256SUMS', '.env.example', *PROFILE_FILES):
             shutil.copyfile(ROOT / name, target / name)
@@ -30,7 +30,7 @@ def mutant(label, file=None, old=None, new=None, command=None, extra_env=None):
         if file:
             path = target / file
             original = path.read_text(encoding='utf-8')
-            if original.count(old) != 1:
+            if original.count(old) != occurrences:
                 raise RuntimeError('mutation anchor is not unique: ' + label)
             path.write_text(original.replace(old, new), encoding='utf-8', newline='\n')
         # Keep the fixture internally consistent: a mutant must be killed by

@@ -25,7 +25,7 @@ def ps(script, source=ROOT / "einrichten.ps1", extra_env=None):
 
 class Installer(unittest.TestCase):
     def test_manifest_shape_and_allowed_files(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)
             for name in ('SHA256SUMS', '.env.example', *PROFILE_FILES):
                 shutil.copyfile(ROOT / name, target / name)
@@ -43,7 +43,7 @@ class Installer(unittest.TestCase):
                 self.assertIn(message, result.stderr)
 
     def test_real_checksum_adapter_rejects_corruption(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / "test") as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)
             for name in ('SHA256SUMS', *PROFILE_FILES):
                 shutil.copyfile(ROOT / name, target / name)
@@ -66,7 +66,7 @@ class Installer(unittest.TestCase):
             self.assertIn("Image-Tag oder sha256:", result.stderr)
 
     def test_existing_installation_preserved(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / "test") as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             marker = Path(tmp) / ".env"
             marker.write_bytes(b"existing\n")
             result = ps("function Get-CurrentAccount {$env:COMPUTERNAME+'\\jnpt-dienst'}; $Directory='" + tmp + "'; Install-Profile")
@@ -83,7 +83,7 @@ class Dienst(unittest.TestCase):
         self.assertIn('Administrative PowerShell', result.stderr)
 
     def fake_setup(self, mode='', repeat=True, extra='', backup_target='E:\\Backup'):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)
             (target / 'user').mkdir()
             source = ROOT / 'dienst-einrichten.ps1'
@@ -208,6 +208,21 @@ class Dienst(unittest.TestCase):
         self.assertEqual(events.count('root-acl'), 2)
         self.assertLess(events.index('root-acl'), events.index('acl'))
         self.assertLess(events.index('root-acl'), next(i for i, event in enumerate(events) if event.startswith('task:')))
+        self.assertEqual(events.count('tree-acl'), 2)
+        self.assertLess(events.index('tree-acl'), next(i for i, event in enumerate(events) if event.startswith('task:')))
+
+    def test_new_scripts_and_runtime_directories_are_present_at_final_protection(self):
+        result, _, _ = self.fake_setup(repeat=False, extra=r'''
+function Protect-DienstTree {param($Path,$SID)
+    if ($Path -cne $DienstDirectory) {throw 'wrong protected tree'}
+    foreach ($name in @('jnpt-backup.ps1','jnpt-sperren.ps1','jnpt-update.ps1','log','backups')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $Path $name))) {throw 'staging not finished'}
+    }
+    $script:events.Add('tree-acl')
+}
+''')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('tree-acl', json.loads(result.stdout))
 
     def test_existing_account_requires_explicit_password_reset_without_autologon(self):
         result, _, _ = self.fake_setup(repeat=False, extra='$script:exists=$true')
@@ -236,7 +251,7 @@ class Dienst(unittest.TestCase):
                 self.assertIn('Vorhanden', result.stderr)
 
     def test_actual_autologon_adapter_suppresses_native_password_output_and_failure(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             binary = Path(tmp) / 'autologon.cmd'
             for code in [0, 12]:
                 binary.write_text('@echo off\necho %*\necho %* 1>&2\nexit /b ' + str(code) + '\n')
@@ -269,8 +284,9 @@ Set-DienstScreenLock 'unused' 'S-1-5-21-100-100-100-1001'
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Hive', result.stderr)
 
+    @unittest.skipUnless(os.environ.get('JNPT_OWNER_VM') == '1', 'Besitzwechsel nur auf expliziter NTFS-Test-VM')
     def test_real_filesystem_acl_is_limited_to_account_system_and_administrators(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             # TemporaryDirectory itself may already have a protected DACL.
             # Exercise an inheriting child so dropping access-rule protection is visible.
             target = Path(tmp) / 'inherited'
@@ -293,7 +309,7 @@ Set-DienstScreenLock 'unused' 'S-1-5-21-100-100-100-1001'
         self.assertNotIn('AUTOLOGON-CALLED', result.stdout)
 
     def binary_probe(self, wrong_hash=False, signature='Valid', publisher='Microsoft Corporation', manifest='valid'):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)
             data = b'synthetic binary fixture'
             with zipfile.ZipFile(target / 'fixture.zip', 'w') as z:
@@ -333,7 +349,7 @@ Enable-DienstAutologon $binary (ConvertTo-SecureString 'KANARIE-NICHT-ECHT' -AsP
             self.assertNotIn('AUTOLOGON-CALLED', result.stdout)
 
     def test_docker_settings_are_read_only_and_fail_closed(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / 'AppData' / 'Roaming' / 'Docker'
             target.mkdir(parents=True)
             file = target / 'settings-store.json'
@@ -357,7 +373,7 @@ Enable-DienstAutologon $binary (ConvertTo-SecureString 'KANARIE-NICHT-ECHT' -AsP
         self.assertNotIn('DOCKER-MUST-NOT-RUN', result.stderr)
 
     def test_staged_profile_initializes_env_once_in_dienst_session(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)
             for name in ('SHA256SUMS', *PROFILE_FILES):
                 shutil.copyfile(ROOT / name, target / name)

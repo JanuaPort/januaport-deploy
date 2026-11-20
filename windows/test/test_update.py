@@ -25,12 +25,16 @@ OLD = (b'# retained JANUAPORT_IMAGE=ghcr.io/januaport/januaport:old\r\nJANUAPORT
        b'JNPT_SMTP_HOST=smtp.example.org\nJANUAPORT_IMAGE_DIGEST=' + b'a' * 64 + b'\r\nKEEP=Gr\xc3\xbc\xc3\x9fe')
 NEW = OLD.replace(b'\r\nJANUAPORT_IMAGE=ghcr.io/januaport/januaport:old', b'\r\nJANUAPORT_IMAGE='+REPOSITORY.encode()).replace(b'a' * 64, b'b' * 64)
 SHIM = r'''
-import json,os,pathlib,sys
+import json,os,pathlib,sys,time
 r=pathlib.Path(os.environ['PROBE_ROOT']); a=sys.argv[1:]
 if a==['compose','up','-d']:
     with (r/'trace').open('a') as f: f.write(json.dumps(['env',(r/'p'/'.env').read_text()])+'\n')
 with (r/'trace').open('a') as f: f.write(json.dumps(a)+'\n')
 mode=os.environ.get('PROBE_FAIL','')
+if (mode=='slow-pull' and a[:1]==['pull']) or (mode.startswith('slow-up') and a==['compose','up','-d']):
+    time.sleep(32)
+    with (r/'trace').open('a') as f: f.write(json.dumps(['docker-finished',mode])+'\n')
+    if mode=='slow-up-fail': sys.exit(18)
 if a==['compose','exec','-T','jnpt','/jnpt','update','plan','--json']:
     if mode=='plan-stderr': print('PRIVATE NATIVE OUTPUT',file=sys.stderr)
     if mode=='offline': sys.exit(25)
@@ -284,6 +288,42 @@ $code
 
 
 class UpdateAdapter(unittest.TestCase):
+    def slow_docker_finishes_before_record(self, mode, expected, record):
+        probe=Update()
+        result,trace=probe.invoke(mode=mode)
+        self.assertEqual(result.returncode,expected,result.stderr)
+        done=['docker-finished',mode]
+        self.assertIn(done,trace)
+        records=probe.records(trace)
+        self.assertEqual(len(records),1)
+        self.assertIn('--result='+record,records[0])
+        self.assertLess(trace.index(done),trace.index(records[0]))
+
+    def test_slow_pull_records_installed_after_completion(self):
+        self.slow_docker_finishes_before_record('slow-pull',0,'installed')
+
+    def test_slow_up_records_installed_after_completion(self):
+        self.slow_docker_finishes_before_record('slow-up',0,'installed')
+
+    def test_slow_up_failure_records_failed_after_completion(self):
+        self.slow_docker_finishes_before_record('slow-up-fail',6,'failed')
+
+    def test_timeout_reaps_native_descendant_before_returning_failure(self):
+        command="& '"+sys.executable.replace("'","''")+"' (Join-Path $env:PROBE_ROOT 'descendant.py')"
+        extra=r'''[IO.File]::WriteAllText((Join-Path $env:PROBE_ROOT 'descendant.py'), @'
+import os,time,pathlib
+r=pathlib.Path(os.environ['PROBE_ROOT'])
+(r/'started').write_text('started')
+time.sleep(6)
+(r/'orphan').write_text('finished')
+'@)
+'''
+        extra+="try { Invoke-UpdateProcess '"+command.replace("'","''")+"' 2 | Out-Null; exit 98 } catch {}\n"
+        extra+="[Threading.Thread]::Sleep(6500); if (-not (Test-Path (Join-Path $env:PROBE_ROOT 'started'))) {exit 97}; if (Test-Path (Join-Path $env:PROBE_ROOT 'orphan')) {exit 99}; exit 12"
+        result,trace=Update().invoke(extra=extra)
+        self.assertEqual(result.returncode,12,result.stderr)
+        self.assertEqual(trace,[])
+
     def test_non_core_programs_and_other_docker_operations_rejected_at_native_adapter(self):
         probe=Update()
         for args in ["@('compose','exec','-T','jnpt','sh')", "@('compose','exec','-T','jnpt','stat')", "@('compose','cp','jnpt:/data','x')", "@('compose','exec','-T','jnpt','/jnpt','restore')", "@('compose','exec','-T','jnpt','/jnpt','healthz')", "@('pull','other.example/EVIL@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')", "@('compose','exec','-T','jnpt','/jnpt','update','rollback')"]:

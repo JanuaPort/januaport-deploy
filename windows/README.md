@@ -163,17 +163,34 @@ drei expliziten Allow-Regeln vorbereitet: `jnpt-dienst`, Administratoren und
 SYSTEM erhalten FullControl mit ContainerInherit und ObjectInherit.
 R4 verlangt außerdem Propagation None: kein InheritOnly oder NoPropagate,
 keine weiteren ACEs, weder Allow noch Deny, weder explizit noch geerbt.
-Ein einzelner `Directory.SetAccessControl`-Aufruf ersetzt nur den Access-Abschnitt,
-ohne vorheriges Leeren. Vorherige zusätzliche Freigaben und die Vererbung vom
-Elternordner entfallen zusammen; Besitzer, Gruppe und Audit bleiben erhalten.
-Stimmt die geschützte DACL bereits genau überein, schreibt der erneute Lauf
-nichts. Erbende Dateien bleiben dadurch auch beim Wiederholen zugänglich.
-Erst danach werden Profildateien bereitgestellt. Für bereits von F5 betroffene
+Ein einzelner `Directory.SetAccessControl`-Aufruf setzt Besitzer und vollständige
+DACL, ohne vorheriges Leeren. Vorherige zusätzliche Freigaben und die Vererbung
+vom Elternordner entfallen zusammen. **#1498:** Der Besitzer wird bei jedem Lauf
+mit `SetOwner` auf `BUILTIN\Administrators` (BA) gesetzt, auch bei bereits
+passender DACL und fremdem Vorbesitzer. Vorhandene Ordner sind zulässig;
+Fehler beim Setzen der Rechte oder des Besitzers brechen die Einrichtung ab.
+Alle Unterordner und Dateien unter `C:\JanuaPort` werden einbezogen;
+Dateien erhalten BA als Besitzer und ausschließlich die drei geerbten ACEs.
+Gruppe und Audit bleiben erhalten. Verknüpfungen im Baum werden abgewiesen.
+**SEC H1:** Dateien mit mehr als einem Hardlink werden ebenfalls abgewiesen.
+Der gesamte Baum wird vor jedem ACL-Schreiben geprüft, damit Vererbung keine
+Rechte einer außerhalb liegenden Hardlink-Datei verändert. Die Linkanzahl wird
+über `GetFileInformationByHandle` gelesen; ein Lesefehler bricht die Einrichtung ab.
+Nach dem Bereitstellen werden auch neue Skripte, Log- und Backupordner geschützt.
+Erbende Dateien bleiben beim Wiederholen zugänglich. Für bereits von F5 betroffene
 Installationen beschreibt das [RUNBOOK](RUNBOOK.md#f5-reparatur-nach-entzogenen-dateirechten)
 die manuelle Reparatur.
 Vorhandene abweichende Dateien werden außerhalb der geprüften Upgrades aus 0.1.0 oder 0.2.0
 abgewiesen; `.env` und Secrets bleiben erhalten. Ein von B2
 bereitgestelltes Profil ohne `.env` wird bei der ersten Installation ergänzt.
+
+**SEC B1, Abnahmestatus:** #1498 ist **gebaut, nicht an NTFS belegt**.
+Ein neuer `windows-v*`-Tag darf erst veröffentlicht werden, wenn der echte
+NTFS-Prüfstein auf der Test-VM grün ist: fremder Besitzer an Ordner und Datei
+wird BA, anschließend scheitert `icacls /grant` unter dem fremden Konto.
+Für #1499 ist die **Abnahme mit echtem Docker Desktop offen**; auch dieser
+Nachweis muss vor dem neuen Tag grün sein. Die frühere B4/B5-Abnahme des bereits
+veröffentlichten `windows-v0.3.0` belegt diese beiden Audit-Fixes nicht.
 
 Das Konto erhält ein Zufallskennwort, das nicht angezeigt oder in Dateien
 abgelegt wird. Bei Wiederholung bleibt es erhalten. `-KennwortNeu` erzeugt
@@ -534,8 +551,11 @@ erfolgreicher Auftragslauf sind zusätzlich zur Kopplung zu prüfen.
   ausschließlich `/api/device/v1/*` und exakt `/healthz`; alles andere ist 404,
   darunter GUI, `/admin/mcp`, `/api/admin/*`, `/metrics` und `/mcp`.
   Port 8484 bindet ausschließlich an `127.0.0.1`. Caddys Admin-API ist aus.
-  Der auskommentierte `/mcp`-Block ist erst bei Bedarf eines KI-Clients im LAN
-  und nach erneuter Berechtigungs- und Pfadprüfung zu aktivieren.
+  Das Windows-Profil bietet keinen LAN-MCP-Schalter. Der frühere auskommentierte
+  Block entfällt (#1503); die summengeprüfte `Caddyfile` bleibt unverändert.
+  Wer den alten Block aktiviert hat, stellt vor Wartung oder Upgrade die
+  Originaldatei seiner Profilversion wieder her. Manuelle Routenänderungen
+  werden weiterhin durch die SHA-256-Prüfung abgewiesen.
 - **SEC W9:** Die [LAN-Freigabe bei der Einrichtung](#lan-freigabe-bei-der-einrichtung-n5)
   manuell ausführen: Privat oder Domäne, Regel „JanuaPort 443 LAN“, TCP 443
   ausschließlich aus `LocalSubnet`. Windows-Firewall eingehend auf
@@ -637,8 +657,13 @@ mit Log und GUI prüfen.
 Native Ausgaben und Fehlermeldungsinhalte erscheinen weder auf der Konsole
 noch im Log. `log\update.log` hält höchstens 100 Zeilen ohne Benutzernamen.
 Die alten beiden Image-Werte stehen dort vor dem Austausch; vor einem späteren
-Lauf für den manuellen Rückweg lokal festhalten. Jeder Docker-Aufruf ist auf
-30 Sekunden begrenzt, die Sicherung auf 600 Sekunden. Nach Neustart ohne
+Lauf für den manuellen Rückweg lokal festhalten. Plan, Ergebnisbuchung und
+Zertifikatsabfrage sind auf 30 Sekunden begrenzt, die Sicherung auf 600 Sekunden.
+Pull und `compose up -d` warten ohne feste Frist bis zum Ende des Prozesses;
+erst danach folgen Health/TLS-Prüfung und Ergebnisbuchung. Ein langsamer
+erfolgreicher Aufruf wird deshalb nicht als fehlgeschlagen gebucht. Bei
+befristeten Aufrufen beendet `taskkill /T /F` den gesamten Prozessbaum;
+erst nach dessen Ende wird der Zeitfehler gemeldet. Nach Neustart ohne
 bereites Docker endet der Planversuch begrenzt mit fester Fehlermeldung und
 Exit 2; nach Bereitschaft erneut anstoßen. Host-Health wird höchstens 90-mal
 mit 3 Sekunden Anfragefrist und 2 Sekunden Pause geprüft, TLS höchstens
@@ -647,7 +672,9 @@ mit 3 Sekunden Anfragefrist und 2 Sekunden Pause geprüft, TLS höchstens
 Rückweg von Hand und gleichzeitige tägliche Sicherung: [RUNBOOK](RUNBOOK.md#7-update-b5).
 BOX hat den [Prüfstein B5](PRUEFSTEIN-B5.md) auf VM `jnpt-b4` abgenommen
 (Abnahmestatus GRÜN, Protokoll `c-6796028725`); `windows-v0.3.0` ist veröffentlicht. Docker Desktop läuft weiterhin in der angemeldeten,
-gesperrten Sitzung von `jnpt-dienst`. Tailscale gehört nicht zu diesem Paket.
+gesperrten Sitzung von `jnpt-dienst`. Diese historische Abnahme umfasst #1498
+und #1499 nicht; deren SEC-B1-Prüfsteine oben sind weiterhin offen.
+Tailscale gehört nicht zu diesem Paket.
 
 ## Fernwartung
 

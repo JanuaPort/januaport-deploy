@@ -1,5 +1,6 @@
 """0.1.0/0.2.0 -> 0.3.0 through real PS 5.1 file/hash adapters, with transport fakes."""
 import json
+import os
 import base64
 from pathlib import Path
 import subprocess
@@ -16,7 +17,7 @@ UPGRADE_BLOCKED = 'Upgrade gesperrt: eine Profildatei weicht vom ausgelieferten 
 
 class Upgrade(unittest.TestCase):
     def exercise(self, mode='', manifest=False, release='windows-v0.1.0', altered='docker-compose.yml', capture_error=False):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             target = root / 'profile'
             target.mkdir()
@@ -130,7 +131,7 @@ Install-Profile
                 else: verify_sums(target)
 
     def test_local_dienst_staging_also_upgrades_legacy_files(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             target = root / 'profile'
             target.mkdir()
@@ -192,19 +193,20 @@ class ParentAcl(unittest.TestCase):
         from test_acl_f5 import root_probe
         return root_probe(fail=fail)
 
-    def test_b7_one_atomic_write_exact_three_rules_and_second_run_no_write(self):
+    def test_b7_one_atomic_write_exact_three_rules_and_owner_on_every_run(self):
         from test_acl_f5 import assert_exact_rules
         result = self.root_probe()
         self.assertEqual(result.returncode, 0, result.stderr)
-        assert_exact_rules(self, json.loads(result.stdout), writes=1)
+        assert_exact_rules(self, json.loads(result.stdout), writes=3)
 
     def test_b7_acl_write_error_aborts(self):
         result = self.root_probe(fail=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('DACL write failed', result.stderr)
 
+    @unittest.skipUnless(os.environ.get('JNPT_OWNER_VM') == '1', 'Besitzwechsel nur auf expliziter NTFS-Test-VM')
     def test_b7_real_temp_parent_removes_inherited_and_explicit_other_principals(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'test') as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             command = r'''
 $broadSource=Join-Path $env:PROBE_ROOT 'broad-source'
 $parent=Join-Path $broadSource 'JanuaPort'

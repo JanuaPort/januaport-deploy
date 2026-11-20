@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -11,6 +12,9 @@ import (
 )
 
 func TestEnvModusUndMetadaten(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux-Dateirechte und install/setpriv erforderlich; Windows bildet POSIX-Modus 0600 nicht ab")
+	}
 	path := "cloud-init.yaml"
 	if p := os.Getenv("JNPT_TEST_TEMPLATE"); p != "" {
 		path = p
@@ -74,6 +78,9 @@ func TestEnvModusUndMetadaten(t *testing.T) {
 }
 
 func TestEnvModusMutation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux-Dateirechte und install/setpriv erforderlich; Windows bildet POSIX-Modus 0600 nicht ab")
+	}
 	b, err := os.ReadFile("cloud-init.yaml")
 	if err != nil {
 		t.Fatal(err)
