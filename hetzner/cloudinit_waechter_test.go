@@ -1,6 +1,7 @@
 package hetzner_test
 
 import (
+	"bufio"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -86,10 +87,42 @@ func TestStartWeistFehlendeUndUnsichereDateienAb(t *testing.T) {
 	put(key, strings.Repeat("a", 64), 0600)
 	put(tail, "erste\nzweite", 0600)
 	check(true, "tailscale_authkey")
+	put(tail, "KANARIE_TAILSCALE", 0600)
+	// Auch die root- und Parallelstartsperren am echten Shell-/flock-Adapter.
+	cmd := exec.Command("setpriv", "--reuid=65532", "--regid=65532", "--clear-groups", "sh", "-s", "--", "--check")
+	cmd.Stdin = strings.NewReader(fileContent(t, cfg, "/usr/local/sbin/jnpt-start"))
+	if out, err := cmd.CombinedOutput(); err == nil || !strings.Contains(string(out), "als root") {
+		t.Fatalf("Nicht-root-Start nicht abgewiesen: %v %s", err, out)
+	}
+	lock := exec.Command("flock", "-x", "/run/lock/jnpt-start.lock", "cat")
+	in, err := lock.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := lock.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := lock.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { in.Close(); lock.Wait() })
+	if _, err := in.Write([]byte("bereit\n")); err != nil {
+		t.Fatal(err)
+	}
+	if line, err := bufio.NewReader(out).ReadString('\n'); err != nil || line != "bereit\n" {
+		t.Fatalf("flock nicht bereit: %q %v", line, err)
+	}
+	if out, err := exec.Command("sh", start).CombinedOutput(); err == nil || !strings.Contains(string(out), "laeuft bereits") {
+		t.Fatalf("Parallelstart nicht abgewiesen: %v %s", err, out)
+	}
 }
 
 func TestAlteTerraformGeheimnisseWerdenAbgewiesen(t *testing.T) {
 	adapterTests(t)
+	if os.Getenv("JNPT_TERRAFORM_TESTS") != "1" {
+		t.Skip("Terraform-CLI separat freigeben (lokale SEC-R2-Sperre #1055)")
+	}
 	dir := t.TempDir()
 	src, err := os.ReadFile("variables.tf")
 	if err != nil {

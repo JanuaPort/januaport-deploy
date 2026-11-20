@@ -132,6 +132,15 @@ func TestUserDataOhneGeheimnisse(t *testing.T) {
 
 func TestMetadatenUnitUndStartreihenfolge(t *testing.T) {
 	_, cfg := render(t, nil)
+	for _, f := range cfg.Files {
+		if strings.HasPrefix(f.Content, "#!/bin/sh\n") {
+			cmd := exec.Command("sh", "-n")
+			cmd.Stdin = strings.NewReader(f.Content)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("Shell-Syntax %s: %v %s", f.Path, err, out)
+			}
+		}
+	}
 	unit := fileContent(t, cfg, "/etc/systemd/system/jnpt-metadata-guard.service")
 	for _, line := range []string{"After=docker.service", "Requires=docker.service", "PartOf=docker.service", "Type=oneshot", "RemainAfterExit=yes", "ExecStart=/usr/local/sbin/jnpt-metadata-guard.sh", "WantedBy=multi-user.target docker.service"} {
 		if !strings.Contains(unit, line) {
@@ -139,6 +148,16 @@ func TestMetadatenUnitUndStartreihenfolge(t *testing.T) {
 		}
 	}
 	guard := fileContent(t, cfg, "/usr/local/sbin/jnpt-metadata-guard.sh")
+	readme, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := strings.ReplaceAll(string(readme), "\r\n", "\n")
+	for lang, content := range map[string]string{"sh": guard, "ini": unit} {
+		if !strings.Contains(doc, "```"+lang+"\n"+strings.TrimSpace(content)+"\n```") {
+			t.Errorf("Upgrade-Anleitung weicht von gerendertem %s ab", lang)
+		}
+	}
 	if !strings.Contains(guard, "-I DOCKER-USER 1 -d 169.254.0.0/16 -j DROP") {
 		t.Error("Link-Local-DROP muss an Position 1 stehen")
 	}
@@ -146,7 +165,7 @@ func TestMetadatenUnitUndStartreihenfolge(t *testing.T) {
 	if !strings.Contains(boot, "systemctl enable --now jnpt-metadata-guard.service") {
 		t.Error("Guard wird nicht aktiviert")
 	}
-	if strings.Contains(boot, "compose") || strings.Contains(boot, "git clone") {
+	if strings.Contains(boot, "docker compose ") || strings.Contains(boot, "git clone ") {
 		t.Error("cloud-init darf den Stack nicht vor der manuellen Ablage starten/klonen")
 	}
 	start := fileContent(t, cfg, "/usr/local/sbin/jnpt-start")
@@ -160,5 +179,46 @@ func adapterTests(t *testing.T) {
 	t.Helper()
 	if os.Getenv("JNPT_ADAPTER_TESTS") != "1" {
 		t.Skip("echte Adapter: hetzner/test.Dockerfile, isolierter privilegierter Testcontainer")
+	}
+}
+
+func TestAltvariablenValidierungenMitEchtenHCLAusdruecken(t *testing.T) {
+	src, err := os.ReadFile("variables.tf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, diags := hclsyntax.ParseConfig(src, "variables.tf", hcl.InitialPos)
+	if diags.HasErrors() {
+		t.Fatal(diags.Error())
+	}
+	for _, name := range []string{"jnpt_master_key", "tailscale_authkey", "git_token", "registry_token"} {
+		t.Run(name, func(t *testing.T) {
+			found := false
+			for _, block := range f.Body.(*hclsyntax.Body).Blocks {
+				if block.Type != "variable" || block.Labels[0] != name {
+					continue
+				}
+				for _, validation := range block.Body.Blocks {
+					if validation.Type != "validation" {
+						continue
+					}
+					found = true
+					for _, value := range []string{"", "KANARIE_1497", strings.Repeat("a", 64)} {
+						ctx := &hcl.EvalContext{Variables: map[string]cty.Value{"var": cty.ObjectVal(map[string]cty.Value{name: cty.StringVal(value)})}}
+						got, diags := validation.Body.Attributes["condition"].Expr.Value(ctx)
+						if diags.HasErrors() || got.Type() != cty.Bool || got.True() != (value == "") {
+							t.Fatalf("Altwert nicht abgewiesen: %s / %s", got.GoString(), diags.Error())
+						}
+					}
+					message, diags := validation.Body.Attributes["error_message"].Expr.Value(nil)
+					if diags.HasErrors() || !strings.Contains(message.AsString(), name) || !strings.Contains(message.AsString(), "#1497") {
+						t.Fatal("Migrationsmeldung fehlt")
+					}
+				}
+			}
+			if !found {
+				t.Fatal("Migrationssperre fehlt")
+			}
+		})
 	}
 }
