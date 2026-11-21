@@ -122,7 +122,7 @@ noch Metadaten geschützt.
 ## Variablen (Auswahl, vollständig in `variables.tf`)
 
 `git_ref` akzeptiert Branch, Tag und vollständigen Commit-SHA. Der Default
-`v0.87.1` passt zum Beispiel-Image `0.87.1`; bei einem anderen Image auch die
+`v0.101.0` passt zum Beispiel-Image `0.101.0`; bei einem anderen Image auch die
 Konfig-Version bewusst wählen. `config-holen.sh` verwendet `git init`,
 `fetch --depth 1 origin <ref>` und `checkout --detach FETCH_HEAD`. Ein fehlender
 Ref oder eine fehlende Compose-/Caddy-/Tailscale-/Aktuator-Datei beendet den
@@ -148,7 +148,7 @@ Ein erfolgreiches `terraform apply` allein bedeutet weiterhin keine gestartete A
 | `ssh_allowed_cidr` | — | **Pflicht, kein Default** | SSH-Quellen; IPv4 ab `/8`, IPv6 ab `/16`; breitere Netze einschließlich `0.0.0.0/0` und `::/0` werden abgewiesen; `[]` bleibt möglich |
 | `public_web_enabled` | — | `false` | öffnet 80/443 in der Firewall |
 | `image_ref` | — | Pflicht | gepinnter Registry-Tag, den die VM zieht |
-| `git_repo` / `git_ref` | — | privates Produkt-Repo / `v0.87.1` | Konfiguration und Aktuator; Default braucht `git_token`-Datei; Branch/Tag/Commit-SHA |
+| `git_repo` / `git_ref` | — | privates Produkt-Repo / `v0.101.0` | Konfiguration und Aktuator; Default braucht `git_token`-Datei; Branch/Tag/Commit-SHA |
 | `update_manifest_url` / `update_public_keys` | — | `""` | optionaler Versions-Check (offline-first) |
 | `update_plugins_url` | — | `""` | signierter Plugin-Katalog (`JNPT_UPDATE_PLUGINS_URL`); leer = kein Katalog, offline-first; gleicher Client und Schlüsselring wie Manifest |
 | `updater_image_repo` | — | Produkt-Registry | Allowlist des Host-Aktuators |
