@@ -288,6 +288,22 @@ $code
 
 
 class UpdateAdapter(unittest.TestCase):
+    def test_only_leaf_query_gets_300_seconds_plan_record_stay_at_30(self):
+        from test_install import ps
+        result = ps(r'''
+function Invoke-UpdateProcess {param($Command,$TimeoutSeconds)
+    [pscustomobject]@{ExitCode=0;Output=('sha256 Fingerprint='+('AB:'*31)+'AB');Seconds=$TimeoutSeconds;Command=$Command}
+}
+$leaf = Invoke-UpdateDocker @('compose','run','--rm','--no-deps','--entrypoint','openssl','cert-init','x509','-in','/certs/cert.pem','-noout','-fingerprint','-sha256')
+$plan = Invoke-UpdateDocker @('compose','exec','-T','jnpt','/jnpt','update','plan','--json')
+$record = Invoke-UpdateDocker @('compose','exec','-T','jnpt','/jnpt','update','record','--result=installed')
+$pull = Invoke-UpdateDocker @('pull',('ghcr.io/januaport/januaport@sha256:'+('b'*64)))
+$up = Invoke-UpdateDocker @('compose','up','-d')
+@($leaf.Seconds,$plan.Seconds,$record.Seconds,$pull.Seconds,$up.Seconds) | ConvertTo-Json -Compress
+''', ROOT/'jnpt-update.ps1')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), [300, 30, 30, 0, 0])
+
     def slow_docker_finishes_before_record(self, mode, expected, record):
         probe=Update()
         result,trace=probe.invoke(mode=mode)

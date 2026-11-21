@@ -339,6 +339,11 @@ ein tatsächlicher Startfehler wird danach als `failed` gebucht. Ein weiterer
 Test startet einen nativen Python-Nachfahren, belegt dessen Start und verlangt,
 dass er nach Ablauf der Frist keine Abschlussdatei mehr schreiben kann.
 Die Mutanten mit pauschalen 30 Sekunden und ohne `taskkill /T` müssen rot sein.
+Die Fristauswahl am echten `Invoke-UpdateDocker`-Adapter mit ersetzter Prozessgrenze
+verlangt für genau die OpenSSL-Zertifikatsabfrage 300 Sekunden (BOX: gemessen
+37–48 Sekunden bei schlechter Leitung), für Plan/Ergebnisbuchung weiter 30 und
+für Pull/Start 0 (ohne Frist). `pruefstein_mutations.py` setzt die Konstante auf
+30 zurück und verlangt einen Assertion-Fehler.
 
 **#1503:** Das Ticket erlaubt, den nicht unterstützten MCP-Schalter zu entfernen.
 `test_audit_caddy` hält diese Variante fest und versucht am echten Hashadapter
@@ -382,9 +387,26 @@ mit USB-Wurzel, Apostroph und SMB-Ziel. Beide Dateilisten und Summen enthalten
 Update-Skript und B5-Prüfstein. `test_upgrade.py` liest zusätzlich die elf
 veröffentlichten 0.2.0-Dateien aus dem lokalen Tag und führt 0.2.0 → 0.3.0 durch
 beide Installer mit echten Datei-/Hashadaptern aus. `.env` und Secret-Inhalte
-bleiben erhalten, der zweite Lauf lädt nichts. Jede der elf geänderten
-Originaldateien sperrt die lokale Diensteinrichtung; fehlendes/geändertes
-Altprofil sperrt den Download. Der 0.1.0-Weg bleibt ebenfalls geprüft.
+bleiben erhalten, der zweite Lauf lädt nichts. Zusätzlich erzeugt der Test den
+exakten v0.3.0-Baum aus `git show windows-v0.3.0:windows/<Datei>`: Alle 13
+Profil-Dateien werden durch beide Installer ersetzt. Die separat heruntergeladene
+`Autologon64.exe` ist kein ProfileFile; Erfolg wird ohne und mit einer synthetischen
+EXE geprüft (sie wird nie ausgeführt). Ein geändertes Byte in jeder der elf v0.2.0-
+und 13 v0.3.0-Dateien sperrt beide Wege an echten Datei-/Hashadaptern.
+Fehlende Altdateien sperren ebenfalls den Download. Der 0.1.0-Weg bleibt geprüft.
+`ProfileSourceDrift` zählt mit `git tag -l 'windows-v*'` alle lokalen Tags auf und
+prüft ihre Upgrade-Erkennung. Nur der neueste Tag darf fehlen, solange HEAD exakt
+dessen Profilbytes und Manifest trägt. Ohne Git oder Tags wird mit klarer
+Begründung übersprungen. `pruefstein_mutations.py` entfernt den v0.3.0-Eintrag
+(Upgrade und Drift müssen rot sein) und die Hashsperre an beiden Installationswegen.
+Eine passend gefälschte lokale Summenliste darf `Test-LegacyProfile` keine Quelle
+hinzufügen; auch das wird am echten Hashadapter und per Mutation geprüft.
+
+```powershell
+$env:PYTHONPATH = 'windows/test'
+python -B -m unittest test_update test_upgrade -v
+python -B windows/test/pruefstein_mutations.py
+```
 
 [Prüfstein B5](../PRUEFSTEIN-B5.md) ist durch BOX auf VM `jnpt-b4` @`a87f571`
 grün (Protokoll `c-6796028725`, #1246): Feed-Freigabe und GUI-Buchung, TaskResult,

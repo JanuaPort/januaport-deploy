@@ -72,7 +72,7 @@ Digest-Referenz. Caddy und Skript-Läufer sind bereits per Digest festgelegt.
 Ein vollständiges vorhandenes Profil wird erneut geprüft und gestartet; seine
 Dateien, `.env`, Zertifikat und Schlüssel bleiben erhalten. Dabei gibt es
 keinen Download und keine erneute Image-Abfrage. Für unveränderte Profile aus
-0.1.0 und 0.2.0 gilt der [Upgrade-Weg](#von-010-oder-020-auf-030); andere unvollständige Zielordner
+0.1.0, 0.2.0 und 0.3.0 gilt der [Upgrade-Weg](#profil-upgrade-von-010-020-oder-030); andere unvollständige Zielordner
 werden weiterhin abgewiesen. Für ein anderes Ziel gibt es
 `-Directory <Profilordner>`; der Dienstbetrieb und seine Aufgaben verwenden immer
 `C:\JanuaPort\windows`.
@@ -92,7 +92,7 @@ Die GUI-Ausgabe lautet wörtlich `Admin-GUI: http://127.0.0.1:8484`. Weiter mit
 `docs/inbetriebnahme.md` im Produkt-Repo `JanuaPort/januaport`: Master-Schlüssel
 sichern, Admin-Passwort setzen, ersten Admin-Token erzeugen.
 
-## Von 0.1.0 oder 0.2.0 auf 0.3.0
+## Profil-Upgrade von 0.1.0, 0.2.0 oder 0.3.0
 
 Nach Veröffentlichung des Tags durch GATE das **neue** `einrichten.ps1` laden
 (siehe „Zwei Befehle“) und in `jnpt-dienst` mit dem bisherigen Profilordner starten:
@@ -105,7 +105,10 @@ Das Skript erkennt die drei unveränderten Originaldateien aus `windows-v0.1.0`
 (`docker-compose.yml`, `Caddyfile`, `einrichten.ps1`) an ihren festen SHA-256-Werten.
 Für `windows-v0.2.0` müssen alle elf releaseverwalteten Originaldateien
 unverändert vorhanden sein; ihre veröffentlichten SHA-256-Werte sind ebenfalls
-fest im Skript hinterlegt. Eine abweichende Datei sperrt das automatische Upgrade.
+fest im Skript hinterlegt. Für `windows-v0.3.0` sind es alle 13 Profil-Dateien
+aus dem veröffentlichten Tag. `Autologon64.exe` gehört nicht zum Profilvergleich:
+Die Diensteinrichtung lädt sie separat; sie darf im Altprofil fehlen.
+Eine abweichende Profildatei sperrt das automatische Upgrade.
 `.env` muss vorhanden sein; eine alte `SHA256SUMS` darf vorhanden sein oder fehlen.
 Es lädt sämtliche Dateien und die Summenliste ausschließlich von `windows-v0.3.0`
 in einen temporären Ordner und prüft sie vollständig, bevor es im Ziel schreibt.
@@ -124,7 +127,7 @@ Die beiden fehlenden Mail-Secret-Dateien werden wie bisher nur bei Bedarf leer
 angelegt. Es gibt keine Image-Abfrage und keinen Wechsel des gespeicherten
 Kern-Images. Ohne `-NeuesZertifikat` bleiben Zertifikat und Schlüssel erhalten.
 Die lokale Bereitstellung durch `dienst-einrichten.ps1` erkennt dieselben
-0.1.0- bzw. 0.2.0-Dateien und verwendet dafür den bereits geprüften Release-Ordner.
+0.1.0-, 0.2.0- bzw. 0.3.0-Dateien und verwendet dafür den bereits geprüften Release-Ordner.
 Bei 0.2.0 → 0.3.0 anschließend `dienst-einrichten.ps1` aus dem geprüften
 0.3.0-Release als Administrator mit dem bisherigen `-BackupTarget` wiederholen,
 damit die Aufgabe „JanuaPort Update“ registriert wird. Dieser Dateischritt
@@ -180,7 +183,7 @@ Nach dem Bereitstellen werden auch neue Skripte, Log- und Backupordner geschütz
 Erbende Dateien bleiben beim Wiederholen zugänglich. Für bereits von F5 betroffene
 Installationen beschreibt das [RUNBOOK](RUNBOOK.md#f5-reparatur-nach-entzogenen-dateirechten)
 die manuelle Reparatur.
-Vorhandene abweichende Dateien werden außerhalb der geprüften Upgrades aus 0.1.0 oder 0.2.0
+Vorhandene abweichende Dateien werden außerhalb der geprüften Upgrades aus 0.1.0, 0.2.0 oder 0.3.0
 abgewiesen; `.env` und Secrets bleiben erhalten. Ein von B2
 bereitgestelltes Profil ohne `.env` wird bei der ersten Installation ergänzt.
 
@@ -657,8 +660,10 @@ mit Log und GUI prüfen.
 Native Ausgaben und Fehlermeldungsinhalte erscheinen weder auf der Konsole
 noch im Log. `log\update.log` hält höchstens 100 Zeilen ohne Benutzernamen.
 Die alten beiden Image-Werte stehen dort vor dem Austausch; vor einem späteren
-Lauf für den manuellen Rückweg lokal festhalten. Plan, Ergebnisbuchung und
-Zertifikatsabfrage sind auf 30 Sekunden begrenzt, die Sicherung auf 600 Sekunden.
+Lauf für den manuellen Rückweg lokal festhalten. Plan und Ergebnisbuchung
+sind auf 30 Sekunden begrenzt, die Zertifikatsabfrage über `compose run` auf
+300 Sekunden (BOX: bei schlechter Leitung 37–48 Sekunden statt sonst rund 1 Sekunde),
+die Sicherung auf 600 Sekunden.
 Pull und `compose up -d` warten ohne feste Frist bis zum Ende des Prozesses;
 erst danach folgen Health/TLS-Prüfung und Ergebnisbuchung. Ein langsamer
 erfolgreicher Aufruf wird deshalb nicht als fehlgeschlagen gebucht. Bei

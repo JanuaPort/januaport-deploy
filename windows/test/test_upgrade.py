@@ -1,9 +1,11 @@
-"""0.1.0/0.2.0 -> 0.3.0 through real PS 5.1 file/hash adapters, with transport fakes."""
+"""Published Windows profiles -> current bytes through PS 5.1 file/hash adapters."""
+from functools import lru_cache
 import json
 import os
 import base64
 from pathlib import Path
 import subprocess
+import shutil
 import tempfile
 import unittest
 
@@ -11,20 +13,70 @@ from test_install import ps
 from test_profile import PROFILE_FILES, ROOT, verify_sums
 
 LEGACY_FILES = ('docker-compose.yml', 'Caddyfile', 'einrichten.ps1')
-OLD_B4_FILES = tuple(row.split('  ')[1] for row in subprocess.check_output(['git','show','windows-v0.2.0:windows/SHA256SUMS'],text=True).splitlines() if not row.endswith('  Autologon64.exe'))
 UPGRADE_BLOCKED = 'Upgrade gesperrt: eine Profildatei weicht vom ausgelieferten Stand ab (SHA256SUMS). Datei prüfen oder zurücksetzen.'
 
 
+@lru_cache(None)
+def windows_tags():
+    if not shutil.which('git'):
+        raise unittest.SkipTest('Git fehlt: veröffentlichte Profilquellen und Drift nicht prüfbar.')
+    result = subprocess.run(['git', 'tag', '-l', 'windows-v*', '--sort=-v:refname'],
+                            cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True)
+    if result.returncode:
+        raise unittest.SkipTest('Git-Tags nicht lesbar: ' + result.stderr.strip())
+    tags = result.stdout.splitlines()
+    if not tags:
+        raise unittest.SkipTest('Keine lokalen windows-v*-Tags: Profilquellen und Drift nicht prüfbar.')
+    return tags
+
+
+def published_bytes(release, name):
+    return subprocess.check_output(['git', 'show', release + ':windows/' + name],
+                                   cwd=Path(__file__).resolve().parents[2])
+
+
+@lru_cache(None)
+def published_files(release):
+    if release not in windows_tags():
+        raise unittest.SkipTest('Lokales Tag fehlt: ' + release)
+    return tuple(row.split('  ')[1] for row in published_bytes(release, 'SHA256SUMS').decode().splitlines()
+                 if not row.endswith('  Autologon64.exe'))
+
+
+class ProfileSourceDrift(unittest.TestCase):
+    def test_every_local_windows_tag_is_an_upgrade_source(self):
+        tags = windows_tags()
+        for release in tags:
+            with self.subTest(release=release), tempfile.TemporaryDirectory() as tmp:
+                target = Path(tmp)
+                files = published_files(release)
+                for name in files:
+                    data = published_bytes(release, name)
+                    (target/name).write_bytes(data)
+                (target/'.env').write_bytes(b'synthetic retained environment\n')
+                result = ps("Test-LegacyProfile '" + tmp + "'")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                if result.stdout.strip() == 'True':
+                    continue
+                # Only the newest tag may be omitted, and only while HEAD
+                # carries exactly its complete release-managed profile bytes.
+                self.assertEqual(release, tags[0], 'Older tag missing as upgrade source')
+                self.assertEqual(published_bytes('HEAD', 'SHA256SUMS'), published_bytes(release, 'SHA256SUMS'))
+                for name in files:
+                    self.assertEqual(published_bytes('HEAD', name), (target/name).read_bytes(), name)
+
+
 class Upgrade(unittest.TestCase):
-    def exercise(self, mode='', manifest=False, release='windows-v0.1.0', altered='docker-compose.yml', capture_error=False):
+    def exercise(self, mode='', manifest=False, release='windows-v0.1.0', altered='docker-compose.yml', capture_error=False, autologon=False):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             target = root / 'profile'
             target.mkdir()
             # Read exact published bytes, never execute the old installer.
-            for name in (LEGACY_FILES if release=='windows-v0.1.0' else OLD_B4_FILES) + (('SHA256SUMS',) if manifest else ()):
-                (target / name).write_bytes(subprocess.check_output(
-                    ['git', 'show', release + ':windows/' + name]))
+            for name in published_files(release) + (('SHA256SUMS',) if manifest else ()):
+                (target / name).write_bytes(published_bytes(release, name))
+            if autologon:
+                (target/'Autologon64.exe').write_bytes(b'synthetic separately downloaded binary; never executed')
             (target / '.env').write_bytes(b'# synthetic retained environment\r\nJANUAPORT_IMAGE=synthetic-image\r\n')
             (target / 'secrets').mkdir()
             for name in ('smtp_password', 'graph_client_secret', 'operator-file'):
@@ -32,8 +84,9 @@ class Upgrade(unittest.TestCase):
             if mode == 'missing-base':
                 (target / 'Caddyfile').unlink()
             if mode == 'modified-base':
-                with (target / altered).open('ab') as file:
-                    file.write(b'# synthetic local change\n')
+                data = bytearray((target/altered).read_bytes())
+                data[0] ^= 1
+                (target/altered).write_bytes(data)
             before = {p.relative_to(target).as_posix(): p.read_bytes()
                       for p in target.rglob('*') if p.is_file()}
             command = r'''
@@ -88,6 +141,36 @@ Install-Profile
                     self.assertEqual(before[name],after[name])
                 for name in ('SHA256SUMS',*PROFILE_FILES): self.assertEqual(after[name],(ROOT/name).read_bytes())
 
+    def test_v030_exact_profile_is_replaced_preserving_local_data(self):
+        for manifest,autologon in [(False,False),(True,False),(True,True)]:
+            with self.subTest(manifest=manifest,autologon=autologon):
+                r,before,after,downloads,docker = self.exercise(manifest=manifest,release='windows-v0.3.0',autologon=autologon)
+                self.assertEqual(r.returncode,0,r.stderr)
+                self.assertCountEqual(downloads,['SHA256SUMS',*PROFILE_FILES])
+                self.assertNotEqual(before['einrichten.ps1'],after['einrichten.ps1'])
+                for name in ('SHA256SUMS',*PROFILE_FILES): self.assertEqual(after[name],(ROOT/name).read_bytes())
+                for name in ('.env','secrets/smtp_password','secrets/graph_client_secret','secrets/operator-file'):
+                    self.assertEqual(before[name],after[name])
+                if autologon: self.assertEqual(before['Autologon64.exe'],after['Autologon64.exe'])
+                self.assertEqual(docker.count('compose up -d'),2)
+
+    def test_v030_forged_local_manifest_cannot_authorize_changed_bytes(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as tmp:
+            target=Path(tmp)
+            for name in published_files('windows-v0.3.0'):
+                (target/name).write_bytes(published_bytes('windows-v0.3.0',name))
+            (target/'.env').write_bytes(b'synthetic environment\n')
+            file=target/'docker-compose.yml'
+            data=bytearray(file.read_bytes()); data[0] ^= 1; file.write_bytes(data)
+            manifest=published_bytes('windows-v0.3.0','SHA256SUMS').decode().splitlines()
+            (target/'SHA256SUMS').write_text('\n'.join(
+                hashlib.sha256(data).hexdigest()+'  docker-compose.yml'
+                if row.endswith('  docker-compose.yml') else row for row in manifest)+'\n')
+            result=ps("Test-LegacyProfile '"+tmp+"'")
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertEqual(result.stdout.strip(),'False')
+
     def test_modified_or_incomplete_b4_profile_is_rejected_before_download(self):
         for mode in ['modified-base','missing-base']:
             r,before,after,downloads,docker=self.exercise(mode=mode,release='windows-v0.2.0')
@@ -96,18 +179,19 @@ Install-Profile
             self.assertNotIn('compose up',docker)
 
     def test_modified_original_reports_exact_upgrade_block_without_file_contents(self):
-        for release,files in [('windows-v0.1.0',LEGACY_FILES),('windows-v0.2.0',OLD_B4_FILES)]:
-            for altered in files:
+        for release in ['windows-v0.1.0','windows-v0.2.0','windows-v0.3.0']:
+            for altered in published_files(release):
                 with self.subTest(release=release,altered=altered):
                     r,before,after,downloads,docker=self.exercise(mode='modified-base',release=release,
-                                                                altered=altered,capture_error=True)
+                                                                altered=altered,capture_error=True,
+                                                                manifest=(release=='windows-v0.3.0'))
                     self.assertNotEqual(r.returncode,0)
                     self.assertEqual(r.stderr.strip(),UPGRADE_BLOCKED)
                     self.assertEqual(before,after); self.assertEqual(downloads,[])
                     self.assertNotIn('compose up',docker)
 
     def test_missing_original_remains_a_separate_incomplete_profile_error(self):
-        for release in ['windows-v0.1.0','windows-v0.2.0']:
+        for release in ['windows-v0.1.0','windows-v0.2.0','windows-v0.3.0']:
             with self.subTest(release=release):
                 r,before,after,downloads,docker=self.exercise(mode='missing-base',release=release,capture_error=True)
                 self.assertNotEqual(r.returncode,0)
@@ -115,20 +199,33 @@ Install-Profile
                 self.assertEqual(before,after); self.assertEqual(downloads,[])
 
     def test_local_dienst_staging_also_upgrades_b4_and_rejects_every_changed_file(self):
-        for altered in [None,*OLD_B4_FILES]:
+        self.check_local_dienst_profile('windows-v0.2.0')
+
+    def test_local_dienst_staging_also_upgrades_v030_and_rejects_every_changed_file(self):
+        self.check_local_dienst_profile('windows-v0.3.0')
+
+    def check_local_dienst_profile(self, release):
+        for altered in [None,*published_files(release)]:
             with self.subTest(altered=altered),tempfile.TemporaryDirectory() as tmp:
                 root=Path(tmp); target=root/'profile'; target.mkdir(); (root/'user').mkdir()
-                for name in OLD_B4_FILES:
-                    (target/name).write_bytes(subprocess.check_output(['git','show','windows-v0.2.0:windows/'+name]))
+                for name in published_files(release):
+                    (target/name).write_bytes(published_bytes(release,name))
                 (target/'.env').write_bytes(b'synthetic retained env\r\n')
-                if altered: (target/altered).write_bytes((target/altered).read_bytes()+b'# changed\n')
+                if altered:
+                    data=bytearray((target/altered).read_bytes()); data[0] ^= 1
+                    (target/altered).write_bytes(data)
+                before={name:(target/name).read_bytes() for name in published_files(release)}
                 command=". '"+str(Path(__file__).with_name('dienst_fakes.ps1'))+"'; "
                 command+="$DienstDirectory=Join-Path $env:PROBE_ROOT 'profile'; $BackupTarget='E:\\Backup'; Initialize-Dienst"
                 result=ps(command,ROOT/'dienst-einrichten.ps1',dict(PROBE_ROOT=tmp,PROBE_FAIL=''))
                 self.assertEqual(result.returncode==0,altered is None,result.stderr)
                 self.assertEqual((target/'.env').read_bytes(),b'synthetic retained env\r\n')
-                if altered: self.assertIn('Vorhandenes Profil weicht ab',result.stderr)
-                else: verify_sums(target)
+                if altered:
+                    self.assertIn('Vorhandenes Profil weicht ab',result.stderr)
+                    for name,data in before.items(): self.assertEqual((target/name).read_bytes(),data)
+                else:
+                    verify_sums(target)
+                    for name in PROFILE_FILES: self.assertEqual((target/name).read_bytes(),(ROOT/name).read_bytes())
 
     def test_local_dienst_staging_also_upgrades_legacy_files(self):
         with tempfile.TemporaryDirectory() as tmp:

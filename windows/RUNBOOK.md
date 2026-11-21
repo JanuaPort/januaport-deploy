@@ -133,7 +133,8 @@ am gesamten Baum ab; auch ein Fehler beim Lesen der Linkanzahl führt zum Abbruc
 SEC B1: #1498 ist gebaut, nicht an NTFS belegt; die Abnahme mit echtem Docker
 Desktop für #1499 ist offen. Ein neuer `windows-v*`-Tag wartet auf beide grünen
 VM-Prüfsteine aus [B4](PRUEFSTEIN-B4.md) und [B5](PRUEFSTEIN-B5.md).
-Bei einem Altprofil den [Upgrade-Weg 0.1.0 oder 0.2.0 → 0.3.0](README.md#von-010-oder-020-auf-030) und
+Jeder neue `windows-v*`-Tag trägt sein Profil als Upgrade-Quelle in `Test-LegacyProfile` ein; der Drift-Wächter `test_upgrade.ProfileSourceDrift` erinnert daran.
+Bei einem Altprofil den [Upgrade-Weg von 0.1.0, 0.2.0 oder 0.3.0](README.md#profil-upgrade-von-010-020-oder-030) und
 die zusätzliche Abnahme in B4 verwenden. Die
 Erstkonfiguration von Docker Desktop und die Schritte in [„Zwei Befehle“](README.md#zwei-befehle)
 führt der Betreiber in `jnpt-dienst` aus. Danach startet das Wartungskonto nur Aufgaben.
@@ -297,7 +298,7 @@ Daten des Kunden. Vor dem Start hakt die Person ab:
 
 1. [PRUEFSTEIN-B5.md](PRUEFSTEIN-B5.md) ist durch BOX auf VM `jnpt-b4`
    GRÜN abgenommen (`c-6796028725`); `windows-v0.3.0` ist veröffentlicht. Ein unverändertes
-   0.2.0-Profil über den geprüften 0.3.0-Release aktualisieren; anschließend
+   0.1.0-, 0.2.0- oder 0.3.0-Profil über den geprüften Zielrelease aktualisieren; anschließend
    `dienst-einrichten.ps1` als Administrator mit dem bisherigen `-BackupTarget`
    wiederholen. Das legt die Aufgabe „JanuaPort Update“ an: `jnpt-dienst`,
    Interactive/Limited, `IgnoreNew`, kein Auslöser. Diese historische Abnahme
@@ -361,8 +362,9 @@ Exit-Code bleibt wie im Lauf (auch 0 bzw. 6). Native Ausgaben und rohe
 Fehlermeldungen bleiben privat. Das Log hält höchstens 100 Zeilen ohne
 Benutzernamen. Die alten zwei Image-Zeilen vor einem späteren Lauf lokal
 festhalten; eine Logrotation ersetzt kein dauerhaftes Rückweg-Protokoll.
-Plan, Ergebnisbuchung und Zertifikatsabfrage haben 30 Sekunden Frist, die
-Sicherung 600 Sekunden. Pull und `compose up -d` warten dagegen bis zum
+Plan und Ergebnisbuchung haben 30 Sekunden Frist, die Zertifikatsabfrage über
+`compose run` 300 Sekunden (BOX: bei schlechter Leitung 37–48 Sekunden, sonst rund
+1 Sekunde), die Sicherung 600 Sekunden. Pull und `compose up -d` warten bis zum
 Prozessende ohne feste Frist. Erst danach folgen Prüfungen und Ergebnisbuchung.
 Bei Fristablauf eines befristeten Schritts wird der ganze Prozessbaum mit
 `taskkill /T /F` beendet und dessen Ende abgewartet.

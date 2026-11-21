@@ -9,6 +9,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'einrichten.ps1')
 $UpdateRepository = 'ghcr.io/januaport/januaport'
+# BOX measured 37-48 s on real Docker Desktop with a slow connection (usually 1 s).
+# Only the compose-run leaf query needs this margin; plan/record keep 30 s.
+Set-Variable -Name UpdateLeafTimeoutSeconds -Value 300 -Option Constant
 
 function Write-UpdateLog {
     param([string]$Message)
@@ -90,6 +93,9 @@ function Invoke-UpdateDocker {
     $quoted = @($Arguments | ForEach-Object { "'" + $_.Replace("'", "''") + "'" })
     # Native output stays private; only LASTEXITCODE determines command success.
     $timeout = if ($Arguments[0] -ceq 'pull' -or $command -ceq 'compose up -d') { 0 } else { 30 }
+    if ($command -ceq 'compose run --rm --no-deps --entrypoint openssl cert-init x509 -in /certs/cert.pem -noout -fingerprint -sha256') {
+        $timeout = $UpdateLeafTimeoutSeconds
+    }
     return Invoke-UpdateProcess ("& docker " + ($quoted -join ' ') + ' 2>$null; exit $LASTEXITCODE') $timeout
 }
 
