@@ -9,6 +9,7 @@ ENGINE_TESTS = {
     'test_profile.Profile.test_leaf_properties_and_partial_pair_rejection',
     'test_profile.Profile.test_caddy_adapter_and_https_rejections',
     'test_operator_docs.RecoveryDocs.test_n4_helper_preserves_files_and_nonroot_key',
+    'test_runner.Runner.test_desktop_package_without_local_execution',
 }
 
 

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import os
+import shutil
 import unittest
 
 from test_install import ps
@@ -56,6 +57,7 @@ Get-AutologonBinary -ManifestDirectory $env:PROBE_ROOT -AutologonPfad (Join-Path
 $AutologonPfad='operator.exe'
 function Get-AutologonBinary {param($ManifestDirectory,$AutologonPfad)
     if ($AutologonPfad -cne 'operator.exe') {throw 'operator path lost'}
+    $script:events.Add('binary-verified')
     'synthetic.exe'
 }
 ''')
@@ -92,6 +94,42 @@ class PluginNetwork(unittest.TestCase):
                 result, _ = self.probe(subnet, ip, dynamic)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn('Plugin-Netz', result.stderr)
+
+    def test_process_environment_overrides_dotenv_and_empty_values_keep_defaults(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dotenv = Path(tmp)/'.env'
+            dotenv.write_text('JNPT_PLUGIN_IP=8.8.8.8\n')
+            values = dict(JNPT_PLUGIN_SUBNET='10.77.0.0/16', JNPT_PLUGIN_IP='10.77.0.2', JNPT_PLUGIN_RANGE='10.77.128.0/17')
+            cfg = json.loads(config(env_file=dotenv, extra_env=values).stdout)
+            self.assertEqual(cfg['services']['jnpt']['networks']['plugins']['ipv4_address'], '10.77.0.2')
+            cfg = json.loads(config(env_file=dotenv, extra_env=dict.fromkeys(values, '')).stdout)
+            self.assertEqual(cfg['services']['jnpt']['networks']['plugins']['ipv4_address'], '172.21.0.2')
+
+    def test_real_installer_rejects_invalid_resolved_network_before_start(self):
+        from test_profile import PROFILE_FILES
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name in ('SHA256SUMS',*PROFILE_FILES): shutil.copyfile(ROOT/name, root/name)
+            (root/'.env').write_text('JANUAPORT_IMAGE=synthetic\nJANUAPORT_IMAGE_DIGEST='+'a'*64+'\nJNPT_PLUGIN_IP=172.22.0.2\n')
+            # Invoke-Docker remains real. The executable boundary only records
+            # other attempted commands; config uses the actual Compose binary.
+            code = r'''
+function Get-CurrentAccount {$env:COMPUTERNAME+'\jnpt-dienst'}
+function docker {
+    if (($args -join ' ') -ceq 'compose version' -or ($args -join ' ') -ceq 'compose config --format json') {
+        & $env:PROBE_DOCKER @args
+        $global:LASTEXITCODE=$LASTEXITCODE
+    } else {
+        Write-Host 'FORBIDDEN-START'
+        $global:LASTEXITCODE=0
+    }
+}
+Install-Profile
+'''
+            result = ps("$Directory='"+tmp+"'; "+code, extra_env=dict(PROBE_DOCKER=shutil.which('docker')))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Plugin-Netz', result.stderr)
+            self.assertNotIn('FORBIDDEN-START', result.stdout)
 
 
 class RunningDigest(unittest.TestCase):
@@ -172,6 +210,14 @@ function Clear-ExpiredBackups {Write-Host 'RETENTION-CALLED'}
 ''')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('RETENTION-CALLED', result.stdout)
+
+    def test_retention_failure_preserves_verified_new_backup(self):
+        from test_backup import Backup
+        result, files, _ = Backup().invoke(extra="function Clear-ExpiredBackups {throw 'retention failure'}")
+        self.assertNotEqual(result.returncode, 0)
+        backups = [name for name in files if name.endswith('.jnpt-backup')]
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(files[backups[0]], b'synthetic backup contents\n')
 
 
 class Workflow(unittest.TestCase):

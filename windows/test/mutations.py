@@ -20,6 +20,12 @@ CHECKSUM = ['-m', 'unittest', 'test_install.Installer.test_real_checksum_adapter
 
 
 def mutant(label, file=None, old=None, new=None, command=None, extra_env=None, occurrences=1):
+    if '--fakes' in sys.argv:
+        from run_fake_tests import ENGINE_TESTS
+        selected = command or HTTPS
+        if (selected == HTTPS or any(item in ENGINE_TESTS or item.endswith('live.py') for item in selected)):
+            print('NOT RUN (Linux-Engine erforderlich): ' + label, flush=True)
+            return
     originals = {path: path.read_bytes() for path in ROOT.rglob('*') if path.is_file()}
     with tempfile.TemporaryDirectory(prefix='mutation-') as tmp:
         target = Path(tmp)
@@ -158,6 +164,9 @@ def main():
     mutant('existing installation refusal', 'einrichten.ps1',
            "throw 'Ziel existiert bereits und ist kein vollstaendiges Profil.'", 'return',
            command=['-m', 'unittest', 'test_install.Installer.test_existing_installation_preserved', '-v'])
+    if '--fakes' in sys.argv:
+        print('NOT RUN (Linux-Engine und Upstream-Download erforderlich): W6 no local sandbox execution', flush=True)
+        return
     with tempfile.TemporaryDirectory(prefix='seccomp-', dir=TESTS) as tmp:
         # Upstream fixture, not a deployment asset. Never adds a sandbox to the profile.
         url = ('https://raw.githubusercontent.com/JanuaPort/januaport-plugins/'

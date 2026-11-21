@@ -1,5 +1,6 @@
 """Mutate operator recipes; exercise their real helper adapter on test volumes."""
 from mutations import mutant
+import sys
 
 
 def main():
@@ -22,7 +23,7 @@ def main():
          'test_installer_never_changes_firewall'),
     ]:
         mutant(label, file, old, new, command=['-m', 'unittest', 'test_operator_docs.FirewallDocs.' + test, '-v'])
-    print('Operator recipes: 7 mutations killed; original bytes unchanged.', flush=True)
+    print('Operator recipes: ' + ('4 fake mutations killed; 3 Linux mutations NOT RUN' if '--fakes' in sys.argv else '7 mutations killed') + '; original bytes unchanged.', flush=True)
 
 
 if __name__ == '__main__':

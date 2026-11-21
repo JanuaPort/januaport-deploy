@@ -48,7 +48,7 @@ def run(*args, input=None, check=True, env=None):
 def config(directory=ROOT, extra_env=None, check=True, env_file=None):
     # Mail tests must not inherit an operator's settings or credentials.
     env = {key: value for key, value in os.environ.items()
-           if not key.startswith(('JNPT_SMTP_', 'JNPT_NOTIFY_', 'JNPT_UPDATE_')) and key != 'JNPT_ADMIN_URL'}
+           if not key.startswith(('JNPT_SMTP_', 'JNPT_NOTIFY_', 'JNPT_UPDATE_', 'JNPT_PLUGIN_')) and key != 'JNPT_ADMIN_URL'}
     env.update(EXAMPLE)
     env.update(extra_env or {})
     return run("docker", "compose", "--env-file", str(env_file or os.devnull), "-f",
