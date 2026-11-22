@@ -2,7 +2,8 @@
 [CmdletBinding()]
 param(
     [string]$BackupTarget,
-    [switch]$KennwortNeu
+    [switch]$KennwortNeu,
+    [string]$AutologonPfad
 )
 
 Set-StrictMode -Version Latest
@@ -233,7 +234,19 @@ function Test-DockerDesktopSettings {
 }
 
 function Get-AutologonBinary {
-    param([string]$ManifestDirectory = $PSScriptRoot)
+    param([string]$ManifestDirectory = $PSScriptRoot, [string]$AutologonPfad)
+    if ($AutologonPfad) {
+        if (-not (Test-Path -LiteralPath $AutologonPfad -PathType Leaf)) { throw 'AutologonPfad muss eine vorhandene Datei sein.' }
+        $binary = (Get-Item -LiteralPath $AutologonPfad).FullName
+        Assert-AutologonSignature $binary
+        $digest = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant()
+        Write-Host ('AutologonPfad SHA-256: ' + $digest)
+        $destination = Join-Path $ManifestDirectory 'Autologon64.exe'
+        if ([IO.Path]::GetFullPath($destination) -ine $binary) {
+            Copy-Item -LiteralPath $binary -Destination $destination -Force
+        }
+        return $destination
+    }
     $rows = @([IO.File]::ReadAllLines((Join-Path $ManifestDirectory 'SHA256SUMS')) |
         Where-Object { $_ -cmatch '^[a-f0-9]{64}  Autologon64\.exe$' })
     if ($rows.Count -ne 1) { throw 'SHA-256-Pin fuer Autologon64.exe fehlt oder ist doppelt.' }
@@ -247,12 +260,9 @@ function Get-AutologonBinary {
         Expand-Archive -LiteralPath $zip -DestinationPath $temp
         $binary = Join-Path $temp 'Autologon64.exe'
         if ((Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant() -cne $expected) {
-            throw 'SHA-256-Pruefung fuer Autologon64.exe fehlgeschlagen.'
+            throw 'SHA-256-Pruefung fuer Autologon64.exe fehlgeschlagen. Autologon64.exe selbst laden und mit -AutologonPfad <datei> erneut einrichten (gueltige Microsoft-Signatur erforderlich).'
         }
-        $signature = Get-AuthenticodeSignature -FilePath $binary
-        if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(?:^|,\s*)O=Microsoft Corporation(?:,|$)') {
-            throw 'Authenticode fuer Autologon64.exe ungueltig.'
-        }
+        Assert-AutologonSignature $binary
         $destination = Join-Path $ManifestDirectory 'Autologon64.exe'
         Copy-Item -LiteralPath $binary -Destination $destination -Force
         return $destination
@@ -261,6 +271,14 @@ function Get-AutologonBinary {
         $root = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
         if (-not $resolved.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) { throw 'Temp-Pfad ungueltig.' }
         Remove-Item -LiteralPath $resolved -Recurse -Force
+    }
+}
+
+function Assert-AutologonSignature {
+    param([string]$Binary)
+    $signature = Get-AuthenticodeSignature -FilePath $Binary
+    if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(?:^|,\s*)O=Microsoft Corporation(?:,|$)') {
+        throw 'Authenticode fuer Autologon64.exe ungueltig.'
     }
 }
 
@@ -337,8 +355,8 @@ function Initialize-Dienst {
     $user = Get-LocalUser -Name 'jnpt-dienst' -ErrorAction SilentlyContinue
     $password = $null
     try {
-        # Verify even on repeat runs. No other binary/fallback is accepted.
-        $binary = Get-AutologonBinary $PSScriptRoot
+        # Verify even on repeat runs; the explicit operator path keeps Authenticode mandatory.
+        $binary = Get-AutologonBinary -ManifestDirectory $PSScriptRoot -AutologonPfad $AutologonPfad
         if ($null -eq $user) {
             $password = New-DienstPassword
             $user = New-LocalUser -Name 'jnpt-dienst' -Password $password -PasswordNeverExpires -AccountNeverExpires -Description 'JanuaPort Dienstbetrieb'
