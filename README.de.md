@@ -26,7 +26,7 @@ Kennzeichnung: **Gebaut** · **Im Bau** · **Geplant**. Jeder Eintrag sagt, was 
 | Umgebung | Stand | Anleitung |
 |---|---|---|
 | Docker Compose (generisch, Selbst-Hoster) | **Gebaut.** Von der JanuaPort GmbH betrieben (Showcase-Muster). | [`compose/`](compose/) |
-| Windows Pro / Docker Desktop (LAN-TLS, A + B1–B5) | **Gebaut.** B4 und B5 abgenommen; Profil-Tag `windows-v0.3.0` veröffentlicht. Betreiber-Firewall, Neustart, Rücksicherung und Update im Abnahmeprofil belegt. | [`windows/`](windows/) |
+| Windows Pro / Docker Desktop (LAN-TLS, A + B1–B5) | **Gebaut.** Profil-Tag `windows-v0.4.0` veröffentlicht; Abnahme von 0.4.0 offen (JanuaPort/januaport#1531). B4/B5 für `windows-v0.3.0` abgenommen: Betreiber-Firewall, Neustart, Rücksicherung und Update in diesem Abnahmeprofil belegt. | [`windows/`](windows/) |
 | Hetzner Cloud (Terraform) | **Gebaut.** Von der JanuaPort GmbH betrieben (Showcase-Muster). | [`hetzner/`](hetzner/) |
 | Microsoft Azure | **Gebaut, ungetestet.** Community-Vorlage. | [`azure/`](azure/) |
 | Amazon Web Services (AWS) | **Gebaut, ungetestet.** Community-Vorlage. | [`aws/`](aws/) |
