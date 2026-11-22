@@ -1,0 +1,33 @@
+name: windows-tests
+
+on:
+  push:
+    branches: [main]
+    paths: ['windows/**']
+  pull_request:
+    paths: ['windows/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-tests:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12.9'
+      - name: Windows-Tests mit Fakes (ohne Docker-Engine und VM-Prüfungen)
+        shell: powershell
+        run: python -B windows/test/run_fake_tests.py
+      - name: SHA256SUMS einschließlich externem Autologon-Pin prüfen
+        shell: powershell
+        env:
+          PYTHONPATH: windows/test
+        run: python -B -c "from test_profile import ROOT, verify_sums; verify_sums(ROOT)"
