@@ -80,8 +80,17 @@ Dateioperationen im temporären Ordner. Fehlender Marker, falsches Konto,
 relatives Ziel mit vorhandenem Marker, unvollständiges Profil, jeder native
 Docker-Fehler, leere/fehlende Staging-Datei, Größen-/Hashfehler, Fehler nach Umbenennung
 und Host-Aufräumfehler müssen Exit ungleich 0 und keine neue Zieldatei
-liefern. Fremde alte Sicherungen bleiben erhalten. Nach geprüftem Erfolg gilt
-am Ziel 30 Tage Aufbewahrung (`-RetentionDays`); die jüngste eigene Sicherung
+liefern. Fremde alte Sicherungen bleiben erhalten.
+Der Kindprozess startet dazu im TEMP-Elternordner des Ziels; relative,
+wurzelrelative und laufwerksrelative Eingaben werden ohne `relpath` zum
+Checkout erzeugt. Eine eigene Testzeile setzt `Path.cwd()` auf `Z:\x`, während
+das Ziel auf `C:` liegt, und prüft alle drei Eingabeformen ohne `ValueError`.
+Vor der eigentlichen Abweisung muss der echte PowerShell-Dateiadapter den
+vorhandenen Marker über jede dieser relativen Eingaben erreichen.
+Provider- und .NET-Arbeitsverzeichnis zeigen dabei beide auf TEMP. Entfernt die
+Mutation die Absolutpfad-Sperre, muss die Probe rot werden; ein fehlender
+Zielmarker darf die Abweisung nicht nur vortäuschen.
+Nach geprüftem Erfolg gilt am Ziel 30 Tage Aufbewahrung (`-RetentionDays`); die jüngste eigene Sicherung
 bleibt erhalten. Bei Erfolg gibt es genau eine neue
 Sicherungsdatei und keine Key-Datei; die Staging-Kopie ist entfernt.
 Liegengebliebene Dateien nach dem exakten Namensmuster werden entfernt; fremde

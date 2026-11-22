@@ -4,6 +4,9 @@ from mutations import mutant
 
 def main():
     cases = [
+        ('backup absolute target guard removed', 'jnpt-backup.ps1',
+         "        throw 'Absolutes Sicherungsziel erforderlich.'", '        # removed',
+         'test_backup.Backup.test_relative_or_empty_target_is_rejected'),
         ('environment ACL retention replaced by move', 'jnpt-update.ps1',
          '[IO.File]::Replace($temp, $path, [NullString]::Value)',
          'Remove-Item -LiteralPath $path -Force; Move-Item -LiteralPath $temp -Destination $path',
