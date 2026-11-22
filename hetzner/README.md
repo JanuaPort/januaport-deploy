@@ -264,6 +264,20 @@ eine Löschung entscheidet der Betreiber/PO. Sicherheitshinweis und CRA-Bewertun
 
 ## Lokale Tests
 
+### Datenvolume: Abbruch statt Root-Platte (#1512)
+
+cloud-init wartet höchstens 5 Minuten (60 × 5 Sekunden) auf das Blockgerät.
+Fehlt es danach oder scheitert das Einhängen, bricht der gemeinsame
+Volume-/Docker-Shellblock vor den Datenordnern und `docker volume create` ab.
+Ausgabe und MOTD melden „Keine Anlage gestartet“. Auch `jnpt-start` verlangt
+einen bestehenden Mount, insbesondere nach einem Neustart mit `nofail`.
+Erst Volume-Attachment und cloud-init-Ausgabe prüfen, dann die fehlgeschlagene
+Einrichtung wiederholen; ohne Mount keine Anlage starten.
+`TestVolumeFailClosedRenderUndShell` führt die gerenderte Testzeile aus
+(fehlendes Blockgerät, Mountfehler, fehlender Mount, Erfolg). Die drei
+Volume-Mutanten entfernen Timeout-Abbruch bzw. die beiden Mount-Sperren und
+müssen den jeweiligen echten Shell-Test rot machen.
+
 ```powershell
 $env:MSYS_NO_PATHCONV='1'
 docker run --rm -v "${PWD}:/src" -w /src golang:1.26.11 go test -v ./hetzner/...
@@ -352,7 +366,11 @@ generischen Vorlage. Der SHA-256 der **gesamten** Kern-Vorlage erfasst auch
 Die Ausnahmeliste nennt je Feld einen Grund und die festen Hashes **beider**
 Seiten. Eine Ausnahme ignoriert keine künftige Änderung. Unterschiede sind
 der bestehende #1497-Starthelfer/Guard unter anderen Pfaden, strengere lokale
-Dateiprüfungen und die #1501-Klonprüfung; die APT-Härtung hat keine Ausnahme.
+Dateiprüfungen, die #1501-Klonprüfung und #1512: fail-closed bei Volume-Timeout,
+Mount-Prüfung vor Docker-Volumes sowie vor jedem Handstart. Die Herkunft
+`ceba172a54bd01fa4f8200daba06823232f5d3c7` bleibt unverändert; für #1512 wurde
+die Baseline mit dem Export genau dieses Commits regeneriert. Die APT-Härtung
+hat keine Ausnahme.
 
 Im öffentlichen Repo läuft der Vergleich offline gegen die bekannte Herkunft.
 Für jeden Nachzug aus dem privaten Kern muss der Lead zusätzlich einen

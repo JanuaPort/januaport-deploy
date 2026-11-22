@@ -19,8 +19,8 @@
   "Exceptions": {
     "runcmd": {
       "Core": "fda83d6e1dc2a46b395cbef413ff42a86c6079e7fb0a47581bcc6058c69ede52",
-      "Deploy": "f34bd985f024c16596ccd3d018b43db94c5761b2fb6905fea519a56dad8246de",
-      "Reason": "Generische VM ohne optionale Skript-Laeufer-Provisionierung; bestehender #1497-Guard unter /usr/local/sbin, bewusster Betreiberstart und MOTD. Docker-Pin, Volume-Ablauf und tmpfiles wie Kern; SEC-Haertungen separat getestet."
+      "Deploy": "80377f62ea0b5b6ae21586f31a255c00f598cede8d744c77841ab7e053b89d33",
+      "Reason": "Generische VM ohne optionale Skript-Laeufer-Provisionierung; #1497-Betreiberstart/Guard/MOTD. #1512: Volume-Timeout fail-closed und Mount-Pruefung vor Datenordnern/Docker-Volumes in EINEM Shell-Block, weil cloud-init nach einzelnen runcmd-Fehlern fortsetzt. Herkunft ceba172a unveraendert; APT-Pin/tmpfiles beibehalten."
     },
     "write_files:/etc/systemd/system/jnpt-metadata-guard.service": {
       "Core": "d13676886c70493ad1ceb86c3b3c2de8169caf492c09173eee2756080a8598e9",
@@ -54,8 +54,8 @@
     },
     "write_files:/usr/local/sbin/jnpt-start": {
       "Core": "",
-      "Deploy": "496a3e74d0ae33cb12ee9057c4a394b6e3c1225161840cb20038f23b592dc8d1",
-      "Reason": "Bewusster Betreiberstart aus #1497 statt bootstrap.sh; strengere Modus-/Eigentuemer-/Symlink-/Einzeilenpruefung, root/flock, PAT-Erhalt bei Fehler und bestehende .env erhalten. #1501 ergaenzt geprueften Klon und laute Fehler/MOTD."
+      "Deploy": "b0f3bbb30f93f7b11b476af16340e039077f22eb1a7cba53b6f9285ec2fccee0",
+      "Reason": "Bewusster Betreiberstart aus #1497 statt bootstrap.sh; strengere Modus-/Eigentuemer-/Symlink-/Einzeilenpruefung, root/flock, PAT-Erhalt bei Fehler und bestehende .env erhalten. #1501 ergaenzt geprueften Klon und laute Fehler/MOTD. #1512: Handstart verlangt eingehaengtes Datenvolume auch nach Neustart mit nofail; keine Anlage auf Root-Platte."
     }
   }
 }
