@@ -53,6 +53,9 @@ func TestSicherheitsMutationen(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				// Windows-Worktrees liefern CRLF; Mutationsanker und isolierte
+				// Shell-Fixtures verwenden LF. Die Originalbytes bleiben erhalten.
+				src = []byte(strings.ReplaceAll(string(src), "\r\n", "\n"))
 				if name == m.file {
 					if !strings.Contains(string(src), m.old) {
 						t.Fatalf("Mutationsziel fehlt: %q", m.old)

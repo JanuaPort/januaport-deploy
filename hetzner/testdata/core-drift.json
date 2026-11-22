@@ -12,15 +12,15 @@
     "write_files:/etc/tmpfiles.d/jnpt-tunnel.conf": "fc85d922efdb696503eb71cd00a6c07ede818572d59e4743c133b945152c7780",
     "write_files:/opt/jnpt/apt-schluessel.sh": "85409c54933071f7ff9752f64756965785cb6557a36a2ff57c0371adbc1a9435",
     "write_files:/opt/jnpt/askpass.sh": "c92ea750312bd736249194e897acf9efa7f77b7cd1d465b33a2447542ddc9bc9",
-    "write_files:/opt/jnpt/bootstrap.sh": "742ea6bfdcf305624cdd3ebee223327189dadb41989e40f94a6a73447034ae5d",
+    "write_files:/opt/jnpt/bootstrap.sh": "51fd320fdd4372995ecc4b2d603fc0a50098fdde45536c305cff601ab0e4b891",
     "write_files:/opt/jnpt/metadata-guard.sh": "e7beeb89c673b9f84ba6c350351b21c8924688e931bba4a49a01089d707ac136",
-    "write_files:/opt/jnpt/staging/.env": "3cb5edc0d23f71d0d374dcc51a1451a5dbca1b849ef146ea95c2b19d0b0ce9b7"
+    "write_files:/opt/jnpt/staging/.env": "72f30656bda5fd4621068becb70afc3fa8ff63ccac161365ff84acf34fde80d8"
   },
   "Exceptions": {
     "runcmd": {
       "Core": "fda83d6e1dc2a46b395cbef413ff42a86c6079e7fb0a47581bcc6058c69ede52",
-      "Deploy": "f34bd985f024c16596ccd3d018b43db94c5761b2fb6905fea519a56dad8246de",
-      "Reason": "Generische VM ohne optionale Skript-Laeufer-Provisionierung; bestehender #1497-Guard unter /usr/local/sbin, bewusster Betreiberstart und MOTD. Docker-Pin, Volume-Ablauf und tmpfiles wie Kern; SEC-Haertungen separat getestet."
+      "Deploy": "80377f62ea0b5b6ae21586f31a255c00f598cede8d744c77841ab7e053b89d33",
+      "Reason": "Generische VM ohne optionale Skript-Laeufer-Provisionierung; #1497-Betreiberstart/Guard/MOTD. #1512: Volume-Timeout fail-closed und Mount-Pruefung vor Datenordnern/Docker-Volumes in EINEM Shell-Block, weil cloud-init nach einzelnen runcmd-Fehlern fortsetzt. Herkunft ceba172a unveraendert; APT-Pin/tmpfiles beibehalten."
     },
     "write_files:/etc/systemd/system/jnpt-metadata-guard.service": {
       "Core": "d13676886c70493ad1ceb86c3b3c2de8169caf492c09173eee2756080a8598e9",
@@ -33,7 +33,7 @@
       "Reason": "Nur Kommentare und Shell-Leerraum verschieden; gleicher 0600-Quelldateiweg, Username und Passwort ueber Askpass. Echter Git-Credential-/execve-Test aus #1497."
     },
     "write_files:/opt/jnpt/bootstrap.sh": {
-      "Core": "742ea6bfdcf305624cdd3ebee223327189dadb41989e40f94a6a73447034ae5d",
+      "Core": "51fd320fdd4372995ecc4b2d603fc0a50098fdde45536c305cff601ab0e4b891",
       "Deploy": "",
       "Reason": "Ersetzt durch /usr/local/sbin/jnpt-start und config-holen.sh (#1497/#1501): strengere Dateipruefung, flock, gepruefter Konfig-Klon, PAT-Loeschung erst nach Erfolg. BOX-Beilage des Herkunftsmoduls gehoert nicht zur generischen VM."
     },
@@ -54,8 +54,8 @@
     },
     "write_files:/usr/local/sbin/jnpt-start": {
       "Core": "",
-      "Deploy": "496a3e74d0ae33cb12ee9057c4a394b6e3c1225161840cb20038f23b592dc8d1",
-      "Reason": "Bewusster Betreiberstart aus #1497 statt bootstrap.sh; strengere Modus-/Eigentuemer-/Symlink-/Einzeilenpruefung, root/flock, PAT-Erhalt bei Fehler und bestehende .env erhalten. #1501 ergaenzt geprueften Klon und laute Fehler/MOTD."
+      "Deploy": "21cae6a3e2ba9aa1eb517b0538d4481ad63310f077a4b633a874213ae9a68099",
+      "Reason": "Bewusster Betreiberstart aus #1497 statt bootstrap.sh; strengere Modus-/Eigentuemer-/Symlink-/Einzeilenpruefung, root/flock, PAT-Erhalt bei Fehler und bestehende .env erhalten. #1501 ergaenzt geprueften Klon und laute Fehler/MOTD. #1512: Handstart verlangt eingehaengtes Datenvolume auch nach Neustart mit nofail; keine Anlage auf Root-Platte."
     }
   }
 }

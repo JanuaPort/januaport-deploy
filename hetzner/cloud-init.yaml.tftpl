@@ -198,6 +198,7 @@ write_files:
       [ "$${1:-}" != '--check' ] || exit 0
       exec 9>/run/lock/jnpt-start.lock
       flock -n 9 || fail 'jnpt-start laeuft bereits.'
+      mountpoint -q /mnt/jnpt-data || fail 'Keine Anlage gestartet: Datenvolume nicht eingehangen; cloud-init und Volume pruefen.'
       systemctl restart jnpt-metadata-guard.service
       systemd-tmpfiles --create /etc/tmpfiles.d/jnpt-tunnel.conf
       systemd-tmpfiles --create /etc/tmpfiles.d/jnpt-plugins.conf
@@ -243,17 +244,23 @@ runcmd:
 
   # Volume-Attachment ist eine separate API-Aktion: darauf warten. Formatieren
   # nur ohne bestehendes Dateisystem; ein Neuaufbau erhält die Daten.
-  - 'for i in $(seq 1 60); do [ -b ${volume_device} ] && break; echo "warte auf volume…"; sleep 5; done'
-  - 'blkid ${volume_device} || mkfs.ext4 -F -L jnpt-data ${volume_device}'
-  - mkdir -p /mnt/jnpt-data
-  - 'grep -q "/mnt/jnpt-data" /etc/fstab || echo "${volume_device} /mnt/jnpt-data ext4 defaults,nofail 0 2" >> /etc/fstab'
-  - mount -a
-  - mkdir -p /mnt/jnpt-data/jnpt-data /mnt/jnpt-data/caddy-data /mnt/jnpt-data/caddy-config /mnt/jnpt-data/tailscale-state
-  # Das Projekt heißt jnpt (Top-Level name der Compose-Datei).
-  - docker volume create --driver local --opt type=none --opt o=bind --opt device=/mnt/jnpt-data/jnpt-data jnpt_jnpt-data
-  - docker volume create --driver local --opt type=none --opt o=bind --opt device=/mnt/jnpt-data/caddy-data jnpt_caddy-data
-  - docker volume create --driver local --opt type=none --opt o=bind --opt device=/mnt/jnpt-data/caddy-config jnpt_caddy-config
-  - docker volume create --driver local --opt type=none --opt o=bind --opt device=/mnt/jnpt-data/tailscale-state jnpt_tailscale-state
-  - systemd-tmpfiles --create /etc/tmpfiles.d/jnpt-tunnel.conf
-  - systemd-tmpfiles --create /etc/tmpfiles.d/jnpt-plugins.conf
-  - 'echo "Keine Anlage gestartet. JanuaPort bereit zur Dateiablage. Danach als root /usr/local/sbin/jnpt-start aufrufen (hetzner/README.md, #1497)." > /etc/motd'
+  # Ein Shell-Block: cloud-init setzt nach einem einzelnen runcmd-Fehler fort.
+  - |
+    set -eu
+    fail() { printf '%s\n' "$*" >&2; printf '%s\n' "$*" > /etc/motd; exit 1; }
+    for i in $(seq 1 60); do [ -b ${volume_device} ] && break; echo "warte auf volume…"; sleep 5; done
+    [ -b ${volume_device} ] || fail 'Keine Anlage gestartet: Volume nach 5 Minuten nicht verfuegbar.'
+    blkid ${volume_device} || mkfs.ext4 -F -L jnpt-data ${volume_device} || fail 'Keine Anlage gestartet: Volume nicht formatierbar.'
+    mkdir -p /mnt/jnpt-data
+    grep -q "/mnt/jnpt-data" /etc/fstab || echo "${volume_device} /mnt/jnpt-data ext4 defaults,nofail 0 2" >> /etc/fstab
+    mount -a || fail 'Keine Anlage gestartet: Volume nicht einhaengbar.'
+    mountpoint -q /mnt/jnpt-data || fail 'Keine Anlage gestartet: Datenvolume nicht eingehangen.'
+    mkdir -p /mnt/jnpt-data/jnpt-data /mnt/jnpt-data/caddy-data /mnt/jnpt-data/caddy-config /mnt/jnpt-data/tailscale-state
+    # Das Projekt heißt jnpt (Top-Level name der Compose-Datei).
+    docker volume create --driver local --opt type=none --opt o=bind --opt device=/mnt/jnpt-data/jnpt-data jnpt_jnpt-data
+    docker volume create --driver local --opt type=none --opt o=bind --opt device=/mnt/jnpt-data/caddy-data jnpt_caddy-data
+    docker volume create --driver local --opt type=none --opt o=bind --opt device=/mnt/jnpt-data/caddy-config jnpt_caddy-config
+    docker volume create --driver local --opt type=none --opt o=bind --opt device=/mnt/jnpt-data/tailscale-state jnpt_tailscale-state
+    systemd-tmpfiles --create /etc/tmpfiles.d/jnpt-tunnel.conf
+    systemd-tmpfiles --create /etc/tmpfiles.d/jnpt-plugins.conf
+    echo "Keine Anlage gestartet. JanuaPort bereit zur Dateiablage. Danach als root /usr/local/sbin/jnpt-start aufrufen (hetzner/README.md, #1497)." > /etc/motd

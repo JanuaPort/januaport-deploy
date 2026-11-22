@@ -2,11 +2,12 @@
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import shutil
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from test_profile import ROOT, run, config
 from test_install import ps
@@ -15,6 +16,17 @@ PATTERN = r'^jnpt-\d{8}T\d{9}Z-[a-f0-9]{32}\.jnpt-backup$'
 OLD = 'jnpt-20000101T000000000Z-' + 'a' * 32 + '.jnpt-backup'
 FOREIGN = {'jnpt.key': b'synthetic foreign fixture', 'foreign.jnpt-backup': b'foreign',
            OLD + '.extra': b'not an exact backup name'}
+
+
+def nonabsolute_target(target, form):
+    # The child runs in target.parent, independent of the checkout drive.
+    if form == '__relative_existing__':
+        return target.name
+    if form == '__root_relative_existing__':
+        return str(target)[len(target.drive):]
+    if form == '__drive_relative_existing__':
+        return target.drive + target.name
+    raise ValueError('unknown target fixture form: ' + form)
 
 SHIM = r'''
 import hashlib,json,os,pathlib,sys
@@ -58,12 +70,11 @@ class Backup(unittest.TestCase):
             (root / 'docker.cmd').write_text('@echo off\n"' + sys.executable + '" "' +
                                             str(root / 'docker_shim.py') + '" %*\n')
             driver = root / 'driver.ps1'
-            if target_value == '__relative_existing__':
-                target_value = os.path.relpath(target, Path.cwd())
-            elif target_value == '__root_relative_existing__':
-                target_value = str(target)[2:]
-            elif target_value == '__drive_relative_existing__':
-                target_value = target.drive + os.path.relpath(target, Path.cwd())
+            fixture_probe = ''
+            if target_value in ('__relative_existing__', '__root_relative_existing__', '__drive_relative_existing__'):
+                target_value = nonabsolute_target(target, target_value)
+                fixture_probe = ("[IO.File]::WriteAllText((Join-Path $env:PROBE_ROOT 'target-present'), "
+                                 "[string](Test-Path -LiteralPath (Join-Path '" + target_value + "' '.jnpt-backup-ziel')))\n")
             adapters = r'''
 function Copy-Item { param($LiteralPath,$Destination,[switch]$Force)
     Add-Content (Join-Path $env:PROBE_ROOT 'copies.txt') $Destination
@@ -79,13 +90,16 @@ function Remove-Item { param($LiteralPath,[switch]$Force)
     Microsoft.PowerShell.Management\Remove-Item -LiteralPath $LiteralPath -Force:$Force
 }
 '''
-            driver.write_text("$ErrorActionPreference='Stop'\n. '" + str(ROOT / 'jnpt-backup.ps1') +
+            driver.write_text("$ErrorActionPreference='Stop'\nSet-Location -LiteralPath $env:PROBE_ROOT\n[Environment]::CurrentDirectory=$env:PROBE_ROOT\n" + fixture_probe + ". '" + str(ROOT / 'jnpt-backup.ps1') +
                               "' -ProfileDirectory '" + str(profile) + "' -Target '" + (str(target) if target_value is None else target_value) + "'\n" +
                               ("function Get-CurrentAccount { $env:COMPUTERNAME + '\\jnpt-dienst' }\n" if identity else '') +
                               adapters + '\n' + extra + '\nStart-JnptBackup\n')
             env = {k: v for k, v in os.environ.items() if k.lower() != 'psmodulepath'}
             env.update(PROBE_ROOT=tmp, PROBE_FAIL=mode, PATH=tmp + os.pathsep + env['PATH'])
             result = run('powershell.exe', '-NoProfile', '-File', str(driver), check=False, env=env)
+            if fixture_probe:
+                self.assertEqual((root / 'target-present').read_text(), 'True',
+                                 'relative input must actually reach the existing target marker')
             files = {p.name: p.read_bytes() for p in target.iterdir() if p.is_file()}
             self.staged = {p.name: p.read_bytes() for p in staging.iterdir() if p.is_file()}
             self.copies = (root / 'copies.txt').read_text().splitlines() if (root / 'copies.txt').exists() else []
@@ -109,6 +123,21 @@ function Remove-Item { param($LiteralPath,[switch]$Force)
         self.assertTrue(self.copies[0].endswith('.teil'), self.copies)
         self.assertFalse(any(n.endswith('.teil') for n in files))
         self.assertNotIn('jnpt.key', files)
+
+    def test_nonabsolute_fixtures_ignore_checkout_on_another_drive(self):
+        target = PureWindowsPath(r'C:\temp\probe\usb')
+        with patch.object(Path, 'cwd', return_value=PureWindowsPath(r'Z:\x')):
+            for form, expected in (
+                ('__relative_existing__', 'usb'),
+                ('__root_relative_existing__', r'\temp\probe\usb'),
+                ('__drive_relative_existing__', 'C:usb'),
+            ):
+                with self.subTest(form=form):
+                    try:
+                        value = nonabsolute_target(target, form)
+                    except ValueError as exc:
+                        self.fail('fixture must work across drives: ' + str(exc))
+                    self.assertEqual(value, expected)
 
     def test_every_docker_and_verification_error_is_nonzero_without_target_file(self):
         for mode in ['backup', 'source-missing', 'empty', 'size', 'hash', 'copy', 'cleanup']:
@@ -175,7 +204,9 @@ function Register-DienstTasks {
             (target / '.env').write_text('synthetic env')
             script = r'''
 function Get-CurrentAccount {$env:COMPUTERNAME+'\jnpt-dienst'}
-function Invoke-Docker {param($Arguments)}
+function Invoke-Docker {param($Arguments)
+    if (($Arguments -join ' ') -ceq 'compose config --format json') { return '{"networks":{"plugins":{"ipam":{"config":[{"subnet":"172.21.0.0/16","ip_range":"172.21.128.0/17"}]}}},"services":{"jnpt":{"networks":{"plugins":{"ipv4_address":"172.21.0.2"}}}}}' }
+}
 function Get-LeafFingerprint {'synthetic fingerprint'}
 function Get-ServedLeafFingerprint {'synthetic fingerprint'}
 function Invoke-WebRequest {[pscustomobject]@{StatusCode=200}}
@@ -220,7 +251,7 @@ function Move-Item { param($LiteralPath,$Destination)
         self.assertFalse(any('rm' in a for a in calls))
         self.assertEqual(self.staged, FOREIGN)
 
-    def test_previous_backups_are_retained(self):
+    def test_foreign_previous_backup_is_retained(self):
         result, files, _ = self.invoke(existing=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('old.jnpt-backup', files)

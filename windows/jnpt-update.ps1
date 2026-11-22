@@ -83,12 +83,17 @@ function Invoke-UpdateDocker {
     # Guard the real adapter, including callers added in future changes.
     $command = $Arguments -join ' '
     $allowed = $command -ceq 'compose exec -T jnpt /jnpt update plan --json' -or
+        $command -ceq 'compose ps --status running -q jnpt' -or
         $command -ceq 'compose up -d' -or
         $command -ceq 'compose run --rm --no-deps --entrypoint openssl cert-init x509 -in /certs/cert.pem -noout -fingerprint -sha256'
     if ($Arguments.Count -ge 8 -and
         ($Arguments[0..6] -join ' ') -ceq 'compose exec -T jnpt /jnpt update record') { $allowed = $true }
     if ($Arguments.Count -eq 2 -and $Arguments[0] -ceq 'pull' -and
         $Arguments[1] -cmatch ('\A' + [regex]::Escape($UpdateRepository) + '@sha256:[a-f0-9]{64}\z')) { $allowed = $true }
+    if ($Arguments.Count -eq 6 -and ($Arguments[0..4] -join ' ') -ceq 'inspect --type container --format {{.Image}}' -and
+        $Arguments[5] -cmatch '\A[a-f0-9]{64}\z') { $allowed = $true }
+    if ($Arguments.Count -eq 5 -and ($Arguments[0..3] -join ' ') -ceq 'image inspect --format {{json .RepoDigests}}' -and
+        $Arguments[4] -cmatch '\Asha256:[a-f0-9]{64}\z') { $allowed = $true }
     if (-not $allowed) { throw 'Docker-Aufruf ausserhalb des Update-Vertrags.' }
     $quoted = @($Arguments | ForEach-Object { "'" + $_.Replace("'", "''") + "'" })
     # Native output stays private; only LASTEXITCODE determines command success.
@@ -179,6 +184,18 @@ function Test-UpdateHealth {
     throw 'TLS-Fingerprint abweichend.'
 }
 
+function Assert-RunningUpdateDigest {
+    param([string]$Digest)
+    $container = Invoke-UpdateDocker @('compose', 'ps', '--status', 'running', '-q', 'jnpt')
+    if ($container.ExitCode -ne 0 -or $container.Output -cnotmatch '\A[a-f0-9]{64}(?:\r?\n)?\z') { throw 'Genau ein laufender jnpt-Container erforderlich.' }
+    $image = Invoke-UpdateDocker @('inspect', '--type', 'container', '--format', '{{.Image}}', $container.Output.Trim())
+    if ($image.ExitCode -ne 0 -or $image.Output -cnotmatch '\Asha256:[a-f0-9]{64}(?:\r?\n)?\z') { throw 'Laufendes Image nicht lesbar.' }
+    $native = Invoke-UpdateDocker @('image', 'inspect', '--format', '{{json .RepoDigests}}', $image.Output.Trim())
+    if ($native.ExitCode -ne 0) { throw 'Laufender Digest nicht lesbar.' }
+    $digests = ConvertFrom-Json -InputObject $native.Output
+    if (@($digests) -cnotcontains ($UpdateRepository + '@' + $Digest)) { throw 'Laufender Image-Digest weicht vom Plan ab.' }
+}
+
 function Invoke-JnptUpdate {
     try {
         Assert-DienstSession
@@ -216,6 +233,7 @@ function Invoke-JnptUpdate {
         $up = Invoke-UpdateDocker @('compose', 'up', '-d')
         if ($up.ExitCode -ne 0) { throw 'Start fehlgeschlagen.' }
         Test-UpdateHealth
+        Assert-RunningUpdateDigest $plan.digest
     } catch {
         Write-UpdateRecord $plan 'failed'
         Write-UpdateLog 'Update fehlgeschlagen; RUNBOOK.md: Rueckweg von Hand; exit=6'

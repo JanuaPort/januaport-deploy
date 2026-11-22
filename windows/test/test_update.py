@@ -24,6 +24,22 @@ def update_plan(**values):
 OLD = (b'# retained JANUAPORT_IMAGE=ghcr.io/januaport/januaport:old\r\nJANUAPORT_IMAGE=ghcr.io/januaport/januaport:old\r\n'
        b'JNPT_SMTP_HOST=smtp.example.org\nJANUAPORT_IMAGE_DIGEST=' + b'a' * 64 + b'\r\nKEEP=Gr\xc3\xbc\xc3\x9fe')
 NEW = OLD.replace(b'\r\nJANUAPORT_IMAGE=ghcr.io/januaport/januaport:old', b'\r\nJANUAPORT_IMAGE='+REPOSITORY.encode()).replace(b'a' * 64, b'b' * 64)
+ACL_SNAPSHOT = r'''
+$path=Join-Path $ProfileDirectory '.env'
+if (Test-Path -LiteralPath $path) {
+    $acl=[IO.File]::GetAccessControl($path)
+    $parent=[IO.Directory]::GetAccessControl($ProfileDirectory)
+    $rules=@($acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier]))
+    [pscustomobject]@{
+        Sddl=$acl.Sddl; Protected=$acl.AreAccessRulesProtected
+        ParentProtected=$parent.AreAccessRulesProtected
+        Rules=@($rules | ForEach-Object {
+            [pscustomobject]@{Sid=$_.IdentityReference.Value;Inherited=$_.IsInherited;Rights=[int]$_.FileSystemRights}
+        })
+        User=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $env:PROBE_ROOT 'ACL_FILE') -Encoding UTF8
+}
+'''
 SHIM = r'''
 import json,os,pathlib,sys,time
 r=pathlib.Path(os.environ['PROBE_ROOT']); a=sys.argv[1:]
@@ -47,6 +63,16 @@ if a[:1]==['pull']:
     sys.exit(17 if mode=='pull' else 0)
 if a==['compose','up','-d']:
     sys.exit(18 if mode=='up' else 0)
+if a==['compose','ps','--status','running','-q','jnpt']:
+    print('' if mode=='container-stopped' else ('c'*64+'\n'+'e'*64 if mode=='container-ambiguous' else 'c'*64)); sys.exit(0)
+if a==['inspect','--type','container','--format','{{.Image}}','c'*64]:
+    if mode=='image-error': sys.exit(18)
+    if mode=='image-invalid': print('not-an-image-id'); sys.exit(0)
+    print('sha256:'+'d'*64); sys.exit(0)
+if a==['image','inspect','--format','{{json .RepoDigests}}','sha256:'+'d'*64]:
+    if mode=='digest-error': sys.exit(18)
+    print(json.dumps([] if mode=='digest-missing' else [
+        ('other.example/core' if mode=='digest-repository' else 'ghcr.io/januaport/januaport')+'@sha256:'+('a' if mode=='digest-mismatch' else 'b')*64])); sys.exit(0)
 if a==['compose','run','--rm','--no-deps','--entrypoint','openssl','cert-init','x509','-in','/certs/cert.pem','-noout','-fingerprint','-sha256']:
     print('sha256 Fingerprint='+':'.join(['AB']*32)); sys.exit(0)
 sys.exit(92)
@@ -55,7 +81,7 @@ sys.exit(92)
 
 class Update(unittest.TestCase):
     def invoke(self, action='approved', digest=DIGEST, mode='', identity=True,
-               raw=None, extra='', incomplete=None, seed=False):
+               raw=None, extra='', incomplete=None, seed=False, protected_env=False):
         source = ROOT / 'jnpt-update.ps1'
         self.assertTrue(source.is_file(), 'B5 script must be shipped')
         # Short paths also keep mutation runs below Win32 MAX_PATH.
@@ -99,23 +125,36 @@ function Start-Sleep {param($Seconds,$Milliseconds)}
 '''
             if identity:
                 bootstrap += "\nfunction Get-CurrentAccount {$env:COMPUTERNAME+'\\jnpt-dienst'}\n"
-            bootstrap += r"""
-if (Test-Path -LiteralPath (Join-Path $ProfileDirectory '.env')) {
-    [IO.File]::WriteAllText((Join-Path $env:PROBE_ROOT 'acl-before'), ((& icacls.exe (Join-Path $ProfileDirectory '.env')) -join "`n"))
+            # Run the actual F5 algorithms/native ACL adapters in TEMP. Only
+            # privileged BA ownership assignment is omitted; the current user
+            # stands in for the service SID, so no elevation/account is needed.
+            bootstrap += "\n& {\n. '" + str(ROOT / 'dienst-einrichten.ps1') + "'\n" + r'''
+foreach ($name in @('Protect-DienstDirectory','Protect-DienstFile')) {
+    $body=(Get-Command $name).ScriptBlock.ToString().Replace(
+        '    $sec.SetOwner((New-Object Security.Principal.SecurityIdentifier(''S-1-5-32-544'')))', '')
+    Set-Item ('Function:\'+$name) ([scriptblock]::Create($body))
 }
-""" + extra + '\n'
+Protect-DienstDirectory $ProfileDirectory ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value)
+$envPath=Join-Path $ProfileDirectory '.env'
+if (Test-Path -LiteralPath $envPath) { Protect-DienstFile $envPath }
+}
+'''
+            if protected_env:
+                bootstrap += r'''
+$envPath=Join-Path $ProfileDirectory '.env'
+$acl=[IO.File]::GetAccessControl($envPath)
+$acl.SetAccessRuleProtection($true,$true)
+[IO.File]::SetAccessControl($envPath,$acl)
+'''
+            bootstrap += ACL_SNAPSHOT.replace('ACL_FILE', 'acl-before') + extra + '\n'
             text = source.read_text(encoding='utf-8-sig')
             anchor = "if ($MyInvocation.InvocationName -ne '.')"
             self.assertEqual(text.count(anchor), 1)
             script = profile / 'jnpt-update.ps1'
             script.write_text(text.replace(anchor, bootstrap + anchor), encoding='utf-8-sig')
             driver = root / 'driver.ps1'
-            driver.write_text("try { & '" + str(script) + "' -ProfileDirectory '" + str(profile) + "' -Target 'E:\\Back''up\\'; $code=$LASTEXITCODE } catch {$code=1}\n" + r"""
-+if (Test-Path -LiteralPath (Join-Path $env:PROBE_ROOT 'p/.env')) {
-+    [IO.File]::WriteAllText((Join-Path $env:PROBE_ROOT 'acl-after'), ((& icacls.exe (Join-Path $env:PROBE_ROOT 'p/.env')) -join "`n"))
-+}
-+exit $code
-+""".replace('\n+','\n'), encoding='utf-8-sig')
+            driver.write_text("$ProfileDirectory='" + str(profile) + "'\ntry { & '" + str(script) + "' -ProfileDirectory $ProfileDirectory -Target 'E:\\Back''up\\'; $code=$LASTEXITCODE } catch {$code=1}\n" +
+                              ACL_SNAPSHOT.replace('ACL_FILE', 'acl-after') + '\nexit $code\n', encoding='utf-8-sig')
             env = {k:v for k,v in os.environ.items() if k.lower() != 'psmodulepath'}
             env.update(PROBE_ROOT=tmp, PROBE_FAIL=mode, PATH=tmp+os.pathsep+env['PATH'])
             result = run('powershell.exe','-NoProfile','-File',str(driver),check=False,env=env)
@@ -129,7 +168,8 @@ if (Test-Path -LiteralPath (Join-Path $ProfileDirectory '.env')) {
                 if value: self.assertNotIn(value, self.log)
             self.assertEqual(list(profile.glob('*.tmp')), [])
             if (root/'acl-before').exists():
-                self.assertEqual((root/'acl-before').read_text().strip(), (root/'acl-after').read_text().strip())
+                self.acl_before = json.loads((root/'acl-before').read_text(encoding='utf-8-sig'))
+                self.assertEqual(self.acl_before, json.loads((root/'acl-after').read_text(encoding='utf-8-sig')))
             return result, trace
 
     @staticmethod
@@ -226,6 +266,19 @@ if (Test-Path -LiteralPath (Join-Path $ProfileDirectory '.env')) {
         self.assertFalse(any('up' in a for a in t)); self.assertEqual(self.records(t),[])
         self.assertIn('Austausch der .env fehlgeschlagen; exit=3',self.log)
         self.assertEqual(sum('exit=3' in line for line in self.log.splitlines()),1)
+
+    def test_environment_acl_matches_f5_profile_and_survives_replace(self):
+        for protected in (False, True):
+            with self.subTest(protected=protected):
+                r,_ = self.invoke(protected_env=protected)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(self.env_after, NEW)
+                acl = self.acl_before
+                self.assertTrue(acl['ParentProtected'], 'fixture must reproduce the protected F5 parent')
+                self.assertEqual(acl['Protected'], protected)
+                self.assertEqual({r['Sid'] for r in acl['Rules']}, {acl['User'], 'S-1-5-32-544', 'S-1-5-18'})
+                self.assertEqual(len(acl['Rules']), 3)
+                self.assertTrue(all(r['Inherited'] != protected and r['Rights'] == 2032127 for r in acl['Rules']))
 
     def test_06_health_tls_or_up_failure_records_failed_without_reversal(self):
         for mode in ['health','tls','up']:

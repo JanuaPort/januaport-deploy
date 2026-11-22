@@ -44,7 +44,7 @@ Die Adaptertests ersetzen diese Abnahme nicht. B4 gilt ergänzend weiter.
 - [ ] **Sicherung und unveränderliche Referenz:** Neue, geprüfte Sicherung
   von vor dem Wechsel am markierten USB-Ziel; keine `.teil` und keine Key-Kopie.
   Reihenfolge Plan → Sicherung → Pull → alte zwei Image-Zeilen im Log →
-  Austausch → `up -d` → Host-Health/TLS → `record installed` belegen. Image
+  Austausch → `up -d` → Host-Health/TLS → laufender Image-Digest → `record installed` belegen. Image
   ausschließlich `ghcr.io/januaport/januaport@sha256:<64 kleine Hex-Zeichen>`.
   `.env` enthält nur die zwei geänderten Image-Zeilen, UTF-8 ohne BOM;
   `icacls .env` ist vor/nach dem Austausch gleich. Host-Health 200 und derselbe
@@ -93,7 +93,7 @@ Die Adaptertests ersetzen diese Abnahme nicht. B4 gilt ergänzend weiter.
   späteren Lauf separat lokal festhalten.
 - [ ] **#1499, langsames Docker:** Pull und `compose up -d` getrennt mit mehr
   als 30 Sekunden Laufzeit nachstellen. Bis Prozessende keine Ergebnisbuchung;
-  Erfolg erst nach Health/TLS als `installed`, echter Startfehler nach dessen
+  Erfolg erst nach Health/TLS und passendem laufendem Digest als `installed`, echter Startfehler nach dessen
   Ende als `failed`. Bei einem befristeten Plan-Test muss auch der native
   Nachfahre beendet sein. Lokale Shim-Regression ersetzt diese Docker-Abnahme nicht.
 - [ ] **#1499, langsame Zertifikatsabfrage:** Den exakten `compose run --rm

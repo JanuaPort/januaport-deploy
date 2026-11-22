@@ -122,7 +122,7 @@ noch Metadaten geschützt.
 ## Variablen (Auswahl, vollständig in `variables.tf`)
 
 `git_ref` akzeptiert Branch, Tag und vollständigen Commit-SHA. Der Default
-`v0.101.0` passt zum Beispiel-Image `0.101.0`; bei einem anderen Image auch die
+`v0.104.0` passt zum Beispiel-Image `0.104.0`; bei einem anderen Image auch die
 Konfig-Version bewusst wählen. `config-holen.sh` verwendet `git init`,
 `fetch --depth 1 origin <ref>` und `checkout --detach FETCH_HEAD`. Ein fehlender
 Ref oder eine fehlende Compose-/Caddy-/Tailscale-/Aktuator-Datei beendet den
@@ -148,7 +148,7 @@ Ein erfolgreiches `terraform apply` allein bedeutet weiterhin keine gestartete A
 | `ssh_allowed_cidr` | — | **Pflicht, kein Default** | SSH-Quellen; IPv4 ab `/8`, IPv6 ab `/16`; breitere Netze einschließlich `0.0.0.0/0` und `::/0` werden abgewiesen; `[]` bleibt möglich |
 | `public_web_enabled` | — | `false` | öffnet 80/443 in der Firewall |
 | `image_ref` | — | Pflicht | gepinnter Registry-Tag, den die VM zieht |
-| `git_repo` / `git_ref` | — | privates Produkt-Repo / `v0.101.0` | Konfiguration und Aktuator; Default braucht `git_token`-Datei; Branch/Tag/Commit-SHA |
+| `git_repo` / `git_ref` | — | privates Produkt-Repo / `v0.104.0` | Konfiguration und Aktuator; Default braucht `git_token`-Datei; Branch/Tag/Commit-SHA |
 | `update_manifest_url` / `update_public_keys` | — | `""` | optionaler Versions-Check (offline-first) |
 | `update_plugins_url` | — | `""` | signierter Plugin-Katalog (`JNPT_UPDATE_PLUGINS_URL`); leer = kein Katalog, offline-first; gleicher Client und Schlüsselring wie Manifest |
 | `updater_image_repo` | — | Produkt-Registry | Allowlist des Host-Aktuators |
@@ -264,6 +264,20 @@ eine Löschung entscheidet der Betreiber/PO. Sicherheitshinweis und CRA-Bewertun
 
 ## Lokale Tests
 
+### Datenvolume: Abbruch statt Root-Platte (#1512)
+
+cloud-init wartet höchstens 5 Minuten (60 × 5 Sekunden) auf das Blockgerät.
+Fehlt es danach oder scheitert das Einhängen, bricht der gemeinsame
+Volume-/Docker-Shellblock vor den Datenordnern und `docker volume create` ab.
+Ausgabe und MOTD melden „Keine Anlage gestartet“. Auch `jnpt-start` verlangt
+einen bestehenden Mount, insbesondere nach einem Neustart mit `nofail`.
+Erst Volume-Attachment und cloud-init-Ausgabe prüfen, dann die fehlgeschlagene
+Einrichtung wiederholen; ohne Mount keine Anlage starten.
+`TestVolumeFailClosedRenderUndShell` führt die gerenderte Testzeile aus
+(fehlendes Blockgerät, Mountfehler, fehlender Mount, Erfolg). Die drei
+Volume-Mutanten entfernen Timeout-Abbruch bzw. die beiden Mount-Sperren und
+müssen den jeweiligen echten Shell-Test rot machen.
+
 ```powershell
 $env:MSYS_NO_PATHCONV='1'
 docker run --rm -v "${PWD}:/src" -w /src golang:1.26.11 go test -v ./hetzner/...
@@ -352,7 +366,11 @@ generischen Vorlage. Der SHA-256 der **gesamten** Kern-Vorlage erfasst auch
 Die Ausnahmeliste nennt je Feld einen Grund und die festen Hashes **beider**
 Seiten. Eine Ausnahme ignoriert keine künftige Änderung. Unterschiede sind
 der bestehende #1497-Starthelfer/Guard unter anderen Pfaden, strengere lokale
-Dateiprüfungen und die #1501-Klonprüfung; die APT-Härtung hat keine Ausnahme.
+Dateiprüfungen, die #1501-Klonprüfung und #1512: fail-closed bei Volume-Timeout,
+Mount-Prüfung vor Docker-Volumes sowie vor jedem Handstart. Die Herkunft
+`ceba172a54bd01fa4f8200daba06823232f5d3c7` bleibt unverändert; für #1512 wurde
+die Baseline mit dem Export genau dieses Commits regeneriert. Die APT-Härtung
+hat keine Ausnahme.
 
 Im öffentlichen Repo läuft der Vergleich offline gegen die bekannte Herkunft.
 Für jeden Nachzug aus dem privaten Kern muss der Lead zusätzlich einen

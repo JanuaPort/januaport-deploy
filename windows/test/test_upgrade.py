@@ -94,6 +94,8 @@ $Directory = Join-Path $env:PROBE_ROOT 'profile'
 function Get-CurrentAccount {$env:COMPUTERNAME+'\jnpt-dienst'}
 function docker {throw 'unexpected native Docker'}
 function Invoke-Docker {param($Arguments)
+    if (($Arguments -join ' ') -ceq 'compose config --format json') { return '{"networks":{"plugins":{"ipam":{"config":[{"subnet":"172.21.0.0/16","ip_range":"172.21.128.0/17"}]}}},"services":{"jnpt":{"networks":{"plugins":{"ipv4_address":"172.21.0.2"}}}}}' }
+
     ($Arguments -join ' ') | Add-Content (Join-Path $env:PROBE_ROOT 'docker.txt')
 }
 function Read-Host {throw 'image prompt forbidden during upgrade'}

@@ -77,8 +77,40 @@ class Installer(unittest.TestCase):
 
 class Dienst(unittest.TestCase):
     def test_actual_nonadmin_session_rejected(self):
-        # This test runner must be non-elevated. Never elevate it for B2/B3.
-        result = ps('Assert-Administrator', ROOT / 'dienst-einrichten.ps1')
+        # GitHub's runner is elevated. Impersonate a restricted copy of our
+        # actual Windows token: no account, logon, task or privilege changes.
+        result = ps(r'''
+Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+public static class ProbeToken {
+    [DllImport("advapi32", SetLastError=true)]
+    static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+    [DllImport("advapi32", SetLastError=true)]
+    static extern bool CreateRestrictedToken(IntPtr token, uint flags, uint disabledCount,
+        IntPtr disabled, uint deletedCount, IntPtr deleted, uint restrictedCount,
+        IntPtr restricted, out IntPtr result);
+    [DllImport("kernel32")] static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32")] public static extern bool CloseHandle(IntPtr handle);
+    public static IntPtr Restricted() {
+        IntPtr token;
+        if (!OpenProcessToken(GetCurrentProcess(), 0xE, out token)) throw new Win32Exception();
+        try {
+            IntPtr result;
+            if (!CreateRestrictedToken(token, 5, 0, IntPtr.Zero, 0, IntPtr.Zero,
+                    0, IntPtr.Zero, out result)) throw new Win32Exception();
+            return result;
+        } finally { CloseHandle(token); }
+    }
+}
+'@
+$token = [ProbeToken]::Restricted()
+try {
+    $context = [Security.Principal.WindowsIdentity]::Impersonate($token)
+    try { Assert-Administrator } finally { $context.Undo(); $context.Dispose() }
+} finally { [ProbeToken]::CloseHandle($token) | Out-Null }
+''', ROOT / 'dienst-einrichten.ps1')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Administrative PowerShell', result.stderr)
 
@@ -380,7 +412,9 @@ Enable-DienstAutologon $binary (ConvertTo-SecureString 'KANARIE-NICHT-ECHT' -AsP
             command = r'''
 function Get-CurrentAccount {$env:COMPUTERNAME+'\jnpt-dienst'}
 function docker {throw 'unexpected native Docker'}
-function Invoke-Docker {param($Arguments)}
+function Invoke-Docker {param($Arguments)
+    if (($Arguments -join ' ') -ceq 'compose config --format json') { return '{"networks":{"plugins":{"ipam":{"config":[{"subnet":"172.21.0.0/16","ip_range":"172.21.128.0/17"}]}}},"services":{"jnpt":{"networks":{"plugins":{"ipv4_address":"172.21.0.2"}}}}}' }
+}
 function Read-Host {'synthetic-image'}
 function Resolve-CoreImage { @('synthetic-image', ('1'*64)) }
 function Get-LeafFingerprint { 'synthetic fingerprint' }
