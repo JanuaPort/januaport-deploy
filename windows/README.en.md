@@ -179,12 +179,15 @@ an LSA secret readable by administrators. Its CLI briefly needs a plaintext
 process argument, visible to privileged process inspection; the script does
 not log it.
 
-The exact `Autologon64.exe` is downloaded only from
+By default, `Autologon64.exe` is downloaded from
 `https://download.sysinternals.com/files/AutoLogon.zip`, checked against its
 SHA-256 in `SHA256SUMS`, then checked for a valid Microsoft Authenticode
-signature. A mismatch aborts without a fallback. The licensed binary is local
-only and excluded from the public repository. Changed upstream bytes require a
-reviewed pin update.
+signature. A mismatch aborts without an automatic fallback and names the explicit
+`-AutologonPfad <datei>` option of `dienst-einrichten.ps1`: the operator supplies
+a separately downloaded `Autologon64.exe`. This local path requires a valid
+Authenticode signature from **Microsoft Corporation** and logs its SHA-256;
+it performs no download. The download pin remains unchanged. The licensed binary
+is local only and excluded from the public repository.
 
 “JanuaPort Sperren bei Anmeldung” starts the fixed
 `C:\JanuaPort\windows\jnpt-sperren.ps1` with hidden PowerShell immediately at
@@ -296,13 +299,19 @@ The core writes atomically using a temporary file and rename. The distroless
 image has no file utilities; the script reads size and SHA-256 on the host,
 copies exactly that file to `.teil` at the destination, verifies size/hash,
 renames it and verifies again. It then removes the local staging file.
-Every error returns nonzero and removes the run's own destination file.
+Errors before the verified copy is complete return nonzero and remove the run's own destination file.
 A staging removal failure also invalidates the run and removes its destination.
 Staging cleanup only deletes names matching `jnpt-<UTC-time>-<GUID>.jnpt-backup`,
 including leftovers from earlier runs; foreign files remain untouched.
 The exact pattern is `^jnpt-[0-9]{8}T[0-9]{9}Z-[a-f0-9]{32}\.jnpt-backup$`.
-Older external backups are not automatically deleted. Monitor free space and
-`LastTaskResult`.
+External retention defaults to 30 days; override with `-RetentionDays <days>`
+(minimum 1). After a verified new backup, only regular files matching that exact
+generated name pattern with a UTC last-write time older than the cutoff are
+deleted. The newest backup by UTC filename is always retained, as are foreign
+files and links. Retention failure returns a failure while preserving the verified
+new backup. Monitor free space and `LastTaskResult`: a full target prevents the
+new copy before retention can run. For the daily task, set a custom value in its
+backup action command and reapply it after reconfiguration.
 
 **B4/F4 still requires deployment evidence:** the nonroot core must be able to
 write and atomically rename on the Docker Desktop bind mount. Run
@@ -523,9 +532,13 @@ completed job separately from pairing.
   and for the Docker processes. No rule may allow "Any" as remote address. Where
   possible, add a negative probe from a foreign subnet.
 
-On the internal `plugins` network, `jnpt` uses the fixed address `172.21.0.2`
-in subnet `172.21.0.0/16`; sidecars receive addresses exclusively from the dynamic
-pool `172.21.128.0/17`, keeping the gateway address free during restarts (#1355).
+The internal `plugins` network defaults to `JNPT_PLUGIN_IP=172.21.0.2`,
+`JNPT_PLUGIN_SUBNET=172.21.0.0/16` and `JNPT_PLUGIN_RANGE=172.21.128.0/17`.
+Existing profiles need no new `.env` entries. For LAN/VPN conflicts, change all
+three together in `.env`, e.g. `10.77.0.0/16`, `10.77.0.2`, `10.77.128.0/17`.
+`einrichten.ps1` checks Compose's resolved values: an entirely RFC1918 subnet,
+a contained dynamic range, and a usable fixed IP inside the subnet and outside
+that range (#1355). Process environment overrides `.env` and is checked too.
 All long-running services use `restart: unless-stopped`; init services use `restart: "no"`.
 Compose recreates the network itself during upgrade. Only if it aborts with
 “needs to be recreated”, run `docker compose down` followed by
@@ -582,7 +595,7 @@ approval. The host script derives no policy from `current`, `latest`,
 Sequence: plan → verified backup in a child process → pull
 `ghcr.io/januaport/januaport@<digest>` → log the two old image lines →
 atomically replace only those two `.env` lines (UTF-8 without BOM) → `up -d`
-→ host health and TLS fingerprint → record the result.
+→ host health and TLS fingerprint → verify the running image digest → record the result.
 Neither `latest` nor `reason` supplies an image reference. The digest must
 be exactly `sha256:` followed by 64 lowercase hex digits; uppercase, newlines
 and extra reference components are rejected. The core container runs only
@@ -595,7 +608,7 @@ the `.env` DACL; the script writes no ACL.
 | 1 | Wrong session or incomplete profile |
 | 2 | Plan is not exactly one JSON line, Docker not ready, invalid digest or `rollback` (RUNBOOK) |
 | 3 | Backup, pull or file replacement failed; backup/pull failure preserves `.env` |
-| 6 | Start, host health or TLS failed; `failed` with digest, new state remains for diagnosis |
+| 6 | Start, host health, TLS or running image digest failed; `failed` with digest, new state remains for diagnosis |
 
 An unbookable result is logged only; the update's exit code is preserved.
 For “JanuaPort Update” and “JanuaPort Sicherung”, `LastTaskResult` equals the
@@ -606,7 +619,13 @@ before replacement; retain them locally before a later run for manual recovery.
 Plan and result recording are bounded to 30 seconds, the certificate query via
 `compose run` to 300 seconds (BOX measured 37–48 seconds on a slow connection,
 usually about 1 second), and backup to 600 seconds. Pull and `compose up -d` wait for process completion
-without a fixed deadline, followed by health/TLS checks and result recording.
+without a fixed deadline, followed by health/TLS and running digest checks and result recording.
+Before `installed`, exactly one running `jnpt` container is required. The adapter
+reads its image ID using `compose ps --status running -q jnpt` and container
+inspect `.Image`, then requires the plan's fixed repository and digest in that
+image's `RepoDigests`. Each of these three native queries has a 30-second deadline.
+Missing, ambiguous, failed or mismatching results use exit 6, `failed`, and the
+same manual RUNBOOK recovery as health failures.
 A slow successful command therefore does not record a failed update. Timed
 commands use `taskkill /T /F` to terminate the entire process tree and wait for
 completion before reporting a timeout. If Docker

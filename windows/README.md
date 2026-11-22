@@ -207,12 +207,17 @@ Sysinternals speichert das Autologon-Kennwort als LSA-Secret; Administratoren
 können es auslesen. Die CLI benötigt es kurz als Prozessargument, das für
 privilegierte Prozessinspektion sichtbar ist. Das Skript protokolliert es nicht.
 
-`Autologon64.exe` wird ausschließlich aus
+`Autologon64.exe` wird standardmäßig aus
 `https://download.sysinternals.com/files/AutoLogon.zip` geladen. Der exakte
 SHA-256 steht in `SHA256SUMS`; erst danach wird eine gültige Microsoft-
 Authenticode-Signatur verlangt. Hashabweichung bedeutet Abbruch, ohne
-Ausweichquelle. Das lizenzierte Binary liegt nur lokal, nicht im öffentlichen
-Repo. Ein neuer Upstream-Download erfordert ggf. einen überprüften neuen Pin.
+automatische Ausweichquelle. Alternativ lädt der Betreiber `Autologon64.exe`
+selbst und übergibt `-AutologonPfad <datei>` an `dienst-einrichten.ps1`.
+Dieser ausdrückliche Dateiweg verlangt eine gültige Authenticode-Signatur mit
+Herausgeber **Microsoft Corporation** und protokolliert den SHA-256; er lädt
+nichts nach. Bei geänderten Upstream-Bytes nennt die Pin-Fehlermeldung diesen
+Weg. Der Download-Pin bleibt unverändert. Das lizenzierte Binary liegt nur lokal,
+nicht im öffentlichen Repo.
 
 „JanuaPort Sperren bei Anmeldung“ startet sofort bei der Anmeldung das feste
 `C:\JanuaPort\windows\jnpt-sperren.ps1` verborgen
@@ -333,13 +338,21 @@ Das distroless-Image enthält keine Dateiverwaltungswerkzeuge; Größe und
 SHA-256 liest das Skript auf dem Host aus genau dieser Datei. Es kopiert sie
 auf das Sicherungsziel unter `.teil`, prüft Größe und Hash, benennt um und
 prüft erneut. Anschließend löscht es die Datei im lokalen Staging.
-Jeder Fehler liefert Exit ungleich 0 und räumt die eigene Zieldatei auf.
-Auch ein Löschfehler macht den Lauf ungültig und entfernt seine Zieldatei.
+Fehler bis zum Abschluss der geprüften Kopie liefern Exit ungleich 0 und
+räumen die eigene Zieldatei auf. Auch ein Staging-Löschfehler entfernt sie.
 Nur Namen nach `jnpt-<UTC-Zeit>-<GUID>.jnpt-backup` werden im Staging gelöscht,
 auch beim Aufräumen liegengebliebener Läufe. Fremde Dateien bleiben erhalten.
 Das exakte Muster ist `^jnpt-[0-9]{8}T[0-9]{9}Z-[a-f0-9]{32}\.jnpt-backup$`.
-Ältere Sicherungen am externen Ziel werden nicht automatisch gelöscht.
-Freien Speicher und `LastTaskResult` regelmäßig prüfen.
+Am externen Ziel gilt nach erfolgreicher Sicherung eine Aufbewahrung von
+30 Tagen (änderbar mit `-RetentionDays <tage>`, mindestens 1). Gelöscht werden
+nur reguläre Dateien dieses exakten Namensmusters, deren letzte Schreibzeit
+in UTC älter als die Frist ist; die nach UTC-Dateinamen jüngste Sicherung
+bleibt immer erhalten. Fremde Dateien und Verknüpfungen bleiben erhalten.
+Scheitert die Aufbewahrung, bleibt die bereits geprüfte neue Sicherung erhalten,
+der Lauf endet mit Fehler. Freien Speicher und `LastTaskResult` regelmäßig
+prüfen: Ein volles Ziel verhindert schon die neue Kopie; die Aufbewahrung
+läuft erst danach. Für die tägliche Aufgabe einen abweichenden Wert im
+Sicherungsaufruf der Aufgabenaktion setzen (bei Neueinrichtung erneut setzen).
 
 **B4/F4 bleibt am Betriebsmodell zu belegen:** Der nonroot-Kern muss auf dem
 Bind-Mount unter Docker Desktop schreiben können; das atomare Rename muss
@@ -576,9 +589,14 @@ erfolgreicher Auftragslauf sind zusätzlich zur Kopplung zu prüfen.
   in den Abnahmebericht. Eine Freigabe mit „Beliebig“ als Remoteadresse darf es nicht
   geben. Wo möglich, kommt eine Gegenprobe aus einem fremden Subnetz dazu.
 
-Im internen Plugin-Netz `plugins` ist `jnpt` fest auf `172.21.0.2` im Subnetz
-`172.21.0.0/16` gesetzt; Beisteller erhalten Adressen ausschließlich dynamisch
-aus `172.21.128.0/17`, damit sie beim Neustart den Gateway-Platz freihalten (#1355).
+Im internen Plugin-Netz `plugins` sind die Defaults `JNPT_PLUGIN_IP=172.21.0.2`,
+`JNPT_PLUGIN_SUBNET=172.21.0.0/16` und `JNPT_PLUGIN_RANGE=172.21.128.0/17`.
+Ohne neue `.env`-Einträge läuft ein Bestandsprofil mit diesen Werten weiter.
+Bei Konflikten mit LAN/VPN in `.env` alle drei Werte gemeinsam anpassen,
+z. B. `10.77.0.0/16`, `10.77.0.2`, `10.77.128.0/17`. `einrichten.ps1`
+prüft die von Compose aufgelösten Werte: vollständiges RFC1918-Subnetz,
+Range darin, feste nutzbare IP darin und außerhalb der dynamischen Range (#1355).
+Prozessvariablen haben wie bei Compose Vorrang vor `.env`; auch sie werden geprüft.
 Alle Dauerdienste verwenden `restart: unless-stopped`, Init-Dienste `restart: "no"`.
 Compose legt das Netz beim Upgrade selbst neu an; nur wenn es mit
 „needs to be recreated“ abbricht, im Profilordner einmal `docker compose down`
@@ -638,7 +656,7 @@ im Host-Skript. Es führt weder Restore noch automatischen Rückweg aus.
 Der Ablauf ist Plan → geprüfte Sicherung als Kindprozess → Pull von
 `ghcr.io/januaport/januaport@<digest>` → alte zwei Image-Zeilen ins Log →
 atomarer Austausch ausschließlich dieser zwei `.env`-Zeilen (UTF-8 ohne BOM)
-→ `up -d` → Health am Host und TLS-Fingerprint → Ergebnis buchen.
+→ `up -d` → Health am Host und TLS-Fingerprint → laufenden Image-Digest prüfen → Ergebnis buchen.
 `latest` und `reason` liefern keine Image-Referenz. Der Digest muss exakt
 `sha256:` und 64 kleine Hex-Zeichen enthalten; Großschreibung, Zeilenumbrüche
 und zusätzliche Referenzbestandteile werden abgewiesen. Im Kern-Container
@@ -651,7 +669,7 @@ Die `.env`-DACL bleibt beim Dateiaustausch erhalten; das Skript setzt keine ACL.
 | 1 | Falsche Sitzung oder unvollständiges Profil |
 | 2 | Plan nicht genau eine JSON-Zeile, Docker nicht bereit, ungültiger Digest oder `rollback` (RUNBOOK) |
 | 3 | Sicherung, Pull oder Dateiaustausch fehlgeschlagen; bei Sicherungs-/Pullfehler `.env` unverändert |
-| 6 | Start, Host-Health oder TLS rot; `failed` mit Digest, neuer Stand bleibt zur Diagnose |
+| 6 | Start, Host-Health, TLS oder laufender Image-Digest rot; `failed` mit Digest, neuer Stand bleibt zur Diagnose |
 
 Ist das Ergebnis nicht buchbar, steht es nur im Log; der Exit-Code des Laufs
 bleibt erhalten. Bei „JanuaPort Update“ und „JanuaPort Sicherung“ entspricht
@@ -661,11 +679,11 @@ Native Ausgaben und Fehlermeldungsinhalte erscheinen weder auf der Konsole
 noch im Log. `log\update.log` hält höchstens 100 Zeilen ohne Benutzernamen.
 Die alten beiden Image-Werte stehen dort vor dem Austausch; vor einem späteren
 Lauf für den manuellen Rückweg lokal festhalten. Plan und Ergebnisbuchung
-sind auf 30 Sekunden begrenzt, die Zertifikatsabfrage über `compose run` auf
+sind wie jede der drei Digest-Abfragen auf 30 Sekunden begrenzt, die Zertifikatsabfrage über `compose run` auf
 300 Sekunden (BOX: bei schlechter Leitung 37–48 Sekunden statt sonst rund 1 Sekunde),
 die Sicherung auf 600 Sekunden.
 Pull und `compose up -d` warten ohne feste Frist bis zum Ende des Prozesses;
-erst danach folgen Health/TLS-Prüfung und Ergebnisbuchung. Ein langsamer
+erst danach folgen Health/TLS-Prüfung, Digest-Prüfung und Ergebnisbuchung. Ein langsamer
 erfolgreicher Aufruf wird deshalb nicht als fehlgeschlagen gebucht. Bei
 befristeten Aufrufen beendet `taskkill /T /F` den gesamten Prozessbaum;
 erst nach dessen Ende wird der Zeitfehler gemeldet. Nach Neustart ohne
@@ -673,6 +691,11 @@ bereites Docker endet der Planversuch begrenzt mit fester Fehlermeldung und
 Exit 2; nach Bereitschaft erneut anstoßen. Host-Health wird höchstens 90-mal
 mit 3 Sekunden Anfragefrist und 2 Sekunden Pause geprüft, TLS höchstens
 30-mal mit 2 Sekunden Pause wie bei der Einrichtung.
+Vor `installed` muss genau ein laufender `jnpt`-Container vorhanden sein.
+`compose ps --status running -q jnpt`, Container-Inspect auf `.Image` und
+Image-Inspect auf `RepoDigests` müssen den Plan-Digest für das feste Repository
+belegen. Fehlende, mehrdeutige oder abweichende Antworten führen zu Exit 6
+mit `failed` und demselben manuellen Rückweg im RUNBOOK wie Health-Fehler.
 
 Rückweg von Hand und gleichzeitige tägliche Sicherung: [RUNBOOK](RUNBOOK.md#7-update-b5).
 BOX hat den [Prüfstein B5](PRUEFSTEIN-B5.md) auf VM `jnpt-b4` abgenommen

@@ -105,7 +105,7 @@ eine neue Sitzung nötig ist.
    ist eine Betriebsregel, keine technische Trennung. In `docker-users` gehört
    nur `jnpt-dienst`; vorhandene weitere Mitglieder prüft und entfernt die IT
    gemäß README. Das Skript fügt das Wartungskonto nicht hinzu.
-   `jnpt` behält im Plugin-Netz `172.21.0.0/16` die feste Adresse `172.21.0.2` außerhalb der dynamischen Beisteller-Spanne `172.21.128.0/17`; zusammen mit `restart: unless-stopped` an allen Dauerdiensten bleibt sein Platz beim Neustart frei (#1355; Umstellung bestehender Netze siehe [README](README.md#sicherheits-defaults)).
+   `jnpt` behält standardmäßig im Plugin-Netz `172.21.0.0/16` die feste Adresse `172.21.0.2` außerhalb der dynamischen Beisteller-Spanne `172.21.128.0/17`. Bei LAN-/VPN-Konflikten `JNPT_PLUGIN_SUBNET`, `JNPT_PLUGIN_IP` und `JNPT_PLUGIN_RANGE` gemeinsam in `.env` ändern; die Einrichtung prüft privates Netz, enthaltene Range und freie feste IP. Bestehende `.env` brauchen keine neuen Einträge. Zusammen mit `restart: unless-stopped` an allen Dauerdiensten bleibt sein Platz beim Neustart frei (#1355; Umstellung bestehender Netze siehe [README](README.md#sicherheits-defaults)).
 
 ### 3.4 Anlage einrichten
 Vor `dienst-einrichten.ps1` Docker Desktop einmal als `jnpt-dienst` starten,
@@ -116,6 +116,11 @@ Der Betreiber setzt dann lokal vorübergehend ein Kennwort, meldet sich als
 `jnpt-dienst` an und startet Docker Desktop. Danach die administrative
 [B2-Einrichtung](README.md#dienstbetrieb-b2) mit `-KennwortNeu` erneut ausführen;
 Autologon wird alle 500 ms bis höchstens 10 Sekunden nachgeprüft. Neustarten.
+
+Bei einem Autologon-Download mit abweichendem Pin: `Autologon64.exe` selbst
+laden und `dienst-einrichten.ps1` zusätzlich mit `-AutologonPfad <datei>`
+aufrufen. Dieser Dateiweg verlangt eine gültige Microsoft-Corporation-
+Authenticode-Signatur und protokolliert SHA-256; der Download-Pin bleibt bestehen.
 B-7: `icacls C:\JanuaPort` und `icacls C:\JanuaPort\windows` zeigen ausschließlich
 `jnpt-dienst`, Administratoren und SYSTEM. Vererbung vom Laufwerksstamm ist aus.
 F5: Die Einrichtung ersetzt die vollständige DACL in einem einzigen
@@ -150,6 +155,16 @@ Die Einrichtung legt `backups\` im B-7-geschützten Profilordner an. Der Kern
 schreibt dort über den relativen Bind-Mount `/backups`; Größe, Hash, Zielkopie
 und Aufräumen erfolgen auf dem Host. Schreibrecht und atomisches Rename durch
 den nonroot-Kern sowie alle USB-Fehlerfälle in B4/F4 erneut belegen.
+Aufbewahrung am Ziel: standardmäßig 30 Tage, abweichend mit
+`jnpt-backup.ps1 -Target <ziel> -RetentionDays <tage>` (mindestens 1),
+bei der täglichen Aufgabe entsprechend in deren Aktion. Erst nach einer
+geprüften neuen Sicherung werden überfällige reguläre Dateien des exakten
+Skript-Namensmusters nach UTC-Schreibzeit gelöscht. Die nach UTC-Dateinamen
+jüngste Sicherung, fremde Dateien und Verknüpfungen bleiben erhalten.
+Ein Aufbewahrungsfehler erhält die neue Sicherung und liefert Fehler.
+Freien Zielspeicher prüfen: Bei vollem Ziel scheitert schon die Kopie, bevor
+die Aufbewahrung läuft. Benutzerdefinierte Aufgabenparameter nach erneuter
+Diensteinrichtung wieder setzen.
 Master-Key getrennt von Sicherungen verwahren. Ein vom Rechner beschreibbares Ziel schützt nicht
 gegen einen Angreifer auf dem Rechner; wechselndes, abgezogenes USB dagegen schon. Die Wahl
 trifft der Betreiber. Wiederherstellung nach Kennwortreset und getrennte Rücksicherung gemäß
@@ -330,7 +345,8 @@ Daten des Kunden. Vor dem Start hakt die Person ab:
    wie täglich, höchstens 600 Sekunden), Pull der festen Repository-Konstante
    `ghcr.io/januaport/januaport@<digest>`, alte zwei `.env`-Zeilen ins Log,
    ausschließlich diese zwei Zeilen atomar ersetzen, `up -d`, Host-Health und
-   TLS-Fingerprint wie bei der Einrichtung, `record installed` oder `record failed`.
+   TLS-Fingerprint wie bei der Einrichtung, laufenden Image-Digest prüfen,
+   `record installed` oder `record failed`.
    UTF-8 ohne BOM und die `.env`-DACL bleiben erhalten. Der Digest wird exakt
    mit `-cmatch '\Asha256:[a-f0-9]{64}\z'` geprüft. Image-Referenzen stammen
    weder aus `latest` noch aus `reason`. Im Kern-Container läuft nur `/jnpt`;
@@ -362,7 +378,7 @@ Exit-Code bleibt wie im Lauf (auch 0 bzw. 6). Native Ausgaben und rohe
 Fehlermeldungen bleiben privat. Das Log hält höchstens 100 Zeilen ohne
 Benutzernamen. Die alten zwei Image-Zeilen vor einem späteren Lauf lokal
 festhalten; eine Logrotation ersetzt kein dauerhaftes Rückweg-Protokoll.
-Plan und Ergebnisbuchung haben 30 Sekunden Frist, die Zertifikatsabfrage über
+Plan, Ergebnisbuchung und jede der drei Digest-Abfragen haben 30 Sekunden Frist, die Zertifikatsabfrage über
 `compose run` 300 Sekunden (BOX: bei schlechter Leitung 37–48 Sekunden, sonst rund
 1 Sekunde), die Sicherung 600 Sekunden. Pull und `compose up -d` warten bis zum
 Prozessende ohne feste Frist. Erst danach folgen Prüfungen und Ergebnisbuchung.
@@ -372,6 +388,11 @@ Bei Neustart vor Docker-Bereitschaft scheitert der Plan laut mit fester Meldung 
 keinen endlosen Bereitschaftslauf. Nach Bereitschaft erneut anstoßen.
 Health wird nur vom Host aus geprüft: maximal 90 Anfragen mit je 3 Sekunden
 Frist und 2 Sekunden Pause; TLS danach maximal 30 Versuche mit 2 Sekunden Pause.
+Vor `installed` muss genau ein laufender `jnpt`-Container erscheinen:
+`compose ps --status running -q jnpt`, dessen `.Image` per Container-Inspect
+und `RepoDigests` per Image-Inspect belegen das feste Repository mit Plan-Digest.
+Fehlende/mehrdeutige Antworten, Adapterfehler oder Abweichungen liefern wie
+Health-Fehler `failed`, Exit 6 und den Rückweg von Hand.
 
 ### Rückweg von Hand
 

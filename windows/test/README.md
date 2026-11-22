@@ -1,5 +1,46 @@
 # Prüfungen für das Windows-Profil (Paket A und B1–B5)
 
+## Auswahl ohne laufende Container (#1512, auch CI)
+
+```powershell
+python -B windows/test/run_fake_tests.py
+$env:PYTHONPATH = 'windows/test'
+python -B -c "from test_profile import ROOT, verify_sums; verify_sums(ROOT)"
+python -B windows/test/rest_mutations.py
+python -B windows/test/mutations.py --fakes
+python -B windows/test/operator_mutations.py --fakes
+```
+
+Diese Auswahl führt die PS-5.1-Adapter mit Fakes, echten TEMP-Dateien,
+nativen Docker-Shims und `docker compose config` aus. Keine Docker-Engine,
+kein Docker Desktop, keine GUI, Dienste oder echten Downloads nötig.
+Die fünf vorhandenen Linux-Container-Integrationstests (Mail-Mount, TLS-Leaf,
+Caddy-Container, N4-Helfer, Skript-Läufer) gehören weiter zur vollständigen
+Adapterauswahl unten. Die vier NTFS-VM-Prüfungen bleiben ohne `JNPT_OWNER_VM`
+übersprungen; der native Caddy-HTTPS-Test bleibt ohne `JNPT_CADDY_EXE` ebenfalls
+sichtbar übersprungen. Die echte Admin-Sperre wird mit einem eingeschränkten
+Duplikat des Windows-Tokens geprüft, auch auf dem erhöhten GitHub-Runner;
+keine Kontoanlage oder Änderung am Prozess-/Benutzertoken.
+`windows-tests.yml` nutzt diese Auswahl und prüft SHA256SUMS separat.
+
+`test_rest.py` prüft den expliziten lokalen Autologon-Dateiweg (Signatur,
+Microsoft-Herausgeber, fehlende Datei, Hashprotokoll, Parameterdurchleitung,
+Download-Pin-Hinweis), die tatsächlich aufgelösten privaten Plugin-Netze samt
+Bestandsdefaults und ungültigen Kombinationen, den laufenden Image-Digest vor
+`installed` samt 30-Sekunden-Abfragen sowie die 30-Tage-Aufbewahrung am echten
+Fake-Ziel. Abgewiesene Inspect-Aufrufe erreichen den nativen Shim nicht.
+Aufbewahrungstests bieten überfällige fremde Dateien und die jüngste eigene
+Sicherung wirklich zum Löschen an; beide müssen erhalten bleiben.
+Reparse-Metadaten werden am Leseübergang ersetzt (lokal fehlt das
+Symlink-Privileg); der Löschversuch gegen die fremde TEMP-Datei verwendet den
+echten `Remove-Item`-Adapter. Ungültige IPv4-/CIDR-Werte und mehrere Pools
+werden zusätzlich direkt an der produktiven Netzprüfung angeboten.
+`rest_mutations.py` entfernt die Sperren in isolierten Profilkopien; Assertions
+müssen rot werden. Originalbytes und Summen bleiben unverändert.
+`--fakes` lässt in den beiden älteren Mutationsskripten die ausdrücklich als
+`NOT RUN` gemeldeten Linux-Engine-/Live-/Download-Fälle aus. Es ersetzt deren
+vollständige Mutationsabnahme nicht; ohne Schalter bleibt sie unverändert.
+
 Vom Repo-Root unter Windows: Python-Standardbibliothek, Windows PowerShell 5.1
 und Docker Desktop (Linux/amd64). Kein Python-Paket und kein PowerShell-Modul
 muss installiert werden. Die beiden Image-Digests der Beisteller werden aus
@@ -39,7 +80,9 @@ Dateioperationen im temporären Ordner. Fehlender Marker, falsches Konto,
 relatives Ziel mit vorhandenem Marker, unvollständiges Profil, jeder native
 Docker-Fehler, leere/fehlende Staging-Datei, Größen-/Hashfehler, Fehler nach Umbenennung
 und Host-Aufräumfehler müssen Exit ungleich 0 und keine neue Zieldatei
-liefern. Alte Sicherungen bleiben erhalten. Bei Erfolg gibt es genau eine
+liefern. Fremde alte Sicherungen bleiben erhalten. Nach geprüftem Erfolg gilt
+am Ziel 30 Tage Aufbewahrung (`-RetentionDays`); die jüngste eigene Sicherung
+bleibt erhalten. Bei Erfolg gibt es genau eine neue
 Sicherungsdatei und keine Key-Datei; die Staging-Kopie ist entfernt.
 Liegengebliebene Dateien nach dem exakten Namensmuster werden entfernt; fremde
 Dateien und Pfade außerhalb von `backups\` bleiben erhalten. Der native
@@ -78,8 +121,10 @@ verglichen. Mutationen und Standardsuite nacheinander ausführen; die
 Originalprüfung darf keine parallel angelegten temporären Testdateien sehen.
 
 Die `Autologon64.exe`-Zeile in `SHA256SUMS` ist ein externer Pin, keine Datei im
-Repo oder Profil-Download. Die echte Binärprüfung lädt ausschließlich die feste
-Sysinternals-URL und prüft Hash vor Authenticode. Die Tests nutzen ein lokales
+Repo oder Profil-Download. Der Standardweg lädt ausschließlich die feste
+Sysinternals-URL und prüft Hash vor Authenticode; `-AutologonPfad` prüft die
+explizite Betreiberdatei mit Authenticode und protokolliert ihren Hash.
+Die Tests nutzen ein lokales
 ZIP-Fixture und eine gültige Fake-Signatur, führen niemals das echte Binary aus.
 Der externe Pin wird von Manifestprüfungen separat von den Profilbytes geprüft.
 Der Live-Rundlauf ersetzt ausschließlich die Kontoidentität; alle Container und
@@ -310,7 +355,7 @@ python -B -m unittest discover -s windows/test -v
 
 `test_update.py` enthält die elf Auftragsfälle: `none`, `approved`,
 `unattended`, ungültige Digests/JSON-Zeilen, Sicherungs-/Pullfehler, rote
-Health/TLS/Start-Prüfung, nicht buchbare Ergebnisse, `rollback`, Sitzung/Profil,
+Health/TLS/Start-/Digest-Prüfung, nicht buchbare Ergebnisse, `rollback`, Sitzung/Profil,
 natives stderr/Docker noch nicht bereit sowie den kommentarlosen Wächter gegen
 eigene Kernentscheidungen. PS 5.1 läuft wirklich; `docker.cmd` auf PATH zeichnet
 die Argumente auf. Die Reihenfolge wird über Protokoll-Indizes geprüft. Das

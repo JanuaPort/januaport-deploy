@@ -222,7 +222,7 @@ function Move-Item { param($LiteralPath,$Destination)
         self.assertFalse(any('rm' in a for a in calls))
         self.assertEqual(self.staged, FOREIGN)
 
-    def test_previous_backups_are_retained(self):
+    def test_foreign_previous_backup_is_retained(self):
         result, files, _ = self.invoke(existing=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('old.jnpt-backup', files)

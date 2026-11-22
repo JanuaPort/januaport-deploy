@@ -143,9 +143,9 @@ def main():
           '-not $success -and $ownsFinal', '$false -and $ownsFinal', backup_errors)
     probe('B3 failed partial file cleanup', 'jnpt-backup.ps1',
           'if ($ownsPartial -and (Test-Path -LiteralPath $partial))', 'if ($false)', backup_errors)
-    probe('B3 no automatic retention deletion', 'jnpt-backup.ps1',
+    probe('B3 foreign previous backup retained', 'jnpt-backup.ps1',
           '        $success = $true', "        Remove-Item -LiteralPath (Join-Path $Target 'old.jnpt-backup')\n        $success = $true",
-          'test_backup.Backup.test_previous_backups_are_retained')
+          'test_backup.Backup.test_foreign_previous_backup_is_retained')
     probe('F4 successful staging cleanup', 'jnpt-backup.ps1',
           '{ Remove-Item -LiteralPath $resolved -Force }', '{ $null=$null }', backup_ok)
     print(f'B2/B3 mutations: {TOTAL} killed; original profile bytes unchanged.', flush=True)
