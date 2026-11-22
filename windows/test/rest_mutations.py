@@ -4,6 +4,10 @@ from mutations import mutant
 
 def main():
     cases = [
+        ('environment ACL retention replaced by move', 'jnpt-update.ps1',
+         '[IO.File]::Replace($temp, $path, [NullString]::Value)',
+         'Remove-Item -LiteralPath $path -Force; Move-Item -LiteralPath $temp -Destination $path',
+         'test_update.Update.test_environment_acl_matches_f5_profile_and_survives_replace'),
         ('operator signature removed', 'dienst-einrichten.ps1',
          "$signature.Status -ne 'Valid' -or", "$false -or",
          'test_rest.Autologon.test_operator_path_rejects_signature_publisher_and_missing_file'),

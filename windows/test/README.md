@@ -367,8 +367,16 @@ im Container geprüft. Die vorhandene Live-Prüfung belegt den echten
 Fingerprint-Adapter gegen Caddy; B5 im Betriebsmodell bleibt BOX-Aufgabe.
 
 Dateiaustausch, UTF-8-Bytes ohne BOM, erhaltene Kommentar-/Mail-Zeilen,
-`icacls` vor/nach dem Austausch, Logdatei und Kindprozess-Zeitlimit sind echte
-Windows-Adapter. Die Testordner liegen kurz unter dem System-Temp-Pfad.
+der SDDL-/Vererbungsvergleich vor/nach dem Austausch, Logdatei und
+Kindprozess-Zeitlimit sind echte Windows-Adapter. Die Testordner liegen kurz
+unter dem System-Temp-Pfad. Das Gerüst setzt die Profilrechte mit den echten
+F5-Funktionen und .NET-Dateiadaptern: geschützter Elternordner mit drei
+vererbbaren ACEs, `.env` erbt diese. Nur die privilegierte BA-Besitzerzuweisung
+entfällt, der aktuelle Testbenutzer ersetzt die Dienst-SID. Zusätzlich wird
+eine explizit geschützte `.env` geprüft; beide DACLs bleiben exakt erhalten.
+Die Mutation ersetzt `File.Replace` durch Löschen und Verschieben und muss
+am tatsächlichen NTFS-ACL-Vergleich scheitern. Ein bloßes Python-TEMP-Profil
+hat diese F5-Rechte nicht und kann beim Austausch erneut Vererbung auslösen.
 Zusätzliche Adapterfälle versuchen `sh`, `stat`, `compose cp`, Restore,
 Health im Container, `update rollback` und einen Pull aus einem fremden
 Repository direkt am produktiven Docker-Adapter: Abweisung vor dem nativen
