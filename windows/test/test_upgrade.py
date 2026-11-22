@@ -104,7 +104,7 @@ function Get-LeafFingerprint {'synthetic fingerprint'}
 function Get-ServedLeafFingerprint {'synthetic fingerprint'}
 function Invoke-WebRequest {param($Uri,$OutFile,[switch]$UseBasicParsing,$TimeoutSec)
     if ($OutFile) {
-        $base='https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.3.0/windows/'
+        $base='https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.4.0/windows/'
         if (-not $Uri.StartsWith($base, [StringComparison]::Ordinal)) {throw 'wrong release URL'}
         $name=$Uri.Substring($base.Length)
         $name | Add-Content (Join-Path $env:PROBE_ROOT 'downloads.txt')
@@ -248,12 +248,12 @@ Install-Profile
             self.assertEqual((target / '.env').read_bytes(), b'synthetic environment\r\n')
             self.assertEqual((target / 'secrets' / 'smtp_password').read_bytes(), b'synthetic retained mail contents')
 
-    def test_release_ref_is_windows_v030(self):
+    def test_release_ref_is_windows_v040(self):
         result = ps('Write-Output $ProfileRef; Write-Output $ProfileBase')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines(), [
-            'windows-v0.3.0',
-            'https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.3.0/windows'])
+            'windows-v0.4.0',
+            'https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.4.0/windows'])
 
     def test_legacy_three_files_upgrade_and_second_run_preserve_env_and_secrets(self):
         for manifest in [False, True]:
