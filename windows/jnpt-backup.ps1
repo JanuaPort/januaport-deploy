@@ -2,7 +2,8 @@
 [CmdletBinding()]
 param(
     [string]$ProfileDirectory = 'C:\JanuaPort\windows',
-    [string]$Target
+    [string]$Target,
+    [int]$RetentionDays = 30
 )
 
 Set-StrictMode -Version Latest
@@ -51,7 +52,24 @@ function Assert-BackupCopy {
     }
 }
 
+function Clear-ExpiredBackups {
+    if ($RetentionDays -lt 1) { throw 'Aufbewahrung muss mindestens einen Tag betragen.' }
+    $files = @(Get-ChildItem -LiteralPath $Target -File | Where-Object {
+        $_.Name -cmatch $BackupNamePattern -and
+        -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint)
+    } | Sort-Object Name -Descending)
+    if ($files.Count -eq 0) { return }
+    $newest = $files[0]
+    $cutoff = [DateTime]::UtcNow.AddDays(-$RetentionDays)
+    foreach ($file in $files) {
+        if ($file.FullName -cne $newest.FullName -and $file.LastWriteTimeUtc -lt $cutoff) {
+            Remove-Item -LiteralPath $file.FullName -Force
+        }
+    }
+}
+
 function Invoke-JnptBackup {
+    if ($RetentionDays -le 0) { throw 'Aufbewahrung muss mindestens einen Tag betragen.' }
     if ((Get-CurrentAccount) -ine ($env:COMPUTERNAME + '\jnpt-dienst')) {
         throw 'Sicherung nur in der Sitzung von jnpt-dienst starten.'
     }
@@ -70,7 +88,7 @@ function Invoke-JnptBackup {
     $staging = Join-Path $ProfileDirectory 'backups'
     if (-not (Test-Path -LiteralPath $staging -PathType Container)) { throw 'Sicherungs-Staging fehlt.' }
     # Recover only generated leftovers from previous failed runs, never foreign
-    # files or older backups on the external destination.
+    # files. Destination retention runs only after a verified new backup.
     Clear-StagedBackups
     $source = Join-Path $staging $name
     $remote = '/backups/' + $name
@@ -96,6 +114,7 @@ function Invoke-JnptBackup {
         Assert-BackupCopy $final $size $digest
         Remove-StagedBackup $source
         $success = $true
+        Clear-ExpiredBackups
         Write-Host ('Sicherung geprueft: ' + $final)
     } finally {
         try { Remove-StagedBackup $source } finally {
