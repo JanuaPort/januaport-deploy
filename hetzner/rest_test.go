@@ -15,7 +15,7 @@ func TestVolumeFailClosedRenderUndShell(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("echter Linux-Shelladapter")
 	}
-	for _, mode := range []string{"missing", "mount-failed", "unmounted", "ready"} {
+	for _, mode := range []string{"missing", "format-failed", "mount-failed", "unmounted", "ready"} {
 		t.Run(mode, func(t *testing.T) {
 			dir := t.TempDir()
 			device := filepath.Join(dir, "device")
@@ -40,7 +40,8 @@ func TestVolumeFailClosedRenderUndShell(t *testing.T) {
 			os.WriteFile(filepath.Join(dir, "fstab"), nil, 0600)
 			for _, name := range []string{"sleep", "blkid", "mkfs.ext4", "mount", "mountpoint", "docker", "systemd-tmpfiles"} {
 				shim := "#!/bin/sh\necho " + name + " >> \"$TRACE\"\n"
-				if name == "mount" && mode == "mount-failed" || name == "mountpoint" && mode == "unmounted" {
+				if name == "mount" && mode == "mount-failed" || name == "mountpoint" && mode == "unmounted" ||
+					(name == "blkid" || name == "mkfs.ext4") && mode == "format-failed" {
 					shim += "exit 1\n"
 				}
 				os.WriteFile(filepath.Join(dir, name), []byte(shim), 0700)

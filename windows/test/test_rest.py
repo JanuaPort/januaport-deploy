@@ -131,13 +131,29 @@ Install-Profile
             self.assertIn('Plugin-Netz', result.stderr)
             self.assertNotIn('FORBIDDEN-START', result.stdout)
 
+    def test_malformed_addresses_cidrs_and_multiple_pools_rejected(self):
+        cfg = json.loads(config().stdout)
+        for field, value in [('ip','::1'), ('ip','172.21.00.2'), ('ip','172.21.0.256'),
+                             ('subnet','172.21.0.0'), ('subnet','172.21.0.0/16junk'), ('subnet','172.21.0.1/16'),
+                             ('range','172.21.128.1/17'), ('pools','two')]:
+            with self.subTest(field=field, value=value):
+                candidate = json.loads(json.dumps(cfg))
+                pools = candidate['networks']['plugins']['ipam']['config']
+                if field == 'ip': candidate['services']['jnpt']['networks']['plugins']['ipv4_address'] = value
+                elif field == 'pools': pools.append(dict(pools[0]))
+                else: pools[0]['subnet' if field == 'subnet' else 'ip_range'] = value
+                result = ps("Assert-PluginNetwork (ConvertFrom-Json -InputObject @'\n"+json.dumps(candidate)+"\n'@)")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('Plugin-Netz', result.stderr)
+
 
 class RunningDigest(unittest.TestCase):
     invoke = test_update.Update.invoke
     records = staticmethod(test_update.Update.records)
 
     def test_wrong_missing_or_failed_running_digest_records_health_failure(self):
-        for mode in ['digest-mismatch','digest-missing','digest-error','container-stopped','container-ambiguous']:
+        for mode in ['digest-mismatch','digest-missing','digest-error','digest-repository',
+                     'container-stopped','container-ambiguous','image-error','image-invalid']:
             with self.subTest(mode=mode):
                 result, trace = self.invoke(mode=mode)
                 self.assertEqual(result.returncode, 6, result.stderr)
@@ -218,6 +234,34 @@ function Clear-ExpiredBackups {Write-Host 'RETENTION-CALLED'}
         backups = [name for name in files if name.endswith('.jnpt-backup')]
         self.assertEqual(len(backups), 1)
         self.assertEqual(files[backups[0]], b'synthetic backup contents\n')
+
+    def test_invalid_retention_rejected_before_backup_adapter(self):
+        from test_backup import Backup
+        result, files, calls = Backup().invoke(extra='$RetentionDays=0')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(calls, [])
+        self.assertEqual(set(files), {'.jnpt-backup-ziel'})
+
+    def test_reparse_metadata_protects_real_foreign_file_from_deletion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            foreign = root/('jnpt-20000101T000000000Z-'+'a'*32+'.jnpt-backup')
+            newest = root/('jnpt-20990101T000000000Z-'+'b'*32+'.jnpt-backup')
+            foreign.write_bytes(b'foreign link fixture'); newest.write_bytes(b'newest')
+            os.utime(foreign, (946684800,946684800))
+            # This account lacks SeCreateSymbolicLinkPrivilege. Replace only
+            # the enumeration metadata; Remove-Item is the real file adapter.
+            result = ps("$Target='"+tmp+"'; "+r'''
+function Get-ChildItem {param($LiteralPath,[switch]$File)
+    foreach ($f in Microsoft.PowerShell.Management\Get-ChildItem -LiteralPath $LiteralPath -File) {
+        [pscustomobject]@{Name=$f.Name;FullName=$f.FullName;LastWriteTimeUtc=$f.LastWriteTimeUtc;
+            Attributes=$(if ($f.Name -like '*20000101*') {[IO.FileAttributes]::ReparsePoint} else {$f.Attributes})}
+    }
+}
+Clear-ExpiredBackups
+''', ROOT/'jnpt-backup.ps1')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(foreign.is_file(), 'reparse-marked foreign file deleted by real Remove-Item')
 
 
 class Workflow(unittest.TestCase):

@@ -50,11 +50,13 @@ if a==['compose','up','-d']:
 if a==['compose','ps','--status','running','-q','jnpt']:
     print('' if mode=='container-stopped' else ('c'*64+'\n'+'e'*64 if mode=='container-ambiguous' else 'c'*64)); sys.exit(0)
 if a==['inspect','--type','container','--format','{{.Image}}','c'*64]:
+    if mode=='image-error': sys.exit(18)
+    if mode=='image-invalid': print('not-an-image-id'); sys.exit(0)
     print('sha256:'+'d'*64); sys.exit(0)
 if a==['image','inspect','--format','{{json .RepoDigests}}','sha256:'+'d'*64]:
     if mode=='digest-error': sys.exit(18)
     print(json.dumps([] if mode=='digest-missing' else [
-        'ghcr.io/januaport/januaport@sha256:'+('a' if mode=='digest-mismatch' else 'b')*64])); sys.exit(0)
+        ('other.example/core' if mode=='digest-repository' else 'ghcr.io/januaport/januaport')+'@sha256:'+('a' if mode=='digest-mismatch' else 'b')*64])); sys.exit(0)
 if a==['compose','run','--rm','--no-deps','--entrypoint','openssl','cert-init','x509','-in','/certs/cert.pem','-noout','-fingerprint','-sha256']:
     print('sha256 Fingerprint='+':'.join(['AB']*32)); sys.exit(0)
 sys.exit(92)
