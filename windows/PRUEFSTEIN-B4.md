@@ -1,7 +1,8 @@
 # Prüfstein B4: Dienstbetrieb und Wiederherstellung
 
 Offene Abnahme auf einem eigenen Testrechner mit ausschließlich synthetischen
-Daten. Die Python-Fakes ersetzen diesen Nachweis nicht. Ergebnis, Windows- und
+Daten. Die Abnahme von `windows-v0.4.0` ist offen (Prüfstein
+JanuaPort/januaport#1531). Die Python-Fakes ersetzen diesen Nachweis nicht. Ergebnis, Windows- und
 Docker-Version, Backend, Uhrzeit und Nachweis je Schritt im Abnahmeprotokoll
 festhalten; keine Geheimnisse oder Daten des Betreibers aufnehmen.
 
@@ -22,9 +23,9 @@ Für #1499 ist die **Abnahme mit echtem Docker Desktop offen**; sie muss gemäß
    vorhandenen weiteren Mitglieder. Die frühere Annahme getrennter Engines
    und Volumes nach Windows-Konto ist widerlegt.
 
-2. **Upgrade 0.1.0 → 0.3.0 am Testrechner einmal gehen.** Von den drei
+2. **Upgrade 0.1.0 → 0.4.0 am Testrechner einmal gehen.** Von den drei
    Originaldateien plus `.env` ausgehen (alte Summenliste optional), neues
-   Einrichtungsskript verwenden. Vollständiges 0.3.0-Profil, unveränderte `.env`
+   Einrichtungsskript verwenden. Vollständiges 0.4.0-Profil, unveränderte `.env`
    und Secrets, bisheriges Kern-Image und Zertifikat prüfen; zweiter Lauf ohne
    Download. Profilpfad und ausführendes Windows-Konto separat prüfen;
    dieselbe Engine und dieselben Volumes werden weiterverwendet.

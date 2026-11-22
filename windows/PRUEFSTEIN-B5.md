@@ -2,7 +2,8 @@
 
 **Abnahmestatus: GRÜN @`a87f571` — BOX auf VM `jnpt-b4`, Protokoll
 `c-6796028725` auf #1246.** Der Tag `windows-v0.3.0` ist veröffentlicht. Die folgende Checkliste gilt
-auch für weitere Abnahmen des Profils.
+auch für weitere Abnahmen des Profils. Die Abnahme von `windows-v0.4.0` ist
+**offen (Prüfstein JanuaPort/januaport#1531)**.
 **Audit-Nachzug, SEC B1:** #1498 ist **gebaut, nicht an NTFS belegt**;
 für #1499 ist die **Abnahme mit echtem Docker Desktop offen**. Die frühere
 grüne B5-Abnahme gilt für den veröffentlichten Stand, nicht für diese Fixes.
@@ -20,10 +21,14 @@ Die Adaptertests ersetzen diese Abnahme nicht. B4 gilt ergänzend weiter.
   `windows-v0.2.0` (elf Profil-Dateien) und `windows-v0.3.0` (13 Profil-Dateien)
   getrennt beginnen, jeweils mit gefüllten synthetischen `.env`-/Secret-Dateien.
   Neues `einrichten.ps1` in `jnpt-dienst` ausführen; vollständiges Zielprofil
-  des geprüften Release, unveränderte `.env` und Secrets, altes Kern-Image und Zertifikat
+  von `windows-v0.4.0`, unveränderte `.env` und Secrets, altes Kern-Image und Zertifikat
   belegen. Zweiter Lauf ohne Download. Eine geänderte Originaldatei muss das
   automatische Upgrade sperren. `dienst-einrichten.ps1` aus dem geprüften
-  Zielrelease als Admin mit bisherigem `-BackupTarget` wiederholen.
+  0.4.0-Zielrelease als Admin mit bisherigem `-BackupTarget` wiederholen;
+  BA-Besitzer-/Dateirechte und erneute Autologon-Signaturprüfung belegen.
+  Plugin-Netzdefaults ohne neue `.env`-Einträge und 30-Tage-Aufbewahrung nach
+  geprüfter Sicherung (jüngste eigene Sicherung und fremde Dateien bleiben)
+  gemäß [Upgrade-Folgeschritten](README.md#profil-upgrade-von-010-020-oder-030) prüfen.
   „JanuaPort Update“ hat `jnpt-dienst`, Interactive/Limited, `IgnoreNew`,
   keinen Auslöser und ein `EncodedCommand` mit genau diesem Sicherungsziel.
 - [ ] **Feed und Freigabe:** Zunächst leere/fehlende Werte für

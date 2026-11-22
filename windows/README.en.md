@@ -35,7 +35,7 @@ from a workstation in the local subnet afterwards. Admin port 8484 stays on loop
 
 ## Two commands
 
-The immutable **profile release tag** `windows-v0.3.0` is published. The
+The immutable **profile release tag** `windows-v0.4.0` is published. The
 following URL is available. `<tag>` in distribution instructions means this profile release,
 not the core image tag or `main`. The installer downloads the profile and its
 checksum manifest from this fixed tag. New profile releases must update the
@@ -46,7 +46,7 @@ After [service setup](#service-operation-b2), the operator commissions the syste
 in the `jnpt-dienst` session. The maintenance account only triggers tasks.
 
 ```powershell
-curl.exe -fLo e.ps1 https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.3.0/windows/einrichten.ps1
+curl.exe -fLo e.ps1 https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.4.0/windows/einrichten.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\e.ps1
 ```
 
@@ -94,7 +94,7 @@ For `windows-v0.3.0`, all 13 profile files from the published tag must match.
 it separately, so it may be absent from an old profile.
 Any changed profile file blocks automatic upgrade.
 `.env` must exist; the old `SHA256SUMS` may be present or absent. It downloads the
-complete profile and manifest only from `windows-v0.3.0` into a temporary directory
+complete profile and manifest only from `windows-v0.4.0` into a temporary directory
 and verifies everything before writing to the target. It then replaces the
 release-managed files and adds the missing READMEs, `.gitignore`, runbook, B2/B3
 scripts including `jnpt-sperren.ps1`, `jnpt-update.ps1` and both acceptance checklists. Setup and upgrade
@@ -108,10 +108,29 @@ Missing mail secret files are created empty as before. There is no image prompt
 or change to the saved core image. Without `-NeuesZertifikat`, the certificate
 and key remain unchanged. Local staging by `dienst-einrichten.ps1` recognizes
 the same 0.1.0, 0.2.0 or 0.3.0 original files and uses its verified release directory.
-After the 0.2.0 → 0.3.0 file upgrade, rerun `dienst-einrichten.ps1` as
-administrator from the verified 0.3.0 release with the previous `-BackupTarget`
-to register “JanuaPort Update”. This file upgrade preserves the core image.
-Acceptance is covered by [B5](PRUEFSTEIN-B5.md).
+**Follow-up steps 0.3.0 → 0.4.0 (also for older sources):** After the file
+upgrade, rerun `dienst-einrichten.ps1` from the complete, verified
+`windows-v0.4.0` release as administrator with the previous `-BackupTarget`.
+Only this run applies the new BA ownership and file permissions
+(#1498, including tree checks before writing) and registers the tasks again.
+The file upgrade alone does not apply these permissions.
+Autologon is verified again on repeat runs: the default download requires the
+fixed hash and a valid Microsoft signature. If the download pin has changed,
+provide the operator's file through `-AutologonPfad <file>`; this path also
+requires a valid Microsoft signature and prints the hash.
+`-KennwortNeu` is needed only for a deliberate password change or missing autologon.
+
+The new `einrichten.ps1` already checks the plugin network against the resolved
+Compose configuration. Without new `.env` entries, the subnet, fixed IP and
+dynamic range stay the same; for LAN/VPN conflicts, adjust all three values
+`JNPT_PLUGIN_SUBNET`, `JNPT_PLUGIN_IP`, `JNPT_PLUGIN_RANGE` together.
+After the next successfully verified backup, destination retention defaults to
+30 days (`-RetentionDays`); the newest own backup and foreign files are retained.
+This needs no new task. The file upgrade preserves the core image.
+Acceptance of 0.4.0 is **open (test milestone JanuaPort/januaport#1531)**:
+verify the file upgrade, administrative repeat run, permissions, autologon,
+plugin network and retention on the test VM; [B4](PRUEFSTEIN-B4.md) and
+[B5](PRUEFSTEIN-B5.md) also apply.
 
 This file upgrade does not move the profile directory. Service operation uses
 `C:\JanuaPort\windows`; `%LOCALAPPDATA%\JanuaPort\windows` is a legacy location.
@@ -134,7 +153,7 @@ channel. Verify account changes using [B4, step 2a](PRUEFSTEIN-B4.md).
 ## Service operation (B2)
 
 On the intended deployment machine, use an administrative PowerShell in the
-`windows` directory of the complete, verified `windows-v0.3.0` release:
+`windows` directory of the complete, verified `windows-v0.4.0` release:
 `.\dienst-einrichten.ps1 -BackupTarget 'E:\JanuaPort-Backup'`. GATE publishes
 the tag after review. The script verifies `SHA256SUMS`, creates `jnpt-dienst`,
 adds it to `docker-users`. **B-7/F5:** For both `C:\JanuaPort` and
@@ -638,7 +657,8 @@ Manual recovery and concurrent daily backups: [RUNBOOK](RUNBOOK.md#7-update-b5).
 BOX completed [B5](PRUEFSTEIN-B5.md) on VM `jnpt-b4` (acceptance GREEN,
 record `c-6796028725`); `windows-v0.3.0` is published. Docker Desktop continues to run in the logged-in, locked
 `jnpt-dienst` session. That historical acceptance does not cover #1498 or #1499;
-their SEC B1 checks above remain open. Tailscale is outside this package.
+their SEC B1 checks above remain open. Acceptance of `windows-v0.4.0` is open
+(test milestone JanuaPort/januaport#1531). Tailscale is outside this package.
 
 
 ## Remote maintenance
