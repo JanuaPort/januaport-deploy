@@ -47,7 +47,7 @@ Arbeitsplatz im lokalen Subnetz prüfen. Der Admin-Port 8484 bleibt auf Loopback
 
 ## Zwei Befehle
 
-Der unveränderliche Profil-Tag `windows-v0.3.0` ist veröffentlicht; die URL
+Der unveränderliche Profil-Tag `windows-v0.4.0` ist veröffentlicht; die URL
 unten ist nutzbar. `<tag>` in eigenen Verteilanweisungen steht für diesen
 Profil-Release, nicht für einen JanuaPort-Image-Tag und nicht für `main`.
 Das Skript lädt alle Dateien und `SHA256SUMS` genau von diesem festen Tag.
@@ -60,7 +60,7 @@ Ersteinrichtung durch den Betreiber in der Sitzung von `jnpt-dienst`, nach der
 In einer normalen PowerShell von `jnpt-dienst` im gewünschten Downloadordner:
 
 ```powershell
-curl.exe -fLo e.ps1 https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.3.0/windows/einrichten.ps1
+curl.exe -fLo e.ps1 https://raw.githubusercontent.com/JanuaPort/januaport-deploy/windows-v0.4.0/windows/einrichten.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\e.ps1
 ```
 
@@ -110,7 +110,7 @@ aus dem veröffentlichten Tag. `Autologon64.exe` gehört nicht zum Profilverglei
 Die Diensteinrichtung lädt sie separat; sie darf im Altprofil fehlen.
 Eine abweichende Profildatei sperrt das automatische Upgrade.
 `.env` muss vorhanden sein; eine alte `SHA256SUMS` darf vorhanden sein oder fehlen.
-Es lädt sämtliche Dateien und die Summenliste ausschließlich von `windows-v0.3.0`
+Es lädt sämtliche Dateien und die Summenliste ausschließlich von `windows-v0.4.0`
 in einen temporären Ordner und prüft sie vollständig, bevor es im Ziel schreibt.
 Danach ersetzt es die releaseverwalteten Dateien und ergänzt die bisher fehlenden
 READMEs, `.gitignore`, das Runbook sowie B2/B3/B5-Skripte einschließlich
@@ -128,10 +128,29 @@ angelegt. Es gibt keine Image-Abfrage und keinen Wechsel des gespeicherten
 Kern-Images. Ohne `-NeuesZertifikat` bleiben Zertifikat und Schlüssel erhalten.
 Die lokale Bereitstellung durch `dienst-einrichten.ps1` erkennt dieselben
 0.1.0-, 0.2.0- bzw. 0.3.0-Dateien und verwendet dafür den bereits geprüften Release-Ordner.
-Bei 0.2.0 → 0.3.0 anschließend `dienst-einrichten.ps1` aus dem geprüften
-0.3.0-Release als Administrator mit dem bisherigen `-BackupTarget` wiederholen,
-damit die Aufgabe „JanuaPort Update“ registriert wird. Dieser Dateischritt
-aktualisiert das Kern-Image nicht. Die Abnahme steht in [B5](PRUEFSTEIN-B5.md).
+**Folgeschritte 0.3.0 → 0.4.0 (auch bei älteren Herkünften):** Nach dem
+Datei-Upgrade `dienst-einrichten.ps1` aus dem vollständigen, geprüften
+`windows-v0.4.0`-Release als Administrator mit dem bisherigen `-BackupTarget`
+wiederholen. Erst dieser Lauf setzt die neuen BA-Besitzer- und Dateirechte
+(#1498, einschließlich Baumprüfung vor dem Schreiben) und registriert die
+Aufgaben erneut. Das bloße Datei-Upgrade setzt diese Rechte nicht.
+Autologon wird auch beim Wiederholungslauf erneut geprüft: Der Standarddownload
+benötigt den festen Hash und eine gültige Microsoft-Signatur. Bei geändertem
+Download-Pin die Betreiberdatei über `-AutologonPfad <datei>` übergeben; auch
+dort ist die gültige Microsoft-Signatur erforderlich und der Hash wird ausgegeben.
+`-KennwortNeu` ist nur bei bewusstem Kennwortwechsel oder fehlendem Autologon nötig.
+
+Die Plugin-Netzprüfung läuft bereits im neuen `einrichten.ps1` gegen die
+aufgelöste Compose-Konfiguration. Ohne neue `.env`-Einträge bleiben Subnetz,
+feste IP und dynamische Range gleich; bei LAN-/VPN-Konflikten alle drei Werte
+`JNPT_PLUGIN_SUBNET`, `JNPT_PLUGIN_IP`, `JNPT_PLUGIN_RANGE` gemeinsam anpassen.
+Nach der nächsten erfolgreich geprüften Sicherung gilt am Sicherungsziel
+standardmäßig 30 Tage Aufbewahrung (`-RetentionDays`); die jüngste eigene
+Sicherung und fremde Dateien bleiben erhalten. Dafür ist keine neue Aufgabe nötig.
+Das Kern-Image bleibt beim Datei-Upgrade erhalten. Die Abnahme von 0.4.0 ist
+**offen (Prüfstein JanuaPort/januaport#1531)**: Datei-Upgrade, administrativen
+Wiederholungslauf, Rechte, Autologon, Plugin-Netz und Aufbewahrung auf der Test-VM
+belegen; [B4](PRUEFSTEIN-B4.md) und [B5](PRUEFSTEIN-B5.md) gelten ergänzend.
 
 Diese Dateimigration verschiebt den Profilordner nicht. Für den Dienstbetrieb
 bleibt das Ziel `C:\JanuaPort\windows`; eine frühere Ablage unter
@@ -156,7 +175,7 @@ erneut koppeln. Den Kontowechsel nach [B4, Schritt 2a](PRUEFSTEIN-B4.md) prüfen
 ## Dienstbetrieb (B2)
 
 Admin-PowerShell, nur auf dem vorgesehenen Betriebsrechner: den vollständigen,
-geprüften Release `windows-v0.3.0` bereitstellen, im enthaltenen Ordner `windows`
+geprüften Release `windows-v0.4.0` bereitstellen, im enthaltenen Ordner `windows`
 `dienst-einrichten.ps1 -BackupTarget 'E:\JanuaPort-Backup'` ausführen. GATE
 veröffentlicht den Tag erst nach Prüfung; dieses Paket erzeugt keinen Tag.
 Das Skript prüft zuerst `SHA256SUMS`, legt `jnpt-dienst` an, nimmt ihn in
@@ -701,7 +720,8 @@ Rückweg von Hand und gleichzeitige tägliche Sicherung: [RUNBOOK](RUNBOOK.md#7-
 BOX hat den [Prüfstein B5](PRUEFSTEIN-B5.md) auf VM `jnpt-b4` abgenommen
 (Abnahmestatus GRÜN, Protokoll `c-6796028725`); `windows-v0.3.0` ist veröffentlicht. Docker Desktop läuft weiterhin in der angemeldeten,
 gesperrten Sitzung von `jnpt-dienst`. Diese historische Abnahme umfasst #1498
-und #1499 nicht; deren SEC-B1-Prüfsteine oben sind weiterhin offen.
+und #1499 nicht; deren SEC-B1-Prüfsteine oben sind weiterhin offen. Die Abnahme
+von `windows-v0.4.0` ist offen (Prüfstein JanuaPort/januaport#1531).
 Tailscale gehört nicht zu diesem Paket.
 
 ## Fernwartung

@@ -26,7 +26,7 @@ Status labels: **Built** · **In progress** · **Planned**. Each entry says what
 | Environment | Status | Guide |
 |---|---|---|
 | Docker Compose (generic, self-hosting) | **Built.** Operated by JanuaPort GmbH (showcase pattern). | [`compose/`](compose/) |
-| Windows Pro / Docker Desktop (LAN TLS, A + B1–B5) | **Built.** B4 and B5 accepted; profile tag `windows-v0.3.0` published. Operator firewall, reboot, restore and update verified in the acceptance profile. | [`windows/`](windows/README.en.md) |
+| Windows Pro / Docker Desktop (LAN TLS, A + B1–B5) | **Built.** Profile tag `windows-v0.4.0` published; 0.4.0 acceptance open (JanuaPort/januaport#1531). B4/B5 accepted for `windows-v0.3.0`: operator firewall, reboot, restore and update verified in that acceptance profile. | [`windows/`](windows/README.en.md) |
 | Hetzner Cloud (Terraform) | **Built.** Operated by JanuaPort GmbH (showcase pattern). | [`hetzner/`](hetzner/) |
 | Microsoft Azure | **Built, untested.** Community template. | [`azure/`](azure/) |
 | Amazon Web Services (AWS) | **Built, untested.** Community template. | [`aws/`](aws/) |

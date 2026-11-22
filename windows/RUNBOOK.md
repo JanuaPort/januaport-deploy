@@ -312,10 +312,20 @@ Daten des Kunden. Vor dem Start hakt die Person ab:
 ### Freigabe, Anstoß und Ergebnis
 
 1. [PRUEFSTEIN-B5.md](PRUEFSTEIN-B5.md) ist durch BOX auf VM `jnpt-b4`
-   GRÜN abgenommen (`c-6796028725`); `windows-v0.3.0` ist veröffentlicht. Ein unverändertes
-   0.1.0-, 0.2.0- oder 0.3.0-Profil über den geprüften Zielrelease aktualisieren; anschließend
-   `dienst-einrichten.ps1` als Administrator mit dem bisherigen `-BackupTarget`
-   wiederholen. Das legt die Aufgabe „JanuaPort Update“ an: `jnpt-dienst`,
+   GRÜN abgenommen (`c-6796028725`); `windows-v0.3.0` ist veröffentlicht.
+   Der neue Zielrelease ist `windows-v0.4.0`; seine Abnahme ist **offen
+   (Prüfstein JanuaPort/januaport#1531)**. Ein unverändertes 0.1.0-, 0.2.0- oder
+   0.3.0-Profil über den [Upgrade-Weg](README.md#profil-upgrade-von-010-020-oder-030)
+   aktualisieren; anschließend `dienst-einrichten.ps1` aus dem geprüften
+   0.4.0-Release als Administrator mit dem bisherigen `-BackupTarget` wiederholen.
+   Das setzt die neuen BA-Besitzer-/Dateirechte und prüft Autologon erneut
+   (fester Download-Pin und Microsoft-Signatur; bei geändertem Pin die signierte
+   Betreiberdatei mit `-AutologonPfad` angeben). Plugin-Netzdefaults bleiben ohne
+   neue `.env`-Einträge gleich; das neue `einrichten.ps1` prüft das aufgelöste Netz.
+   Nach der nächsten geprüften Sicherung gelten standardmäßig 30 Tage Aufbewahrung;
+   jüngste eigene Sicherung und fremde Dateien bleiben erhalten. Diese Schritte
+   auf der Test-VM belegen. Der Wiederholungslauf registriert auch die Aufgabe
+   „JanuaPort Update“: `jnpt-dienst`,
    Interactive/Limited, `IgnoreNew`, kein Auslöser. Diese historische Abnahme
    umfasst die noch offenen SEC-B1-Prüfsteine für #1498 und #1499 nicht.
 2. Feed: VENDOR-Feed oder ein öffentlich erreichbarer Test-Feed; private Ziele

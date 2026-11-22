@@ -148,7 +148,7 @@ beim zweiten Lauf nichts nach. Download/HTTP und Docker sind Fakes; Datei- und
 Summenadapter sind echt. Download- und Hashfehler dürfen vor der ersten
 Ersetzung keine vorhandene Datei ändern. Geänderte/unvollständige Altprofile
 werden vor dem Download abgewiesen. Die lokale Bereitstellung über B2 wird
-ebenfalls geprüft. Ein Test hält `$ProfileRef` auf `windows-v0.3.0` fest.
+ebenfalls geprüft. Ein Test hält `$ProfileRef` und die Download-Basis auf `windows-v0.4.0` fest.
 
 B-7/F5 prueft die vollstaendige geschuetzte DirectorySecurity mit genau drei
 expliziten FullControl-Regeln (ContainerInherit, ObjectInherit, Propagation None,
@@ -354,7 +354,7 @@ vollständiges Desktop-Pairing und ein produktiver Desktop-Auftrag sind weitere
 Abnahmeschritte; die leere Kopplungsanfrage im Rundlauf ist kein solcher Beleg.
 
 
-## B5: Update und Profil 0.3.0
+## B5: Update und Profil 0.4.0
 
 ```powershell
 $env:PYTHONPATH = 'windows/test'
@@ -447,11 +447,11 @@ Prozessumgebung und `.env`, gesetzt/leer/fehlend und nur beim Dienst `jnpt`.
 Interactive/Limited als `jnpt-dienst`, IgnoreNew, kein Auslöser, `EncodedCommand`
 mit USB-Wurzel, Apostroph und SMB-Ziel. Beide Dateilisten und Summen enthalten
 Update-Skript und B5-Prüfstein. `test_upgrade.py` liest zusätzlich die elf
-veröffentlichten 0.2.0-Dateien aus dem lokalen Tag und führt 0.2.0 → 0.3.0 durch
+veröffentlichten 0.2.0-Dateien aus dem lokalen Tag und führt 0.2.0 → 0.4.0 durch
 beide Installer mit echten Datei-/Hashadaptern aus. `.env` und Secret-Inhalte
 bleiben erhalten, der zweite Lauf lädt nichts. Zusätzlich erzeugt der Test den
-exakten v0.3.0-Baum aus `git show windows-v0.3.0:windows/<Datei>`: Alle 13
-Profil-Dateien werden durch beide Installer ersetzt. Die separat heruntergeladene
+exakten v0.3.0-Baum aus `git show windows-v0.3.0:windows/<Datei>`: Beim Upgrade
+0.3.0 → 0.4.0 werden alle 13 Profil-Dateien durch beide Installer ersetzt. Die separat heruntergeladene
 `Autologon64.exe` ist kein ProfileFile; Erfolg wird ohne und mit einer synthetischen
 EXE geprüft (sie wird nie ausgeführt). Ein geändertes Byte in jeder der elf v0.2.0-
 und 13 v0.3.0-Dateien sperrt beide Wege an echten Datei-/Hashadaptern.
@@ -476,4 +476,7 @@ USB-Sicherung, gemeinsame Engine, Rechtegleichheit, Exit 3/6, manueller Rückweg
 und früher Anstoß nach Neustart. Der Hersteller-Feed oder ein öffentlich
 erreichbarer Test-Feed ist nötig; private Ziele sperrt der Kern per SSRF-Schutz.
 Das Wartungskonto ruft nach Betriebsregel kein `docker` auf. Die Standardsuite
-belegt diese Windows-Betriebsabnahme nicht selbst.
+belegt diese Windows-Betriebsabnahme nicht selbst. Die Abnahme von
+`windows-v0.4.0` ist **offen (Prüfstein JanuaPort/januaport#1531)**; die
+[Upgrade-Folgeschritte](../README.md#profil-upgrade-von-010-020-oder-030) einschließlich
+des administrativen Wiederholungslaufs sind auf der Test-VM zu belegen.

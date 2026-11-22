@@ -9,7 +9,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 # Dieser Release-Tag muss vor dem veroeffentlichten Aufruf existieren und
 # unveraenderlich bleiben. Kein main/Branch als Downloadquelle.
-$ProfileRef = 'windows-v0.3.0'
+$ProfileRef = 'windows-v0.4.0'
 $ProfileBase = "https://raw.githubusercontent.com/JanuaPort/januaport-deploy/$ProfileRef/windows"
 $Repository = 'ghcr.io/januaport/januaport'
 $ProfileFiles = @('docker-compose.yml', 'Caddyfile', 'einrichten.ps1', '.gitignore',
