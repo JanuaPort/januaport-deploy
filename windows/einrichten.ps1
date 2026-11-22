@@ -196,6 +196,39 @@ function Test-LegacyProfile {
     return $false
 }
 
+function Assert-PluginNetwork {
+    param($Configuration)
+    function ConvertTo-IPv4Number([string]$Text) {
+        if ($Text -cnotmatch '\A(?:0|[1-9][0-9]{0,2})(?:\.(?:0|[1-9][0-9]{0,2})){3}\z') { throw 'Plugin-Netz: IPv4 erforderlich.' }
+        [long]$value = 0
+        foreach ($part in $Text.Split('.')) {
+            if ([int]$part -gt 255) { throw 'Plugin-Netz: IPv4 ungueltig.' }
+            $value = $value * 256 + [int]$part
+        }
+        return $value
+    }
+    function Get-IPv4Bounds([string]$CIDR) {
+        if ($CIDR -cnotmatch '\A([^/]+)/([0-9]|[12][0-9]|3[0-2])\z') { throw 'Plugin-Netz: CIDR erforderlich.' }
+        $address = ConvertTo-IPv4Number $Matches[1]
+        $size = [long][Math]::Pow(2, (32 - [int]$Matches[2]))
+        if ($address % $size -ne 0) { throw 'Plugin-Netz: kanonisches Netz erforderlich.' }
+        return @($address, ($address + $size - 1))
+    }
+    $pool = @($Configuration.networks.plugins.ipam.config)
+    if ($pool.Count -ne 1) { throw 'Plugin-Netz: genau ein Subnetz erforderlich.' }
+    $subnet = Get-IPv4Bounds $pool[0].subnet
+    $range = Get-IPv4Bounds $pool[0].ip_range
+    $ip = ConvertTo-IPv4Number $Configuration.services.jnpt.networks.plugins.ipv4_address
+    $private = ($subnet[0] -ge 167772160 -and $subnet[1] -le 184549375) -or
+        ($subnet[0] -ge 2886729728 -and $subnet[1] -le 2887778303) -or
+        ($subnet[0] -ge 3232235520 -and $subnet[1] -le 3232301055)
+    if (-not $private -or $ip -le $subnet[0] -or $ip -ge $subnet[1] -or
+        $range[0] -lt $subnet[0] -or $range[1] -gt $subnet[1] -or
+        ($ip -ge $range[0] -and $ip -le $range[1])) {
+        throw 'Plugin-Netz: privates Subnetz, passende Range und freie feste IP erforderlich.'
+    }
+}
+
 function Install-Profile {
     Assert-DienstSession
     Get-Command docker -ErrorAction Stop | Out-Null
@@ -260,6 +293,7 @@ function Install-Profile {
     New-Item -ItemType Directory -Path (Join-Path $Directory 'backups') -Force | Out-Null
     Push-Location $Directory
     try {
+        Assert-PluginNetwork (ConvertFrom-Json -InputObject ((Invoke-Docker @('compose', 'config', '--format', 'json')) -join "`n"))
         Invoke-Docker @('compose', 'config', '--quiet') | Out-Host
         if ($NeuesZertifikat) {
             Invoke-Docker @('compose', 'stop', 'caddy') | Out-Host
