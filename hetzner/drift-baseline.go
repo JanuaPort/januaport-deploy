@@ -27,7 +27,7 @@ func sections(src []byte) map[string]string {
 	vars := map[string]cty.Value{"script_runner_enabled": cty.False}
 	for k, v := range map[string]string{
 		"domain": "mcp.example.com", "acme_email": "admin@example.org", "ts_hostname": "jnpt",
-		"image_ref": "ghcr.io/januaport/januaport:0.104.0", "git_repo": "https://github.com/JanuaPort/januaport.git", "git_ref": "v0.104.0",
+		"image_ref": "ghcr.io/januaport/januaport:0.106.0", "git_repo": "https://github.com/JanuaPort/januaport.git", "git_ref": "v0.106.0",
 		"update_manifest_url": "", "update_plugins_url": "", "update_public_keys": "", "updater_image_repo": "ghcr.io/januaport/januaport",
 		"volume_device": "/dev/disk/by-id/scsi-0HC_Volume_123",
 	} {

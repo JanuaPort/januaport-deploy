@@ -120,7 +120,7 @@ variable "name" {
 variable "image_ref" {
   description = <<-EOT
     Gepinnter Image-Tag, den die VM aus der Registry zieht, z. B.
-    ghcr.io/januaport/januaport:0.104.0. PFLICHT (kein Default): bewusst KEIN
+    ghcr.io/januaport/januaport:0.106.0. PFLICHT (kein Default): bewusst KEIN
     `latest`, damit der Deploy reproduzierbar auf einem festen Tag steht.
     cloud-init bereitet die öffentliche .env mit JANUAPORT_IMAGE vor;
     jnpt-start installiert sie nach der Dateiablage neben der Prod-Compose.
@@ -228,9 +228,9 @@ variable "git_repo" {
 }
 
 variable "git_ref" {
-  description = "Branch/Tag/Commit-SHA der Konfig-Dateien. Default v0.104.0 passend zum Beispiel-Image; für reproduzierbare Deploys Release-Tag oder vollständigen Commit-SHA wählen. Bestehende Arbeitskopien bleiben bei erneutem Start erhalten."
+  description = "Branch/Tag/Commit-SHA der Konfig-Dateien. Default v0.106.0 passend zum Beispiel-Image; für reproduzierbare Deploys Release-Tag oder vollständigen Commit-SHA wählen. Bestehende Arbeitskopien bleiben bei erneutem Start erhalten."
   type        = string
-  default     = "v0.104.0"
+  default     = "v0.106.0"
 }
 
 variable "git_token" {
