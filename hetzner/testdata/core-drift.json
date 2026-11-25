@@ -1,5 +1,5 @@
 {
-  "SourceCommit": "c7fa1c4673ea1cd637cd5502c73d8f316777e05c",
+  "SourceCommit": "b9520a105659d343a28fa0f1a0a84d24eae8c02b",
   "CoreTemplateSHA256": "31ae81ae8eedfc55536277a425c8fac2d093b6f143be6bb34a5508dc6f8b0fd8",
   "CoreSections": {
     "package_update": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
@@ -12,9 +12,9 @@
     "write_files:/etc/tmpfiles.d/jnpt-tunnel.conf": "fc85d922efdb696503eb71cd00a6c07ede818572d59e4743c133b945152c7780",
     "write_files:/opt/jnpt/apt-schluessel.sh": "85409c54933071f7ff9752f64756965785cb6557a36a2ff57c0371adbc1a9435",
     "write_files:/opt/jnpt/askpass.sh": "c92ea750312bd736249194e897acf9efa7f77b7cd1d465b33a2447542ddc9bc9",
-    "write_files:/opt/jnpt/bootstrap.sh": "5bd05d19d78665ee5f04fcf9cc354309734cec4f0cce98ac550042907d30d9fd",
+    "write_files:/opt/jnpt/bootstrap.sh": "33b47d91d77e01ef5d65bd847626013050ed4147504284cbfda7d3e0841cdd89",
     "write_files:/opt/jnpt/metadata-guard.sh": "e7beeb89c673b9f84ba6c350351b21c8924688e931bba4a49a01089d707ac136",
-    "write_files:/opt/jnpt/staging/.env": "4add0c0656bc99fd8a8e86a7d00a0f89ef18425923239754700b3af2c16412ae"
+    "write_files:/opt/jnpt/staging/.env": "ca55fa0165475aaaaf6449e5c77541c7b6cf01113163f00a540b7436afd3600a"
   },
   "Exceptions": {
     "runcmd": {
@@ -33,7 +33,7 @@
       "Reason": "Nur Kommentare und Shell-Leerraum verschieden; gleicher 0600-Quelldateiweg, Username und Passwort ueber Askpass. Echter Git-Credential-/execve-Test aus #1497."
     },
     "write_files:/opt/jnpt/bootstrap.sh": {
-      "Core": "5bd05d19d78665ee5f04fcf9cc354309734cec4f0cce98ac550042907d30d9fd",
+      "Core": "33b47d91d77e01ef5d65bd847626013050ed4147504284cbfda7d3e0841cdd89",
       "Deploy": "",
       "Reason": "Ersetzt durch /usr/local/sbin/jnpt-start und config-holen.sh (#1497/#1501): strengere Dateipruefung, flock, gepruefter Konfig-Klon, PAT-Loeschung erst nach Erfolg. BOX-Beilage des Herkunftsmoduls gehoert nicht zur generischen VM."
     },
@@ -54,7 +54,7 @@
     },
     "write_files:/usr/local/sbin/jnpt-start": {
       "Core": "",
-      "Deploy": "c79cfe43aae9744e36d9d2fb2a9ca2ada62fba833a8bf8a588bf95def77bf81c",
+      "Deploy": "0b669fcdeeae24f78f205816b1206b05cde32840cb2b391f382787eba26f1945",
       "Reason": "Bewusster Betreiberstart aus #1497 statt bootstrap.sh; strengere Modus-/Eigentuemer-/Symlink-/Einzeilenpruefung, root/flock, PAT-Erhalt bei Fehler und bestehende .env erhalten. #1501 ergaenzt geprueften Klon und laute Fehler/MOTD. #1512: Handstart verlangt eingehaengtes Datenvolume auch nach Neustart mit nofail; keine Anlage auf Root-Platte."
     }
   }

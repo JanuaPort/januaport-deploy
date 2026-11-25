@@ -53,7 +53,7 @@ write_files:
       name: jnpt
       services:
         jnpt:
-          image: ${JANUAPORT_IMAGE:?JANUAPORT_IMAGE in der .env setzen, z. B. ghcr.io/januaport/januaport:0.106.0}
+          image: ${JANUAPORT_IMAGE:?JANUAPORT_IMAGE in der .env setzen, z. B. ghcr.io/januaport/januaport:0.107.0}
           ports:
             - "127.0.0.1:8484:8484"
           environment:
@@ -71,7 +71,7 @@ write_files:
       # .env liegt daneben mit Modus 0600 bereit; dort Werte
       # eintragen. Vollständige Liste der Betreiber-Envs (SSO, Anbindungsweg,
       # Verzeichnisse): ../compose/.env.example im Repo.
-      JANUAPORT_IMAGE=ghcr.io/januaport/januaport:0.106.0
+      JANUAPORT_IMAGE=ghcr.io/januaport/januaport:0.107.0
       JNPT_MASTER_KEY=
 
 runcmd:
